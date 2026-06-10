@@ -1,11 +1,38 @@
-"""Agent factory, mock tools, task definition, and programmatic verifier.
+"""Agent surface: mock tools, canonical task, and programmatic verifier.
 
-Build step 2 — to be implemented after the chaos engine is in place.
+Public API::
 
-Planned modules:
-    factory     — create_agent(agent_id, profile) → smolagents ToolCallingAgent
-    tools       — deterministic mock tools (get_weather, file_report, …)
-    task        — task prompt + hardcoded ground truth
-                  (Tokyo = 22.0 °C → 71.6 °F in a filed report)
-    verifier    — programmatic success check over the filed report
+    from saboteur.agents import (
+        GROUND_TRUTH, TASK_PROMPT,
+        build_tools, FiledReport, ReportStore,
+        WeatherTool, CalculatorTool, WebSearchTool, FileReportTool,
+        verify, TaskResult, FailureReason,
+    )
 """
+
+from .task import GROUND_TRUTH, TASK_PROMPT
+from .tools import (
+    CalculatorTool,
+    FiledReport,
+    FileReportTool,
+    ReportStore,
+    WeatherTool,
+    WebSearchTool,
+    build_tools,
+)
+from .verifier import FailureReason, TaskResult, verify
+
+__all__ = [
+    "GROUND_TRUTH",
+    "TASK_PROMPT",
+    "build_tools",
+    "FiledReport",
+    "ReportStore",
+    "WeatherTool",
+    "CalculatorTool",
+    "WebSearchTool",
+    "FileReportTool",
+    "verify",
+    "TaskResult",
+    "FailureReason",
+]
