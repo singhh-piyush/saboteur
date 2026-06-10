@@ -35,7 +35,7 @@ Think of it as a Chaos Monkey, but for AI agents.
 - FastAPI and Python asyncio for the orchestrator
 - React, Vite, and Tailwind for the dashboard
 - vLLM on ROCm with an AMD Instinct MI300X for running 50 agents at the same time
-- Ollama for local development
+- llama.cpp for local development
 
 Built for the AMD Developer Hackathon: ACT II.
 
