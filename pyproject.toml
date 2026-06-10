@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "saboteur"
+version = "0.1.0"
+description = "Chaos engineering test harness for AI agents"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "smolagents",
+    "openai",
+    "pyyaml",
+    "pydantic>=2",
+    "pydantic-settings",
+    "python-dotenv",
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.setuptools.packages.find]
+include = ["saboteur*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

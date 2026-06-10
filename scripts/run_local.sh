@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# run_local.sh — start llama-server (if not already up) then uvicorn.
+#
+# --jinja is REQUIRED for OpenAI-style tool calling: the Jinja2 chat template
+#   renders the tool-call JSON that smolagents ToolCallingAgent parses.
+#
+# -np 8 = 8 parallel slots, matching the local N_AGENTS=8 cap.
+#   Slots split the -c context budget: 32768 ÷ 8 = 4096 tokens per agent slot.
+#   That is enough headroom for the 15-step cap with normal prompts.
+#
+# GGUF download (one-time setup):
+#   pip install huggingface_hub[cli]
+#   huggingface-cli download bartowski/Meta-Llama-3.1-8B-Instruct-GGUF \
+#       --include "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf" \
+#       --local-dir ./models
+#   Then set MODEL_GGUF=./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf in .env.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load .env so MODEL_GGUF (and other vars) are available.
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    # Export only non-comment, non-empty lines.
+    set -a
+    # shellcheck source=/dev/null
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
+: "${MODEL_GGUF:?MODEL_GGUF is not set. Add it to .env or export it before running this script.}"
+
+LLAMA_HEALTH="http://localhost:8080/health"
+
+start_llama_server() {
+    echo "[run_local] Starting llama-server..."
+    llama-server \
+        -m "$MODEL_GGUF" \
+        --port 8080 \
+        -c 32768 \
+        -np 8 \
+        --jinja \
+        >> "$REPO_ROOT/llama-server.log" 2>&1 &
+    LLAMA_PID=$!
+    echo "[run_local] llama-server PID=$LLAMA_PID (log: llama-server.log)"
+}
+
+wait_for_llama() {
+    echo "[run_local] Waiting for llama-server to be ready..."
+    local retries=60
+    while (( retries-- > 0 )); do
+        if curl -sf "$LLAMA_HEALTH" > /dev/null 2>&1; then
+            echo "[run_local] llama-server is ready."
+            return 0
+        fi
+        sleep 1
+    done
+    echo "[run_local] ERROR: llama-server did not become ready in 60s. Check llama-server.log." >&2
+    exit 1
+}
+
+# Only start llama-server if it is not already responding.
+if curl -sf "$LLAMA_HEALTH" > /dev/null 2>&1; then
+    echo "[run_local] llama-server already running — skipping launch."
+else
+    start_llama_server
+    wait_for_llama
+fi
+
+echo "[run_local] Starting uvicorn (reload mode)..."
+cd "$REPO_ROOT"
+exec uvicorn saboteur.api:app --reload --host 0.0.0.0 --port 8000
