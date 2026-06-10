@@ -1,0 +1,15 @@
+name: flaky_friday
+seed: 1337
+description: "Moderate everyday flakiness: occasional 500s, 429s, latency spikes, and garbled output."
+faults:
+  - type: api_error
+    probability: 0.15
+    status_codes: [500, 503]
+  - type: rate_limit
+    probability: 0.10
+    retry_after_s: [2, 8]
+  - type: latency
+    probability: 0.15
+    delay_s: [1, 3]
+  - type: malformed
+    probability: 0.05

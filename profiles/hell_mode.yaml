@@ -1,0 +1,29 @@
+name: hell_mode
+seed: 666
+description: "All 8 faults at high probability, including lies, vanishing tools, and memory loss."
+faults:
+  - type: api_error
+    probability: 0.25
+    status_codes: [500, 502, 503]
+  - type: rate_limit
+    probability: 0.25
+    retry_after_s: [2, 8]
+    burst_budget: 4
+    window_calls: 10
+  - type: malformed
+    probability: 0.15
+  - type: silent_lie
+    probability: 0.20
+    lie_offset: [10, 30]
+    lie_factor: [1.5, 3.0]
+  - type: tool_vanish
+    probability: 0.03
+  - type: latency
+    probability: 0.30
+    delay_s: [2, 6]
+  - type: timeout
+    probability: 0.10
+    timeout_after_s: 8
+  - type: context_drop
+    probability: 0.15
+    drop_last_k: 2

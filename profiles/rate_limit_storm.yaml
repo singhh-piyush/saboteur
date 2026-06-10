@@ -1,0 +1,13 @@
+name: rate_limit_storm
+seed: 1337
+description: "Aggressive 429s on the data tools plus heavy latency: tests backoff discipline."
+faults:
+  - type: rate_limit
+    probability: 0.45
+    target_tools: [web_search, calculator]
+    retry_after_s: [2, 8]
+    burst_budget: 3
+    window_calls: 8
+  - type: latency
+    probability: 0.20
+    delay_s: [2, 6]

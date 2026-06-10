@@ -1,0 +1,167 @@
+"""ChaosEngine: wires a chaos profile onto an agent's tools.
+
+One engine per agent. All mutable state (call counter, vanish flags,
+rate-limit windows) lives on the instance, so concurrent agents never
+share state (invariant #2). All randomness comes from one
+``ChaosRandom(profile.seed + agent_id)`` (invariant #1).
+
+Usage::
+
+    engine = ChaosEngine(profile, agent_id=3, on_fault=bus.publish)
+    tools = engine.wrap_tools({"web_search": search, "calculator": calc})
+    # or for smolagents Tool instances (one instance per agent!):
+    tool = engine.sabotage_tool(tool)
+    # between agent steps:
+    engine.step_hook(agent)
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable
+
+from .events import FaultEvent, FaultType, ToolVanishedError
+from .interceptors import (
+    INTERCEPTOR_TYPES,
+    ContextDropInterceptor,
+    Detail,
+    Interceptor,
+    ToolVanishInterceptor,
+)
+from .profile import ChaosProfile
+from .rng import seeded_rng
+
+if TYPE_CHECKING:
+    from smolagents import Tool
+
+OnFault = Callable[[FaultEvent], None]
+
+
+class ChaosEngine:
+    """Deterministic fault injection for one agent."""
+
+    def __init__(
+        self,
+        profile: ChaosProfile,
+        agent_id: int,
+        on_fault: OnFault | None = None,
+    ) -> None:
+        self.profile = profile
+        self.agent_id = agent_id
+        self._on_fault = on_fault
+        self._rng = seeded_rng(profile.seed, agent_id)
+        self._call_index = 0
+        self._tool_interceptors: list[Interceptor] = []
+        self._context_interceptors: list[ContextDropInterceptor] = []
+        for spec in profile.faults:
+            if spec.type is FaultType.CONTEXT_DROP:
+                self._context_interceptors.append(
+                    ContextDropInterceptor(spec, self._rng)
+                )
+            else:
+                self._tool_interceptors.append(
+                    INTERCEPTOR_TYPES[spec.type](spec, self._rng)
+                )
+
+    # ------------------------------------------------------------------
+    # Wrapping
+    # ------------------------------------------------------------------
+
+    def wrap(self, name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Wrap a plain callable in this engine's interceptor chain."""
+
+        def sabotaged(*args: Any, **kwargs: Any) -> Any:
+            return self._invoke(name, fn, *args, **kwargs)
+
+        sabotaged.__name__ = f"sabotaged_{name}"
+        return sabotaged
+
+    def wrap_tools(
+        self, tools: dict[str, Callable[..., Any]]
+    ) -> dict[str, Callable[..., Any]]:
+        """Wrap a registry of callables, keyed by tool name."""
+        return {name: self.wrap(name, fn) for name, fn in tools.items()}
+
+    def sabotage_tool(self, tool: "Tool") -> "Tool":
+        """Sabotage a smolagents Tool in place by wrapping its forward().
+
+        Name/description/inputs/output_type are untouched, so the JSON
+        tool-call boundary the LLM sees is unchanged. The tool instance
+        must not be shared with another agent (invariant #2).
+        """
+        tool.forward = self.wrap(tool.name, tool.forward)  # type: ignore[method-assign]
+        return tool
+
+    def step_hook(self, agent: Any) -> None:
+        """Run context-layer faults; call between agent steps."""
+        for interceptor in self._context_interceptors:
+            interceptor.maybe_drop(
+                agent,
+                lambda fault, detail: self._emit(
+                    fault, None, self._call_index, detail
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+
+    def _invoke(
+        self, name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
+        index = self._call_index
+        self._call_index += 1
+
+        def emit(fault: FaultType, detail: Detail) -> None:
+            self._emit(fault, name, index, detail)
+
+        # A vanished tool stays vanished — short-circuit before any draws
+        # (deterministic: vanishing itself was a deterministic decision).
+        for interceptor in self._tool_interceptors:
+            if isinstance(interceptor, ToolVanishInterceptor) and interceptor.is_vanished(name):
+                emit(FaultType.TOOL_VANISH, {"sticky": True})
+                raise ToolVanishedError(name)
+
+        # Draw every applicable decision in profile order before acting,
+        # so the RNG draw sequence per call is fixed (invariant #1).
+        decisions = [
+            (interceptor, interceptor.decide(name))
+            for interceptor in self._tool_interceptors
+            if interceptor.applies_to(name)
+        ]
+
+        for interceptor, fired in decisions:
+            if fired and interceptor.kind == "latency":
+                interceptor.apply(name, emit)  # type: ignore[attr-defined]
+
+        for interceptor, fired in decisions:
+            if fired and interceptor.kind == "raising":
+                interceptor.inject(name, emit)  # type: ignore[attr-defined]
+
+        result = fn(*args, **kwargs)
+
+        for interceptor, fired in decisions:
+            if fired and interceptor.kind == "corrupting":
+                return interceptor.corrupt(result, emit)  # type: ignore[attr-defined]
+        return result
+
+    def _emit(
+        self,
+        fault: FaultType,
+        tool_name: str | None,
+        call_index: int,
+        detail: Detail,
+    ) -> None:
+        if self._on_fault is None:
+            return
+        event = FaultEvent(
+            fault=fault,
+            tool_name=tool_name,
+            call_index=call_index,
+            agent_id=self.agent_id,
+            detail=detail,
+        )
+        try:
+            self._on_fault(event)
+        except Exception:
+            # Telemetry must never crash an agent.
+            pass

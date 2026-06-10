@@ -1,10 +1,33 @@
-"""Fault interceptors, chaos profile loader, and seeded RNG.
+"""Chaos engine: deterministic fault injection for agent tool calls,
+transport, and context. See CLAUDE.md invariants #1 and #2."""
 
-Build step 2 — to be implemented after the scaffold is in place.
+from .engine import ChaosEngine
+from .events import (
+    LAYER,
+    ChaosFault,
+    FaultEvent,
+    FaultType,
+    SimulatedAPIError,
+    SimulatedRateLimit,
+    SimulatedTimeout,
+    ToolVanishedError,
+)
+from .profile import ChaosProfile, FaultSpec, load_profile
+from .rng import ChaosRandom, seeded_rng
 
-Planned modules:
-    profile_loader  — loads YAML from profiles/ into a ChaosProfile pydantic model
-    rng             — per-agent seeded random.Random(profile.seed + agent_id)
-    interceptors    — wraps tool calls to inject api_error, rate_limit, malformed,
-                      silent_lie, tool_vanish, latency, timeout, context_drop
-"""
+__all__ = [
+    "LAYER",
+    "ChaosEngine",
+    "ChaosFault",
+    "ChaosProfile",
+    "ChaosRandom",
+    "FaultEvent",
+    "FaultSpec",
+    "FaultType",
+    "SimulatedAPIError",
+    "SimulatedRateLimit",
+    "SimulatedTimeout",
+    "ToolVanishedError",
+    "load_profile",
+    "seeded_rng",
+]

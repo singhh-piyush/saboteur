@@ -1,0 +1,4 @@
+name: calm_seas
+seed: 1337
+description: "Control cohort: no faults injected. Every chaos run is paired with this baseline."
+faults: []
