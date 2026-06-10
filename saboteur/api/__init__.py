@@ -12,8 +12,10 @@ Routes to be added (later build steps):
 from fastapi import FastAPI
 
 from saboteur.config import get_settings
+from saboteur.telemetry.ws import router as ws_router
 
 app = FastAPI(title="Saboteur", version="0.1.0")
+app.include_router(ws_router)
 
 
 @app.get("/health")
