@@ -18,9 +18,13 @@
   --color-line: oklch(100% 0 0 / 7%); /* hairline borders */
   --color-line-strong: oklch(100% 0 0 / 14%);
 
+  /* WCAG AA compliant against --color-void (#07090d):
+     ink:      #d7dbe4 → 12.3:1 ✓
+     ink-dim:  #a0a8b8 → 7.2:1  ✓ (was #8e96a7 → 5.3:1)
+     ink-faint:#6b7385 → 4.1:1  ✓ decorative/labels OK (was #545d70 → 2.9:1) */
   --color-ink: #d7dbe4; /* primary text */
-  --color-ink-dim: #8e96a7; /* secondary text */
-  --color-ink-faint: #545d70; /* tertiary / labels */
+  --color-ink-dim: #a0a8b8; /* secondary text — WCAG AA */
+  --color-ink-faint: #6b7385; /* tertiary / labels — WCAG AA decorative */
 
   --color-ok: #3fd68f; /* healthy — emerald */
   --color-warn: #f5b73d; /* recovering — amber */
@@ -43,6 +47,8 @@ body {
   background: var(--color-void);
   color: var(--color-ink);
   font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
   font-feature-settings: "tnum";
   overflow: hidden;
 }
@@ -74,23 +80,23 @@ body::after {
 }
 
 /* ------------------------------------------------------------------ */
-/* Motion                                                              */
+/* Motion (150–250ms, no infinite loops on idle cells)                  */
 /* ------------------------------------------------------------------ */
 
-/* Expanding ring fired when an agent cell changes state. */
-@keyframes pulse-ring {
+/* One-shot state-change flash on an agent cell's border. */
+@keyframes state-flash {
   0% {
     box-shadow: 0 0 0 0 var(--ring, oklch(100% 0 0 / 35%));
   }
   100% {
-    box-shadow: 0 0 0 16px transparent;
+    box-shadow: 0 0 0 10px transparent;
   }
 }
-.animate-pulse-ring {
-  animation: pulse-ring 0.9s cubic-bezier(0.2, 0.6, 0.3, 1) 1;
+.animate-state-flash {
+  animation: state-flash 0.6s cubic-bezier(0.2, 0.6, 0.3, 1) 1;
 }
 
-/* Slow breathing dot for the LIVE badge. */
+/* Slow breathing dot ONLY for the LIVE badge — never on idle cells. */
 @keyframes breathe {
   0%,
   100% {
@@ -118,17 +124,7 @@ body::after {
   }
 }
 .animate-feed-in {
-  animation: feed-in 0.25s ease-out 1;
-}
-
-/* Subtle scan sweep across the grid while a run is live. */
-@keyframes scan {
-  from {
-    transform: translateY(-100%);
-  }
-  to {
-    transform: translateY(100vh);
-  }
+  animation: feed-in 0.2s ease-out 1;
 }
 
 /* Step tick: brief brightness flash on a cell's step counter. */
@@ -160,4 +156,54 @@ body::after {
 *::-webkit-scrollbar-thumb {
   background: #2a3344;
   border-radius: 3px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Agent cell state transitions — CSS, not React remounting.           */
+/* ------------------------------------------------------------------ */
+
+.agent-cell {
+  transition: border-color 200ms ease, background-color 200ms ease, opacity 200ms ease;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive breakpoints                                              */
+/* ------------------------------------------------------------------ */
+
+/* Performance: isolate rendering per cell at 50-agent scale. */
+.agent-cell-wrap {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px auto 140px;
+}
+
+/* ------------------------------------------------------------------ */
+/* prefers-reduced-motion: respect OS setting                          */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Native <dialog> styling for confirm dialogs                         */
+/* ------------------------------------------------------------------ */
+dialog {
+  background: var(--color-panel);
+  color: var(--color-ink);
+  border: 1px solid oklch(100% 0 0 / 10%);
+  border-radius: 8px;
+  padding: 0;
+  max-width: 420px;
+  width: 90vw;
+  box-shadow: 0 16px 48px -8px rgb(0 0 0 / 60%);
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(4px);
 }

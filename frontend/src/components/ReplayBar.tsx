@@ -11,7 +11,7 @@ export function ReplayBar() {
 
   return (
     <div className="flex items-center gap-3 border-t border-line bg-panel px-3 py-2">
-      <span className="font-display text-xs font-semibold tracking-[0.22em] text-win">
+      <span className="font-display text-xs font-semibold tracking-widest text-win">
         REPLAY
       </span>
 
@@ -47,7 +47,7 @@ export function ReplayBar() {
         />
       </div>
 
-      <span className="w-24 text-right font-mono text-[10px] text-ink-faint">
+      <span className="w-24 text-right font-mono text-xs text-ink-faint">
         {replay.position}/{replay.length}
       </span>
 
@@ -57,7 +57,7 @@ export function ReplayBar() {
             key={s}
             type="button"
             onClick={() => replay.setSpeed(s)}
-            className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold ${
+            className={`rounded-sm border px-1.5 py-0.5 text-xs font-semibold ${
               replay.speed === s
                 ? "border-win/50 text-win"
                 : "border-line text-ink-faint hover:text-ink"

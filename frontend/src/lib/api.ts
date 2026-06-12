@@ -73,11 +73,16 @@ export class ApiError extends Error {
   }
 }
 
+/** Full RunListEntry matching the backend RunListEntry model. */
 export interface RunListEntry {
   run_id: string;
   profile: string;
+  n_agents: number;
   status: "pending" | "running" | "finished" | "failed" | "archived";
+  started_at: string | null;
+  finished_at: string | null;
   has_scorecard: boolean;
+  survival_pct: number | null;
 }
 
 export function fetchProfiles(): Promise<ProfileInfo[]> {
@@ -123,4 +128,36 @@ export async function fetchAllEvents(runId: string): Promise<TelemetryEvent[]> {
     if (page.length < limit) return all;
     afterTs = page[page.length - 1].ts;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Run management (DELETE, downloads)
+// ---------------------------------------------------------------------------
+
+/** Delete a single run and its artifacts. Returns 204 on success. */
+export async function deleteRun(runId: string): Promise<void> {
+  const resp = await fetch(`/runs/${encodeURIComponent(runId)}`, {
+    method: "DELETE",
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new ApiError(resp.status, `${resp.status}: ${body}`);
+  }
+}
+
+/** Bulk-delete all finished runs. Returns the count deleted. */
+export async function bulkDeleteRuns(): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/runs?status=finished", {
+    method: "DELETE",
+  });
+}
+
+/** Direct download URL for a run's JSONL event log. */
+export function downloadJsonlUrl(runId: string): string {
+  return `/runs/${encodeURIComponent(runId)}/download/jsonl`;
+}
+
+/** Direct download URL for a run's scorecard JSON. */
+export function downloadScorecardUrl(runId: string): string {
+  return `/runs/${encodeURIComponent(runId)}/download/scorecard`;
 }

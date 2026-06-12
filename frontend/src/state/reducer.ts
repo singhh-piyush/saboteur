@@ -5,9 +5,10 @@
  * construction: same events in, same state out (literally tested in
  * reducer.test.ts).
  *
- * Resync strategy: the WS server replays the full JSONL backlog on every
- * connect, so the client dispatches `reset` on each (re)connect and rebuilds
- * from scratch. A dropped backend therefore recovers visually by itself.
+ * Idempotency: the reducer deduplicates events by identity (ts + agent_id +
+ * step + event + fault + recovery) so a reconnect that re-sends the JSONL
+ * backlog produces ZERO state changes and zero re-renders. The `_seen` set
+ * is cleared on `reset`.
  */
 
 import type { TelemetryEvent } from "../types/telemetry";
@@ -23,7 +24,14 @@ export type AgentStatus =
   | "crashed" // agent_crashed, or agent_done with success=false
   | "succeeded";
 
-export type ConnStatus = "idle" | "connecting" | "live" | "reconnecting" | "replay";
+export type ConnStatus =
+  | "idle"
+  | "connecting"
+  | "live"
+  | "reconnecting"
+  | "complete"  // stream finished cleanly — no reconnect
+  | "offline"   // max retries exhausted
+  | "replay";
 
 export interface AgentState {
   id: number;
@@ -71,6 +79,8 @@ export interface RunViewState {
   terminals: TerminalMark[];
   eventCount: number;
   conn: ConnStatus;
+  /** Dedup set: event identity → true. Prevents backlog replay re-renders. */
+  _seen: Set<string>;
 }
 
 export type Action =
@@ -91,7 +101,17 @@ export const initialState: RunViewState = {
   terminals: [],
   eventCount: 0,
   conn: "idle",
+  _seen: new Set(),
 };
+
+// ---------------------------------------------------------------------------
+// Event identity for deduplication
+// ---------------------------------------------------------------------------
+
+/** Stable identity matching the backend's _Identity tuple in ws.py. */
+function eventIdentity(ev: TelemetryEvent): string {
+  return `${ev.ts}|${ev.agent_id}|${ev.step ?? ""}|${ev.event}|${ev.fault ?? ""}|${ev.recovery ?? ""}`;
+}
 
 // ---------------------------------------------------------------------------
 // Reducer
@@ -102,7 +122,7 @@ export function reduce(state: RunViewState, action: Action): RunViewState {
     case "reset":
       // Keep the connection status: reset fires on (re)connect, right before
       // the backlog replays.
-      return { ...initialState, conn: state.conn };
+      return { ...initialState, conn: state.conn, _seen: new Set() };
     case "conn":
       return { ...state, conn: action.conn };
     case "event":
@@ -119,7 +139,18 @@ export function foldEvents(events: TelemetryEvent[]): RunViewState {
 }
 
 function applyEvent(state: RunViewState, ev: TelemetryEvent): RunViewState {
-  const next = { ...state, eventCount: state.eventCount + 1 };
+  // --- Idempotency: deduplicate by event identity ---
+  const id = eventIdentity(ev);
+  if (state._seen.has(id)) {
+    // Already processed — return the SAME reference so React skips re-render.
+    return state;
+  }
+  // Mutating the set is safe: we always spread into a new state object below,
+  // and the set is never read by React for rendering.
+  const seen = new Set(state._seen);
+  seen.add(id);
+
+  const next: RunViewState = { ...state, eventCount: state.eventCount + 1, _seen: seen };
 
   if (ev.agent_id < 0) {
     if (ev.event === "run_started") {

@@ -15,14 +15,14 @@ export function BattleGrid({ selectedAgent, onSelect }: Props) {
 
   if (agents.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <div className="font-display text-2xl font-semibold tracking-[0.2em] text-ink-faint">
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <div className="font-display text-2xl font-semibold tracking-widest text-ink-faint">
           NO ACTIVE COHORT
         </div>
-        <p className="max-w-sm text-sm text-ink-dim">
+        <p className="max-w-md text-sm text-ink-dim">
           {state.conn === "live" || state.conn === "connecting"
             ? "Standing by — the calm-seas control cohort runs first; agents appear here when the chaos cohort launches."
-            : "Select a chaos profile and launch a run, or replay an archived one."}
+            : "Select a chaos profile and launch a run, or open an archived one from the Runs page."}
         </p>
       </div>
     );
@@ -30,8 +30,8 @@ export function BattleGrid({ selectedAgent, onSelect }: Props) {
 
   return (
     <div
-      className="grid content-start gap-2 overflow-y-auto p-1"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))" }}
+      className="grid content-start gap-2.5 overflow-y-auto p-3"
+      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
     >
       {agents.map((agent) => (
         <AgentCell

@@ -18,10 +18,9 @@ import {
   type RunViewState,
 } from "./reducer";
 
-/** Strip the connection field: it reflects the transport (live vs replay),
- * not the event stream, and is deliberately excluded from the invariant. */
-function view(state: RunViewState): Omit<RunViewState, "conn"> {
-  const { conn: _conn, ...rest } = state;
+/** Strip internal/transport fields that don't affect visual rendering. */
+function view(state: RunViewState): Omit<RunViewState, "conn" | "_seen"> {
+  const { conn: _conn, _seen: _s, ...rest } = state;
   return rest;
 }
 
@@ -97,6 +96,70 @@ describe("live vs replay parity (invariant #3)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Idempotent deduplication
+// ---------------------------------------------------------------------------
+
+describe("idempotent event deduplication", () => {
+  it("duplicate events produce zero state changes (same reference)", () => {
+    const events = [
+      ev({ agent_id: -1, event: "run_started", payload: { n_agents: 2 } }),
+      ev({ event: "step_start", step: 1, ts: "2026-06-10T12:00:01+00:00" }),
+      ev({ event: "fault_injected", step: 2, fault: "api_error", ts: "2026-06-10T12:00:02+00:00" }),
+    ];
+
+    let state = initialState;
+    for (const event of events) {
+      state = reduce(state, { type: "event", event });
+    }
+    const after = state;
+
+    // Replay the same events — should get identical state back.
+    for (const event of events) {
+      const next = reduce(state, { type: "event", event });
+      // Duplicate events should return the SAME state reference.
+      expect(next).toBe(state);
+      state = next;
+    }
+
+    // Final state unchanged.
+    expect(view(state)).toEqual(view(after));
+  });
+
+  it("_seen set is cleared on reset", () => {
+    let state = initialState;
+    state = reduce(state, { type: "event", event: ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }) });
+    expect(state._seen.size).toBe(1);
+    state = reduce(state, { type: "reset" });
+    expect(state._seen.size).toBe(0);
+  });
+
+  it("reconnect backlog replay deduplicates correctly", () => {
+    const events = [
+      ev({ agent_id: -1, event: "run_started", payload: { n_agents: 2 }, ts: "2026-06-10T12:00:00+00:00" }),
+      ev({ event: "step_start", step: 1, ts: "2026-06-10T12:00:01+00:00" }),
+      ev({ event: "fault_injected", step: 2, fault: "latency", ts: "2026-06-10T12:00:02+00:00" }),
+      ev({ event: "recovery_action", step: 3, recovery: "retry", ts: "2026-06-10T12:00:03+00:00" }),
+    ];
+
+    // First pass: build state.
+    let state = initialState;
+    for (const e of events) state = reduce(state, { type: "event", event: e });
+    const seqAfterFirst = state.agents[0]?.seq ?? 0;
+
+    // Simulate reconnect: DON'T reset (to test dedup without reset).
+    // Re-send all events — they should all be skipped.
+    for (const e of events) {
+      const next = reduce(state, { type: "event", event: e });
+      expect(next).toBe(state); // same reference = no re-render
+      state = next;
+    }
+
+    // seq should NOT have changed.
+    expect(state.agents[0]?.seq).toBe(seqAfterFirst);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Status transition rules
 // ---------------------------------------------------------------------------
 
@@ -118,11 +181,11 @@ describe("agent status transitions", () => {
   it("fault makes an agent recovering; recovery makes it healthy again", () => {
     const base = [
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
-      ev({ event: "step_start", step: 1 }),
+      ev({ event: "step_start", step: 1, ts: "2026-06-10T12:00:01+00:00" }),
     ];
     const faulted = foldEvents([
       ...base,
-      ev({ event: "fault_injected", step: 2, fault: "api_error" }),
+      ev({ event: "fault_injected", step: 2, fault: "api_error", ts: "2026-06-10T12:00:02+00:00" }),
     ]);
     expect(faulted.agents[0].status).toBe("recovering");
     expect(faulted.agents[0].faultCount).toBe(1);
@@ -131,8 +194,8 @@ describe("agent status transitions", () => {
 
     const recovered = foldEvents([
       ...base,
-      ev({ event: "fault_injected", step: 2, fault: "api_error" }),
-      ev({ event: "recovery_action", step: 3, recovery: "retry" }),
+      ev({ event: "fault_injected", step: 2, fault: "api_error", ts: "2026-06-10T12:00:02+00:00" }),
+      ev({ event: "recovery_action", step: 3, recovery: "retry", ts: "2026-06-10T12:00:03+00:00" }),
     ]);
     expect(recovered.agents[0].status).toBe("healthy");
     expect(recovered.agents[0].activeFault).toBeNull();
@@ -142,11 +205,12 @@ describe("agent status transitions", () => {
   it("a clean tool call also resolves a fault", () => {
     const state = foldEvents([
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
-      ev({ event: "fault_injected", step: 1, fault: "latency" }),
+      ev({ event: "fault_injected", step: 1, fault: "latency", ts: "2026-06-10T12:00:01+00:00" }),
       ev({
         event: "tool_call",
         step: 2,
         payload: { tool: "weather", sabotaged: false, errored: false },
+        ts: "2026-06-10T12:00:02+00:00",
       }),
     ]);
     expect(state.agents[0].status).toBe("healthy");
@@ -160,6 +224,7 @@ describe("agent status transitions", () => {
           event: "agent_done",
           tokens_used: 1234,
           payload: { outcome: "completed", success, steps_taken: 4 },
+          ts: "2026-06-10T12:00:01+00:00",
         }),
       ]).agents[0];
 
@@ -171,8 +236,8 @@ describe("agent status transitions", () => {
   it("agent_crashed is terminal and sticky against later faults", () => {
     const state = foldEvents([
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
-      ev({ event: "agent_crashed", payload: { error: "RuntimeError" } }),
-      ev({ event: "fault_injected", step: 5, fault: "timeout" }),
+      ev({ event: "agent_crashed", payload: { error: "RuntimeError" }, ts: "2026-06-10T12:00:01+00:00" }),
+      ev({ event: "fault_injected", step: 5, fault: "timeout", ts: "2026-06-10T12:00:02+00:00" }),
     ]);
     expect(state.agents[0].status).toBe("crashed");
     expect(state.agents[0].faultCount).toBe(1); // badge still counts
@@ -181,9 +246,9 @@ describe("agent status transitions", () => {
   it("seq bumps on every status change (drives the pulse animation)", () => {
     const state = foldEvents([
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
-      ev({ event: "step_start", step: 1 }), // pending → healthy
-      ev({ event: "fault_injected", step: 2, fault: "api_error" }), // → recovering
-      ev({ event: "recovery_action", step: 3, recovery: "retry" }), // → healthy
+      ev({ event: "step_start", step: 1, ts: "2026-06-10T12:00:01+00:00" }), // pending → healthy
+      ev({ event: "fault_injected", step: 2, fault: "api_error", ts: "2026-06-10T12:00:02+00:00" }), // → recovering
+      ev({ event: "recovery_action", step: 3, recovery: "retry", ts: "2026-06-10T12:00:03+00:00" }), // → healthy
     ]);
     expect(state.agents[0].seq).toBe(3);
   });

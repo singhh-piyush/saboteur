@@ -56,7 +56,7 @@ export function ControlPanel() {
   return (
     <section className="border-b border-line">
       <header className="border-b border-line px-3 py-2">
-        <h2 className="font-display text-sm font-semibold tracking-[0.22em] text-ink-dim">
+        <h2 className="font-display text-sm font-semibold tracking-widest text-ink-dim">
           CHAOS CONTROL
         </h2>
       </header>
@@ -78,19 +78,19 @@ export function ControlPanel() {
 
         {profile && (
           <div className="rounded-sm border border-line bg-panel px-2.5 py-2">
-            <p className="text-xs leading-snug text-ink-dim">
+            <p className="text-sm leading-snug text-ink-dim">
               {profile.description || "No description."}
             </p>
             <div className="mt-2 flex flex-wrap gap-1">
               {profile.faults.length === 0 ? (
-                <span className="text-[10px] uppercase tracking-[0.14em] text-ok">
+                <span className="text-xs uppercase tracking-widest text-ok">
                   zero faults — control profile
                 </span>
               ) : (
                 profile.faults.map((f) => (
                   <span
                     key={f.type}
-                    className="rounded-sm border border-line px-1.5 py-0.5 text-[10px] font-medium"
+                    className="rounded-sm border border-line px-1.5 py-0.5 text-xs font-medium"
                     style={{ color: faultStyle(f.type).color }}
                   >
                     {f.type} {pct(f.probability)}
@@ -128,7 +128,7 @@ export function ControlPanel() {
           </Field>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-ink-dim">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-dim">
           <input
             type="checkbox"
             checked={withControl}
@@ -142,13 +142,13 @@ export function ControlPanel() {
           type="button"
           onClick={() => void launch()}
           disabled={busy || profile === null}
-          className="font-display w-full rounded-sm border border-accent/60 bg-accent/10 px-3 py-2.5 text-base font-bold tracking-[0.3em] text-accent transition-all duration-200 hover:bg-accent/20 hover:shadow-[0_0_24px_-6px_var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="font-display w-full rounded-sm border border-accent/60 bg-accent/10 px-3 py-2.5 text-base font-bold tracking-widest text-accent transition-all duration-200 hover:bg-accent/20 hover:shadow-[0_0_24px_-6px_var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? "LAUNCHING…" : "LAUNCH RUN"}
         </button>
 
         {error && (
-          <p className="rounded-sm border border-crit/40 bg-crit/10 px-2 py-1.5 text-xs text-crit">
+          <p className="rounded-sm border border-crit/40 bg-crit/10 px-2 py-1.5 text-sm text-crit">
             {error}
           </p>
         )}
@@ -166,7 +166,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] uppercase tracking-[0.16em] text-ink-faint">
+      <span className="mb-1 block text-xs uppercase tracking-widest text-ink-faint">
         {label}
       </span>
       {children}

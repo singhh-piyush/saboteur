@@ -1,7 +1,9 @@
+import React from "react";
+
 import type { AgentState } from "../state/reducer";
 import { agentLabel } from "../lib/format";
 import { faultStyle } from "../lib/faults";
-import { BoltIcon, CrossIcon, FlagIcon } from "./Icons";
+import { BoltIcon, CircleIcon, CrossIcon, DashedCircleIcon, FlagIcon, LoopIcon } from "./Icons";
 
 const STATUS_COLOR: Record<AgentState["status"], string> = {
   pending: "var(--color-ink-faint)",
@@ -26,86 +28,96 @@ interface Props {
   onSelect: (id: number) => void;
 }
 
-export function AgentCell({ agent, maxSteps, selected, onSelect }: Props) {
+/** Memoized: only re-renders when its OWN derived state changes. */
+export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, selected, onSelect }: Props) {
   const color = STATUS_COLOR[agent.status];
   const pending = agent.status === "pending";
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(agent.id)}
-      className={`group relative flex flex-col justify-between rounded-md border bg-panel p-2.5 text-left transition-colors duration-300 hover:bg-raised ${
-        selected ? "border-line-strong" : "border-line"
-      }`}
-      style={{
-        borderLeftWidth: 3,
-        borderLeftColor: color,
-        opacity: pending ? 0.55 : 1,
-      }}
-    >
-      {/* Pulse overlay: keyed on seq so every state change re-mounts it and
-          restarts the expanding-ring animation — the grid's heartbeat. */}
-      {agent.seq > 0 && (
-        <span
-          key={agent.seq}
-          aria-hidden
-          className="animate-pulse-ring pointer-events-none absolute inset-0 rounded-md"
-          style={{ ["--ring" as string]: color }}
-        />
-      )}
-
-      <div className="flex items-start justify-between">
-        <span className="font-display text-lg font-semibold leading-none tracking-wide">
-          {agentLabel(agent.id)}
-        </span>
-        <StatusGlyph status={agent.status} color={color} />
-      </div>
-
-      <div className="mt-3 flex items-end justify-between">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-            step
-          </div>
-          <div className="text-sm text-ink-dim">
-            <span className="text-ink">{agent.step}</span>
-            <span className="text-ink-faint">/{maxSteps}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {agent.activeFault !== null && (
-            <span
-              className="max-w-20 truncate text-[10px]"
-              style={{ color: faultStyle(agent.activeFault).color }}
-            >
-              {agent.activeFault}
-            </span>
-          )}
-          {agent.faultCount > 0 && (
-            <span
-              className="inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] font-semibold"
-              style={{
-                color: "var(--color-accent)",
-                background: "oklch(70% 0.19 45 / 12%)",
-              }}
-              title={`${agent.faultCount} fault(s) injected`}
-            >
-              <BoltIcon size={9} />
-              {agent.faultCount}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div
-        className="mt-1.5 text-[10px] uppercase tracking-[0.16em]"
-        style={{ color }}
+    <div className="agent-cell-wrap">
+      <button
+        type="button"
+        onClick={() => onSelect(agent.id)}
+        className={`agent-cell group relative flex w-full flex-col justify-between rounded-md border bg-panel p-3 text-left hover:bg-raised ${
+          selected ? "border-line-strong" : "border-line"
+        }`}
+        style={{
+          borderLeftWidth: 3,
+          borderLeftColor: color,
+          opacity: pending ? 0.55 : 1,
+        }}
       >
-        {STATUS_WORD[agent.status]}
-      </div>
-    </button>
-  );
-}
+        {/* One-shot flash on state change — CSS animation, not remount */}
+        {agent.seq > 0 && (
+          <span
+            key={agent.seq}
+            aria-hidden
+            className="animate-state-flash pointer-events-none absolute inset-0 rounded-md"
+            style={{ ["--ring" as string]: color }}
+          />
+        )}
 
+        <div className="flex items-start justify-between">
+          <span className="font-display text-base font-semibold leading-none tracking-wide">
+            {agentLabel(agent.id)}
+          </span>
+          <StatusGlyph status={agent.status} color={color} />
+        </div>
+
+        <div className="mt-3 flex items-end justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-ink-faint">
+              step
+            </div>
+            <div className="text-sm text-ink-dim">
+              <span className="text-ink">{agent.step}</span>
+              <span className="text-ink-faint">/{maxSteps}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {agent.activeFault !== null && (
+              <span
+                className="max-w-20 truncate text-xs"
+                style={{ color: faultStyle(agent.activeFault).color }}
+              >
+                {agent.activeFault}
+              </span>
+            )}
+            {agent.faultCount > 0 && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs font-semibold"
+                style={{
+                  color: "var(--color-accent)",
+                  background: "oklch(70% 0.19 45 / 12%)",
+                }}
+                title={`${agent.faultCount} fault(s) injected`}
+              >
+                <BoltIcon size={10} />
+                {agent.faultCount}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="mt-1.5 text-xs uppercase tracking-widest"
+          style={{ color }}
+        >
+          {STATUS_WORD[agent.status]}
+        </div>
+      </button>
+    </div>
+  );
+}, (prev, next) =>
+  prev.agent.seq === next.agent.seq &&
+  prev.agent.status === next.agent.status &&
+  prev.agent.step === next.agent.step &&
+  prev.agent.faultCount === next.agent.faultCount &&
+  prev.agent.activeFault === next.agent.activeFault &&
+  prev.selected === next.selected
+);
+
+/** Color + icon glyph — never color alone (accessibility). */
 function StatusGlyph({
   status,
   color,
@@ -113,16 +125,17 @@ function StatusGlyph({
   status: AgentState["status"];
   color: string;
 }) {
-  if (status === "succeeded")
-    return <FlagIcon size={13} className="shrink-0" style={{ color }} />;
-  if (status === "crashed")
-    return <CrossIcon size={12} className="shrink-0" style={{ color }} />;
-  return (
-    <span
-      className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
-        status === "healthy" || status === "recovering" ? "animate-breathe" : ""
-      }`}
-      style={{ background: color }}
-    />
-  );
+  switch (status) {
+    case "succeeded":
+      return <FlagIcon size={14} className="shrink-0" style={{ color }} />;
+    case "crashed":
+      return <CrossIcon size={13} className="shrink-0" style={{ color }} />;
+    case "recovering":
+      return <LoopIcon size={13} className="shrink-0" style={{ color }} />;
+    case "healthy":
+      return <CircleIcon size={12} className="shrink-0" style={{ color }} />;
+    case "pending":
+    default:
+      return <DashedCircleIcon size={12} className="shrink-0" style={{ color }} />;
+  }
 }

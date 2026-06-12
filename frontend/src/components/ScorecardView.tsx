@@ -142,13 +142,13 @@ export function ScorecardView() {
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
                   dataKey="t"
-                  tick={{ fill: "#545d70", fontSize: 10 }}
+                  tick={{ fill: "#6b7385", fontSize: 11 }}
                   stroke="rgba(255,255,255,0.1)"
                   unit="s"
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fill: "#545d70", fontSize: 10 }}
+                  tick={{ fill: "#6b7385", fontSize: 11 }}
                   stroke="rgba(255,255,255,0.1)"
                 />
                 <Tooltip content={<ChartTip />} />
@@ -156,7 +156,7 @@ export function ScorecardView() {
                   type="stepAfter"
                   dataKey="done"
                   name="finished"
-                  stroke="#545d70"
+                  stroke="#6b7385"
                   strokeWidth={1.5}
                   dot={false}
                   isAnimationActive={false}
@@ -184,12 +184,12 @@ export function ScorecardView() {
                 <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
                 <XAxis
                   dataKey="kind"
-                  tick={{ fill: "#8e96a7", fontSize: 10 }}
+                  tick={{ fill: "#a0a8b8", fontSize: 11 }}
                   stroke="rgba(255,255,255,0.1)"
                 />
                 <YAxis
                   allowDecimals={false}
-                  tick={{ fill: "#545d70", fontSize: 10 }}
+                  tick={{ fill: "#6b7385", fontSize: 11 }}
                   stroke="rgba(255,255,255,0.1)"
                 />
                 <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
@@ -214,7 +214,7 @@ export function ScorecardView() {
               {failureEntries.map(([mode, count]) => (
                 <li
                   key={mode}
-                  className="flex items-center justify-between rounded-sm border border-crit/30 bg-crit/5 px-2.5 py-1.5 text-xs"
+                  className="flex items-center justify-between rounded-sm border border-crit/30 bg-crit/5 px-2.5 py-1.5 text-sm"
                 >
                   <span className="text-crit">{mode}</span>
                   <span className="font-display text-base font-semibold text-ink">
@@ -227,7 +227,7 @@ export function ScorecardView() {
         </Panel>
 
         <Panel title="RUN">
-          <dl className="space-y-1.5 text-xs">
+          <dl className="space-y-1.5 text-sm">
             <Row k="run id" v={sc.run_id} mono />
             <Row k="profile" v={sc.profile} />
             <Row k="agents" v={String(sc.n_agents)} />
@@ -258,7 +258,7 @@ function Tile({
 }) {
   return (
     <div className="rounded-md border border-line bg-panel px-3 py-2.5">
-      <div className="text-[10px] uppercase tracking-[0.16em] text-ink-faint">
+      <div className="text-xs uppercase tracking-widest text-ink-faint">
         {label}
       </div>
       <div className={`font-display mt-1 text-3xl font-bold ${TONES[tone]}`}>
@@ -272,7 +272,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   return (
     <section className="rounded-md border border-line bg-panel">
       <header className="border-b border-line px-3 py-2">
-        <h3 className="font-display text-xs font-semibold tracking-[0.22em] text-ink-dim">
+        <h3 className="font-display text-xs font-semibold tracking-widest text-ink-dim">
           {title}
         </h3>
       </header>
@@ -282,14 +282,14 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="py-6 text-center text-xs text-ink-faint">{children}</p>;
+  return <p className="py-6 text-center text-sm text-ink-faint">{children}</p>;
 }
 
 function Row({ k, v, mono = false }: { k: string; v: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="shrink-0 uppercase tracking-[0.14em] text-ink-faint">{k}</dt>
-      <dd className={`truncate text-ink-dim ${mono ? "font-mono text-[11px]" : ""}`}>
+      <dt className="shrink-0 uppercase tracking-widest text-ink-faint">{k}</dt>
+      <dd className={`truncate text-ink-dim ${mono ? "font-mono text-xs" : ""}`}>
         {v}
       </dd>
     </div>
@@ -307,7 +307,7 @@ function ChartTip({
 }) {
   if (!active || !payload || payload.length === 0) return null;
   return (
-    <div className="rounded-sm border border-line bg-raised px-2 py-1.5 text-[11px] text-ink">
+    <div className="rounded-sm border border-line bg-raised px-2 py-1.5 text-xs text-ink">
       <div className="mb-0.5 text-ink-faint">{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color }}>
