@@ -8,7 +8,11 @@ from real ``ActionStep``s.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any
+
 from saboteur.agents.outcomes import (
+    AgentEvent,
     Outcome,
     RecoveryKind,
     StepRecord,
@@ -192,3 +196,86 @@ class TestClassifyOutcome:
             )
             is Outcome.COMPLETED
         )
+
+
+# ---------------------------------------------------------------------------
+# Parse-error telemetry (factory._on_step)
+# ---------------------------------------------------------------------------
+
+# Minimal AgentParsingError stand-in (no smolagents import needed).
+_AgentParsingError = type("AgentParsingError", (Exception,), {})
+
+
+def _make_parse_error_step(prose: str) -> Any:
+    """A fake ActionStep that mimics a parse failure."""
+    return SimpleNamespace(
+        step_number=3,
+        tool_calls=[],
+        model_output=prose,
+        model_output_message=None,
+        observations=None,
+        error=_AgentParsingError("The model output does not contain any JSON blob"),
+    )
+
+
+class TestParseErrorTelemetry:
+    """_on_step emits parse_error metadata in the step_start payload."""
+
+    def _build_agent(self) -> tuple[Any, list[AgentEvent]]:
+        """Build a SaboteurAgent with a capturing on_event; engine left None."""
+        from saboteur.agents.factory import SaboteurAgent
+        from saboteur.agents.tools import ReportStore
+
+        events: list[AgentEvent] = []
+        shell = SaboteurAgent(
+            agent_id=99,
+            store=ReportStore(),
+            on_event=events.append,
+        )
+        # engine stays None — no chaos, no context_drop; step_hook is guarded.
+        # Inject a minimal smolagents agent stand-in so _on_step can read
+        # step_number (via getattr with a fallback) and engine.step_hook is
+        # never reached.
+        from unittest.mock import MagicMock
+        shell.agent = MagicMock()
+        shell.agent.step_number = 3
+        return shell, events
+
+    def test_parse_error_in_payload(self) -> None:
+        """step_start payload carries parse_error=True and the raw model output."""
+        shell, events = self._build_agent()
+        prose = "The temperature in Tokyo is 22 °C, which is 71.6 °F."
+
+        shell._on_step(_make_parse_error_step(prose))
+
+        step_events = [e for e in events if e.kind == "step_start"]
+        assert step_events, "no step_start event emitted"
+        payload = step_events[0].data
+        assert payload.get("parse_error") is True
+        assert payload.get("model_output") == prose
+        assert "AgentParsingError" in payload.get("error", "")
+
+    def test_normal_step_has_empty_payload(self) -> None:
+        """step_start for a successful tool call must NOT carry parse_error."""
+        shell, events = self._build_agent()
+
+        # _on_step only reads memory_step via getattr, so a SimpleNamespace is
+        # sufficient — no need for the real ActionStep (which requires Timing).
+        # _build_record accesses tool_call.name and tool_call.arguments directly,
+        # so we use smolagents.memory.ToolCall (not ChatMessageToolCall).
+        from smolagents.memory import ToolCall
+
+        tc = ToolCall(name="weather", arguments={"city": "Tokyo"}, id="c1")
+        memory_step = SimpleNamespace(
+            step_number=1,
+            tool_calls=[tc],
+            model_output="",
+            observations="22.0",
+            error=None,
+        )
+
+        shell._on_step(memory_step)
+
+        step_events = [e for e in events if e.kind == "step_start"]
+        assert step_events, "no step_start event emitted"
+        assert step_events[0].data == {}

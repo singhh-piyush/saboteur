@@ -64,3 +64,81 @@ def test_env_override(monkeypatch, tmp_path):
     s = cfg_module.get_settings()
     assert s.n_agents == 4
     assert s.model_id == "my-custom-model"
+
+
+def test_default_tool_choice(monkeypatch, tmp_path):
+    """tool_choice defaults to 'required'."""
+    monkeypatch.chdir(tmp_path)
+    s = cfg_module.get_settings()
+    assert s.tool_choice == "required"
+
+
+def test_tool_choice_env_override(monkeypatch, tmp_path):
+    """TOOL_CHOICE env var overrides the default."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TOOL_CHOICE", "auto")
+    s = cfg_module.get_settings()
+    assert s.tool_choice == "auto"
+
+
+def test_tool_choice_forwarded_to_outgoing_request(monkeypatch, tmp_path):
+    """tool_choice=required must appear in every chat.completions.create call.
+
+    This is the offline proof that the kwarg reaches the wire: we monkeypatch
+    ``client.chat.completions.create`` to capture the kwargs it is called with,
+    fire a generate() through the live code path, then assert the captured
+    kwargs carry ``tool_choice="required"``.
+    """
+    from types import SimpleNamespace
+
+    monkeypatch.chdir(tmp_path)
+
+    model = cfg_module.get_model()
+
+    # Minimal fake response that OpenAIModel.generate() can unwrap.
+    # smolagents._coerce_tool_call requires a ChatMessageToolCall (or dict /
+    # model_dump-able), so we use the real type rather than SimpleNamespace.
+    from smolagents.models import ChatMessageToolCall, ChatMessageToolCallFunction
+
+    fake_tool_call = ChatMessageToolCall(
+        id="call_0",
+        type="function",
+        function=ChatMessageToolCallFunction(name="dummy_tool", arguments="{}"),
+    )
+    fake_choice = SimpleNamespace(
+        message=SimpleNamespace(
+            role="assistant",
+            content=None,
+            tool_calls=[fake_tool_call],
+        )
+    )
+    fake_response = SimpleNamespace(
+        choices=[fake_choice],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+    )
+
+    captured: dict = {}
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return fake_response
+
+    # Patch the underlying OpenAI client's create method.
+    model.client.chat.completions.create = fake_create
+
+    # A minimal Tool-like object satisfying get_tool_json_schema.
+    # We use a real saboteur tool so we don't need to replicate smolagents
+    # schema internals.
+    from saboteur.agents.tools import ReportStore, build_tools
+    tools = build_tools(0, ReportStore())
+
+    from smolagents.models import ChatMessage, MessageRole
+    model.generate(
+        [ChatMessage(role=MessageRole.USER, content="ping")],
+        tools_to_call_from=tools,
+    )
+
+    assert "tool_choice" in captured, "tool_choice was not forwarded to create()"
+    assert captured["tool_choice"] == "required", (
+        f"Expected tool_choice='required', got {captured['tool_choice']!r}"
+    )

@@ -39,8 +39,15 @@ class Settings(BaseSettings):
     # the same tool-call sequence — a precondition for invariant #1's identical
     # fault sequences on live LLM runs. Raise TEMPERATURE in the demo .env for
     # livelier behavior (at the cost of run-to-run reproducibility).
+    # If tool-call reliability is still poor after enabling tool_choice=required,
+    # the documented fallback is TEMPERATURE=0.3 with the fixed MODEL_SEED —
+    # this trades some run-to-run reproducibility for output variety.
     temperature: float = 0.0
     model_seed: int | None = 42
+    # Force the model to emit a tool call on every turn. llama.cpp (--jinja)
+    # and vLLM both enforce this via constrained generation. Set TOOL_CHOICE=auto
+    # if a future backend rejects the parameter (e.g. no tools-API support).
+    tool_choice: str = "required"
 
     # --- Harness knobs ---
     n_agents: int = 8
@@ -70,4 +77,8 @@ def get_model() -> OpenAIServerModel:
         api_key=s.openai_api_key,
         temperature=s.temperature,
         seed=s.model_seed,
+        # Stored in model.kwargs → applied at highest priority on every
+        # chat.completions.create call (models.py:546-550). This guarantees
+        # constrained generation even across smolagents version upgrades.
+        tool_choice=s.tool_choice,
     )
