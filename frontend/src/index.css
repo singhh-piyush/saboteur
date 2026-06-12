@@ -1,0 +1,163 @@
+@import "@fontsource/big-shoulders-display/500.css";
+@import "@fontsource/big-shoulders-display/600.css";
+@import "@fontsource/big-shoulders-display/700.css";
+@import "@fontsource/instrument-sans/400.css";
+@import "@fontsource/instrument-sans/500.css";
+@import "@fontsource/instrument-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Saboteur design tokens — "flight-ops console"                       */
+/* ------------------------------------------------------------------ */
+@theme {
+  --color-void: #07090d; /* page base */
+  --color-panel: #0c1017; /* panel surface */
+  --color-raised: #111722; /* hover / raised surface */
+  --color-line: oklch(100% 0 0 / 7%); /* hairline borders */
+  --color-line-strong: oklch(100% 0 0 / 14%);
+
+  --color-ink: #d7dbe4; /* primary text */
+  --color-ink-dim: #8e96a7; /* secondary text */
+  --color-ink-faint: #545d70; /* tertiary / labels */
+
+  --color-ok: #3fd68f; /* healthy — emerald */
+  --color-warn: #f5b73d; /* recovering — amber */
+  --color-crit: #f4504a; /* crashed — signal red */
+  --color-win: #8fd7f7; /* succeeded — ice cyan */
+  --color-accent: #ff5c1f; /* chaos / CTA — signal orange */
+
+  --font-display: "Big Shoulders Display", "Instrument Sans", sans-serif;
+  --font-body: "Instrument Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-feature-settings: "tnum";
+  overflow: hidden;
+}
+
+/* Atmosphere: faint grain + corner vignette, never solid flat black. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 49;
+  background:
+    radial-gradient(120% 90% at 50% 0%, transparent 60%, rgb(0 0 0 / 45%) 100%),
+    radial-gradient(
+      60% 50% at 50% 0%,
+      oklch(70% 0.19 45 / 4%) 0%,
+      transparent 70%
+    );
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion                                                              */
+/* ------------------------------------------------------------------ */
+
+/* Expanding ring fired when an agent cell changes state. */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 var(--ring, oklch(100% 0 0 / 35%));
+  }
+  100% {
+    box-shadow: 0 0 0 16px transparent;
+  }
+}
+.animate-pulse-ring {
+  animation: pulse-ring 0.9s cubic-bezier(0.2, 0.6, 0.3, 1) 1;
+}
+
+/* Slow breathing dot for the LIVE badge. */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+}
+.animate-breathe {
+  animation: breathe 2.2s ease-in-out infinite;
+}
+
+/* Chaos-log lines sliding in. */
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-feed-in {
+  animation: feed-in 0.25s ease-out 1;
+}
+
+/* Subtle scan sweep across the grid while a run is live. */
+@keyframes scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100vh);
+  }
+}
+
+/* Step tick: brief brightness flash on a cell's step counter. */
+@keyframes tick {
+  0% {
+    color: var(--color-ink);
+  }
+  100% {
+    color: var(--color-ink-dim);
+  }
+}
+.animate-tick {
+  animation: tick 0.5s ease-out 1;
+}
+
+::selection {
+  background: oklch(70% 0.19 45 / 30%);
+}
+
+/* Thin dark scrollbars (webkit + firefox). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3344 transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a3344;
+  border-radius: 3px;
+}
