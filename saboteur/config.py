@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     n_agents: int = 8
     max_steps: int = 15
     agent_timeout_s: int = 180
+    # Max agents running concurrently; 0 = unlimited. Local default matches
+    # llama.cpp's -np 8 parallel slots; the MI300X .env raises or disables it.
+    concurrency_limit: int = 8
 
 
 @functools.lru_cache(maxsize=1)
