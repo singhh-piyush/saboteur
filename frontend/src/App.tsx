@@ -25,27 +25,39 @@ function Shell() {
   const { state, activeRunId, page, navigate } = useRun();
   const [tab, setTab] = useState<Tab>("grid");
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const counts = runCounts(state);
 
   return (
     <div className="flex h-screen flex-col">
       {/* ---------------------------------------------------------------- */}
       <header className="flex items-center gap-4 border-b border-line bg-panel px-4 py-2.5">
+        {/* Sidebar toggle for tablet/mobile */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="rounded-sm border border-line p-1.5 text-ink-dim hover:bg-raised hover:text-ink xl:hidden"
+          title={sidebarOpen ? "Hide panel" : "Show panel"}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          </svg>
+        </button>
+
         <button
           type="button"
           onClick={() => navigate({ kind: "runs" })}
           className="font-display text-2xl font-bold leading-none tracking-[0.18em] hover:text-accent transition-colors"
         >
           SABOTEUR
-          <span className="ml-2 align-middle text-[11px] font-semibold tracking-[0.3em] text-accent">
+          <span className="hidden sm:inline-block ml-2 align-middle text-[11px] font-semibold tracking-[0.3em] text-accent">
             CHAOS CONSOLE
           </span>
         </button>
 
         {page.kind === "live" && (
           <>
-            <div className="min-w-0 flex-1 truncate text-center font-mono text-xs text-ink-faint">
+            <div className="hidden md:block min-w-0 flex-1 truncate text-center font-mono text-xs text-ink-faint">
               {activeRunId ?? ""}
               {state.profile && (
                 <span className="ml-2 text-ink-dim">
@@ -56,95 +68,94 @@ function Shell() {
             </div>
 
             {counts.total > 0 && (
-              <div className="hidden items-center gap-3 text-sm sm:flex">
+              <div className="hidden items-center gap-3 text-sm md:flex">
                 <Count label="nominal" value={counts.healthy} className="text-ok" />
                 <Count label="recovering" value={counts.recovering} className="text-warn" />
                 <Count label="down" value={counts.crashed} className="text-crit" />
                 <Count label="complete" value={counts.succeeded} className="text-win" />
               </div>
             )}
-
-            {/* Sidebar toggle for tablet/mobile */}
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="rounded-sm border border-line p-1.5 text-ink-dim hover:bg-raised hover:text-ink xl:hidden"
-              title={sidebarOpen ? "Hide panel" : "Show panel"}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-                <path d="M2 4h12M2 8h12M2 12h12" />
-              </svg>
-            </button>
           </>
         )}
 
-        <div className="ml-auto">
+        <div className={page.kind !== "live" ? "ml-auto" : "ml-auto md:ml-0"}>
           <ConnectionBadge conn={state.conn} />
         </div>
       </header>
 
       {/* ---------------------------------------------------------------- */}
-      {page.kind === "runs" ? (
-        <div className="min-h-0 flex-1">
-          <RunsPage />
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1">
-          {/* Sidebar — hidden on mobile, collapsible on tablet */}
-          {sidebarOpen && (
-            <aside className="hidden w-80 shrink-0 flex-col border-r border-line bg-panel/60 xl:flex">
-              <ControlPanel />
-              <ChaosLog />
-            </aside>
-          )}
+      <div className="flex min-h-0 flex-1 relative overflow-hidden">
+        {/* Sidebar — off-canvas on mobile, visible on xl */}
+        <aside 
+          className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col border-r border-line bg-panel/95 backdrop-blur-md transition-transform xl:relative xl:flex xl:translate-x-0 ${
+            sidebarOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
+          }`}
+        >
+          <ControlPanel />
+          {page.kind === "live" && <ChaosLog />}
+        </aside>
 
-          <main className="flex min-w-0 flex-1 flex-col">
-            <nav className="flex items-center gap-1 border-b border-line px-3 py-1.5">
-              <TabButton active={tab === "grid"} onClick={() => setTab("grid")}>
-                BATTLE GRID
-              </TabButton>
-              <TabButton
-                active={tab === "scorecard"}
-                onClick={() => setTab("scorecard")}
-              >
-                SCORECARD
-                {state.finished && tab !== "scorecard" && (
-                  <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
+        {/* Backdrop for mobile sidebar */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 z-30 bg-void/50 xl:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden
+          />
+        )}
+
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {page.kind === "runs" ? (
+            <RunsPage />
+          ) : (
+            <>
+              <nav className="flex items-center gap-1 border-b border-line px-3 py-1.5">
+                <TabButton active={tab === "grid"} onClick={() => setTab("grid")}>
+                  BATTLE GRID
+                </TabButton>
+                <TabButton
+                  active={tab === "scorecard"}
+                  onClick={() => setTab("scorecard")}
+                >
+                  SCORECARD
+                  {state.finished && tab !== "scorecard" && (
+                    <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
+                  )}
+                </TabButton>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  onClick={() => navigate({ kind: "runs" })}
+                  className="rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim hover:bg-raised hover:text-ink"
+                >
+                  ← Runs
+                </button>
+              </nav>
+
+              <div className="min-h-0 flex-1">
+                {tab === "grid" ? (
+                  <BattleGrid
+                    selectedAgent={selectedAgent}
+                    onSelect={setSelectedAgent}
+                  />
+                ) : (
+                  <ScorecardView />
                 )}
-              </TabButton>
-              <div className="flex-1" />
-              <button
-                type="button"
-                onClick={() => navigate({ kind: "runs" })}
-                className="rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim hover:bg-raised hover:text-ink"
-              >
-                ← Runs
-              </button>
-            </nav>
+              </div>
 
-            <div className="min-h-0 flex-1">
-              {tab === "grid" ? (
-                <BattleGrid
-                  selectedAgent={selectedAgent}
-                  onSelect={setSelectedAgent}
-                />
-              ) : (
-                <ScorecardView />
-              )}
-            </div>
-
-            <ReplayBar />
-          </main>
-
-          {/* Timeline drawer — full-screen sheet on mobile */}
-          {selectedAgent !== null && state.agents[selectedAgent] && (
-            <TimelineDrawer
-              agentId={selectedAgent}
-              onClose={() => setSelectedAgent(null)}
-            />
+              <ReplayBar />
+            </>
           )}
-        </div>
-      )}
+        </main>
+
+        {/* Timeline drawer — full-screen sheet on mobile */}
+        {selectedAgent !== null && state.agents[selectedAgent] && page.kind === "live" && (
+          <TimelineDrawer
+            agentId={selectedAgent}
+            onClose={() => setSelectedAgent(null)}
+          />
+        )}
+      </div>
     </div>
   );
 }
