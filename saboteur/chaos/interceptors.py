@@ -106,6 +106,8 @@ class RateLimitInterceptor(Interceptor):
         return limited
 
     def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+        # Profile validation guarantees retry_after_s is set for rate_limit.
+        assert self.spec.retry_after_s is not None
         retry_after = round(self.rng.uniform(*self.spec.retry_after_s), 1)
         emit(self.fault, {"retry_after_s": retry_after})
         raise SimulatedRateLimit(retry_after)
@@ -135,7 +137,9 @@ class TimeoutInterceptor(Interceptor):
     fault = FaultType.TIMEOUT
 
     def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+        # Profile validation guarantees timeout_after_s is set for timeout.
         deadline = self.spec.timeout_after_s
+        assert deadline is not None
         emit(self.fault, {"timeout_after_s": deadline})
         time.sleep(deadline)
         raise SimulatedTimeout(deadline)
@@ -146,6 +150,8 @@ class LatencyInterceptor(Interceptor):
     fault = FaultType.LATENCY
 
     def apply(self, tool_name: str, emit: EmitFn) -> None:
+        # Profile validation guarantees delay_s is set for latency.
+        assert self.spec.delay_s is not None
         delay = round(self.rng.uniform(*self.spec.delay_s), 3)
         emit(self.fault, {"delay_s": delay})
         time.sleep(delay)
@@ -239,6 +245,8 @@ class ContextDropInterceptor:
     def maybe_drop(self, agent: Any, emit: EmitFn) -> None:
         if not self.rng.should_fire(self.spec.probability):
             return
+        # Profile validation guarantees drop_last_k is set for context_drop.
+        assert self.spec.drop_last_k is not None
         try:
             steps = getattr(getattr(agent, "memory", None), "steps", None)
             if not isinstance(steps, list) or not steps:

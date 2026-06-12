@@ -33,7 +33,7 @@ from saboteur.agents.tools import ReportStore
 from saboteur.chaos.profile import ChaosProfile
 from saboteur.config import get_settings
 from saboteur.telemetry.bus import TelemetryBus
-from saboteur.telemetry.schema import TelemetryEvent
+from saboteur.telemetry.schema import EventKind, TelemetryEvent
 
 from .instrumentation import make_on_event
 
@@ -110,11 +110,16 @@ async def battle_royale(
         async with bus.subscribe() as stream:
             subscribed.set()
             async for event in stream:
-                if event.run_id != run_id:
+                try:
+                    if event.run_id != run_id:
+                        continue
+                    events.append(event)
+                    if event.event == "run_finished":
+                        return
+                except Exception:
+                    # A malformed event must never tear down the run (#2). Keep
+                    # draining; the worst case is one dropped collected event.
                     continue
-                events.append(event)
-                if event.event == "run_finished":
-                    return
 
     collector = asyncio.create_task(_collect())
     await subscribed.wait()
@@ -167,6 +172,10 @@ async def battle_royale(
             # Bus never delivered run_finished (unbound bus?) — keep what we
             # have rather than hanging the run.
             collector.cancel()
+        except Exception:
+            # The collector should never raise (its body is guarded), but if it
+            # somehow does, that must not escape the run (#2): keep what we have.
+            collector.cancel()
     finally:
         if not collector.done():
             collector.cancel()
@@ -181,7 +190,7 @@ async def battle_royale(
     )
 
 
-def _run_event(run_id: str, kind: str, payload: dict) -> TelemetryEvent:
+def _run_event(run_id: str, kind: EventKind, payload: dict) -> TelemetryEvent:
     """A run-lifecycle event; agent_id -1 means 'the run itself'."""
     return TelemetryEvent(
         run_id=run_id, agent_id=-1, step=None, event=kind, payload=payload

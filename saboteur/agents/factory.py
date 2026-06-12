@@ -91,13 +91,19 @@ class SaboteurAgent:
         self._faults: list[FaultEvent] = []
         # Faults emitted during the in-flight step, drained by _on_step.
         self._pending_faults: list[FaultEvent] = []
+        # Set in run()'s finally. Once true, all callbacks go silent: a
+        # timed-out run leaves an orphan smolagents worker thread alive (see
+        # run()'s note), and that thread must not keep emitting telemetry after
+        # the harness has moved on — otherwise late events reach the JSONL but
+        # not the in-memory collector, breaking replay parity (invariant #3).
+        self._finished = False
 
     # ------------------------------------------------------------------
     # Event emission (telemetry must never crash an agent — invariant #3)
     # ------------------------------------------------------------------
 
     def _emit(self, kind: str, step: int | None, data: dict[str, Any]) -> None:
-        if self._on_event is None:
+        if self._on_event is None or self._finished:
             return
         try:
             self._on_event(AgentEvent(self.agent_id, step, kind, data))
@@ -110,6 +116,10 @@ class SaboteurAgent:
 
     def _handle_fault(self, event: FaultEvent) -> None:
         """Engine ``on_fault`` sink: record + stamp with the current step."""
+        # An orphan thread from a timed-out run may still hit a sabotaged tool;
+        # drop its faults so post-run telemetry can't desync JSONL vs. collector.
+        if self._finished:
+            return
         step = getattr(self.agent, "step_number", None)
         self._faults.append(event)
         self._pending_faults.append(event)
@@ -136,6 +146,8 @@ class SaboteurAgent:
         emit per-tool-call and recovery events, then run the context_drop hook
         *last* so our own history is unaffected by memory trimming.
         """
+        if self._finished:
+            return
         try:
             target = agent if agent is not None else self.agent
             record = self._build_record(memory_step)
@@ -262,6 +274,10 @@ class SaboteurAgent:
                 "steps_taken": len(self._history),
             },
         )
+        # Terminal event is out; from here any orphan worker thread (from a
+        # timed-out run) is silenced, so no telemetry can land after the
+        # harness emits run_finished and desync JSONL vs. the collector.
+        self._finished = True
 
         return AgentRunResult(
             agent_id=self.agent_id,

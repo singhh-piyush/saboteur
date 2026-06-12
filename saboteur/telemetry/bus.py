@@ -27,7 +27,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator
-from typing import Generator
 
 from .schema import TelemetryEvent
 

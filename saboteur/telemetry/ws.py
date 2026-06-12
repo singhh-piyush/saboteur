@@ -23,8 +23,6 @@ Registry usage::
 
 from __future__ import annotations
 
-import json
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -34,6 +32,25 @@ from .jsonl import read_jsonl
 from .schema import TelemetryEvent
 
 _RUNS_DIR = Path("runs")
+
+# Stable identity for replay/live deduplication. Two events with the same tuple
+# are treated as the same event (the JSONL copy and the live copy). We avoid a
+# bare ``ts`` high-water mark: events emitted from different worker threads can
+# share a microsecond timestamp or arrive slightly out of ts-order, and a
+# ``ts <= last_ts`` cutoff would silently drop distinct live events.
+_Identity = tuple[str, int, int | None, str, str | None, str | None]
+
+
+def _identity(event: TelemetryEvent) -> _Identity:
+    return (
+        event.ts.isoformat(),
+        event.agent_id,
+        event.step,
+        event.event,
+        event.fault,
+        event.recovery,
+    )
+
 
 router = APIRouter()
 
@@ -71,9 +88,9 @@ async def websocket_run(websocket: WebSocket, run_id: str) -> None:
     try:
         if bus is not None:
             async with bus.subscribe() as live_events:
-                last_ts = await _replay_jsonl(websocket, run_id)
+                replayed = await _replay_jsonl(websocket, run_id)
                 async for event in live_events:
-                    if last_ts is not None and event.ts <= last_ts:
+                    if _identity(event) in replayed:
                         continue
                     await websocket.send_text(event.model_dump_json())
         else:
@@ -91,15 +108,18 @@ async def websocket_run(websocket: WebSocket, run_id: str) -> None:
 
 async def _replay_jsonl(
     websocket: WebSocket, run_id: str
-) -> datetime | None:
-    """Send all committed events to the client. Returns the latest ts seen."""
+) -> set[_Identity]:
+    """Send all committed events to the client.
+
+    Returns the set of replayed event identities so the live loop can skip the
+    copies it already sent (and only those) — see ``_identity``.
+    """
     path = _RUNS_DIR / f"{run_id}.jsonl"
     if not path.exists():
-        return None
+        return set()
 
-    last_ts: datetime | None = None
+    seen: set[_Identity] = set()
     for event in read_jsonl(path):
         await websocket.send_text(event.model_dump_json())
-        if last_ts is None or event.ts > last_ts:
-            last_ts = event.ts
-    return last_ts
+        seen.add(_identity(event))
+    return seen

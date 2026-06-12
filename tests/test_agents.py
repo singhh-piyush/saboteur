@@ -16,7 +16,6 @@ from saboteur.agents import (
     FiledReport,
     FileReportTool,
     ReportStore,
-    TaskResult,
     WeatherTool,
     WebSearchTool,
     build_tools,

@@ -5,7 +5,6 @@ They verify that Settings loads with correct defaults and that get_settings()
 returns the singleton (same object on repeated calls).
 """
 
-import importlib
 
 import pytest
 

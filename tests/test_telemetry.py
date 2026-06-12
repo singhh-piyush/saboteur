@@ -12,8 +12,6 @@ Three scenarios:
 from __future__ import annotations
 
 import asyncio
-import json
-from datetime import timezone
 from pathlib import Path
 
 import pytest
@@ -188,7 +186,7 @@ async def test_jsonl_written_and_flushed(tmp_path: Path) -> None:
 
     log = tmp_path / f"{RUN_ID}.jsonl"
     assert log.exists()
-    lines = [l for l in log.read_text().splitlines() if l.strip()]
+    lines = [ln for ln in log.read_text().splitlines() if ln.strip()]
     assert len(lines) == n
     for i, line in enumerate(lines):
         ev = TelemetryEvent.model_validate_json(line)
@@ -281,7 +279,6 @@ def tmp_runs(tmp_path: Path, monkeypatch):
 
 def test_ws_replay_only(tmp_runs: Path) -> None:
     """A completed run: client receives exactly the JSONL backlog."""
-    import saboteur.telemetry.ws as ws_mod
 
     run_id = "ws-test-replay"
     # Write two events to JSONL manually.

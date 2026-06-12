@@ -20,8 +20,25 @@ dependencies = [
     "pytest-asyncio",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "ruff",
+    "types-PyYAML",
+]
+
 [tool.setuptools.packages.find]
 include = ["saboteur*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = false
+
+# smolagents ships no type stubs / py.typed marker; treat it as untyped rather
+# than letting its missing stubs mask real errors in our own code.
+[[tool.mypy.overrides]]
+module = ["smolagents.*"]
+ignore_missing_imports = true
