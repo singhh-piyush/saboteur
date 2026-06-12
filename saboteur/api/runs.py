@@ -1,9 +1,20 @@
 """Run management routes.
 
-POST /runs          — start a battle-royale in the background; returns {run_id}
-GET  /runs/{id}     — status (pending|running|finished|failed) + per-agent summary
-GET  /runs/{id}/scorecard — Scorecard JSON (425 until finished; 404 if missing)
-GET  /runs/{id}/events    — paginated JSONL event history (?after_ts= &limit=)
+POST   /runs                       — start a battle-royale in the background; returns {run_id}
+GET    /runs                       — list all runs: id, profile, n_agents, status,
+                                     started_at, finished_at, survival_pct (if scored)
+GET    /runs/{id}                  — status + per-agent summary
+GET    /runs/{id}/scorecard        — Scorecard JSON (425 until finished; 404 if missing)
+GET    /runs/{id}/events           — paginated JSONL event history (?after_ts= &limit=)
+GET    /runs/{id}/download/jsonl   — download runs/{id}.jsonl
+GET    /runs/{id}/download/scorecard — download runs/{id}.scorecard.json
+DELETE /runs/{id}                  — delete files; 409 if run is RUNNING or PENDING
+DELETE /runs?status=finished       — bulk delete finished runs; returns {"deleted": N}
+
+Deletion is safe under concurrency: the run registry is the authoritative source
+of liveness. We never delete files whose run_id is RUNNING or PENDING in the
+registry, even if that process is not the one that created the files (archived
+runs from previous server lives have no registry entry and are always deletable).
 
 The ``_agent_factory`` module-level variable is the test seam: patch it with a
 FakeAgent factory to exercise the full lifecycle without a live LLM.
@@ -16,7 +27,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from saboteur.agents.factory import build_agent
@@ -80,8 +92,24 @@ class RunStatusResponse(BaseModel):
 class RunListEntry(BaseModel):
     run_id: str
     profile: str
+    n_agents: int
     status: str  # pending | running | finished | failed | archived
+    started_at: datetime | None
+    finished_at: datetime | None
     has_scorecard: bool
+    survival_pct: float | None  # None until scored
+
+
+def _survival_pct_from_scorecard(scorecard_path: Path) -> float | None:
+    """Read survival_rate from a scorecard JSON file, return as percentage."""
+    try:
+        data = json.loads(scorecard_path.read_text(encoding="utf-8"))
+        rate = data.get("survival_rate")
+        if rate is not None:
+            return float(rate) * 100.0
+    except Exception:
+        pass
+    return None
 
 
 @router.get("", response_model=list[RunListEntry])
@@ -95,11 +123,18 @@ def list_runs() -> list[RunListEntry]:
     entries: dict[str, RunListEntry] = {}
 
     for state in run_registry.all():
+        scorecard_path = _RUNS_DIR / f"{state.run_id}.scorecard.json"
         entries[state.run_id] = RunListEntry(
             run_id=state.run_id,
             profile=state.profile,
+            n_agents=state.n_agents,
             status=state.status.value,
-            has_scorecard=(_RUNS_DIR / f"{state.run_id}.scorecard.json").exists(),
+            started_at=state.started_at,
+            finished_at=state.finished_at,
+            has_scorecard=scorecard_path.exists(),
+            survival_pct=_survival_pct_from_scorecard(scorecard_path)
+            if scorecard_path.exists()
+            else None,
         )
 
     if _RUNS_DIR.is_dir():
@@ -109,16 +144,25 @@ def list_runs() -> list[RunListEntry]:
                 continue
             scorecard = _RUNS_DIR / f"{run_id}.scorecard.json"
             profile = run_id.rsplit("-", 2)[0] if run_id.count("-") >= 2 else run_id
+            n_agents = 0
             if scorecard.exists():
                 try:
-                    profile = json.loads(scorecard.read_text(encoding="utf-8"))["profile"]
+                    data = json.loads(scorecard.read_text(encoding="utf-8"))
+                    profile = data.get("profile", profile)
+                    n_agents = data.get("n_agents", 0)
                 except Exception:
                     pass
             entries[run_id] = RunListEntry(
                 run_id=run_id,
                 profile=profile,
+                n_agents=n_agents,
                 status="archived",
+                started_at=None,
+                finished_at=None,
                 has_scorecard=scorecard.exists(),
+                survival_pct=_survival_pct_from_scorecard(scorecard)
+                if scorecard.exists()
+                else None,
             )
 
     # run_ids embed a UTC stamp; reverse-lexicographic ≈ newest first.
@@ -166,6 +210,32 @@ async def start_run(req: RunRequest) -> RunResponse:
 
     asyncio.create_task(_background())
     return RunResponse(run_id=run_id)
+
+
+@router.get("/{run_id}/download/jsonl")
+def download_jsonl(run_id: str) -> FileResponse:
+    """Download the raw JSONL event log for *run_id*."""
+    path = _RUNS_DIR / f"{run_id}.jsonl"
+    if not path.exists():
+        raise HTTPException(404, f"JSONL log for run '{run_id}' not found")
+    return FileResponse(
+        path=str(path),
+        media_type="application/x-ndjson",
+        filename=f"{run_id}.jsonl",
+    )
+
+
+@router.get("/{run_id}/download/scorecard")
+def download_scorecard(run_id: str) -> FileResponse:
+    """Download the scorecard JSON for *run_id*."""
+    path = _RUNS_DIR / f"{run_id}.scorecard.json"
+    if not path.exists():
+        raise HTTPException(404, f"Scorecard for run '{run_id}' not found")
+    return FileResponse(
+        path=str(path),
+        media_type="application/json",
+        filename=f"{run_id}.scorecard.json",
+    )
 
 
 @router.get("/{run_id}", response_model=RunStatusResponse)
@@ -242,6 +312,91 @@ def get_events(
         events = [e for e in events if e.ts > cutoff]
 
     return [json.loads(e.model_dump_json()) for e in events[:limit]]
+
+
+@router.delete("/{run_id}", status_code=204)
+def delete_run(run_id: str) -> None:
+    """Delete all artifacts for *run_id*.
+
+    Returns 409 if the run is currently RUNNING or PENDING (refuse to delete
+    files that belong to an active run — check the registry, not file existence).
+    Returns 404 if no artifacts exist and the run is not in the registry.
+    """
+    state = run_registry.get(run_id)
+
+    if state is not None and state.status in (RunStatus.RUNNING, RunStatus.PENDING):
+        raise HTTPException(
+            409,
+            f"run '{run_id}' is currently {state.status.value} — cannot delete",
+        )
+
+    jsonl = _RUNS_DIR / f"{run_id}.jsonl"
+    scorecard = _RUNS_DIR / f"{run_id}.scorecard.json"
+    control_jsonl = _RUNS_DIR / f"{run_id}-control.jsonl"
+    control_scorecard = _RUNS_DIR / f"{run_id}-control.scorecard.json"
+
+    files_existed = any(p.exists() for p in (jsonl, scorecard))
+    if not files_existed and state is None:
+        raise HTTPException(404, f"run '{run_id}' not found")
+
+    for path in (jsonl, scorecard, control_jsonl, control_scorecard):
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+@router.delete("", status_code=200)
+def bulk_delete_runs(
+    status: str = Query(..., description="Must be 'finished'"),
+) -> dict:
+    """Bulk delete finished runs.
+
+    Only ``status=finished`` is accepted (422 otherwise).  Skips any run that
+    is currently RUNNING or PENDING in the registry — active runs are never
+    touched.  Returns ``{"deleted": N}`` where N is the number of run IDs
+    whose files were removed.
+    """
+    if status != "finished":
+        raise HTTPException(
+            422,
+            f"bulk delete only supports status='finished', got {status!r}",
+        )
+
+    deleted = 0
+    if not _RUNS_DIR.is_dir():
+        return {"deleted": 0}
+
+    # Collect all non-control run IDs that have a JSONL file.
+    run_ids: list[str] = [
+        log.stem
+        for log in _RUNS_DIR.glob("*.jsonl")
+        if not log.stem.endswith("-control")
+    ]
+
+    for run_id in run_ids:
+        reg_state = run_registry.get(run_id)
+        if reg_state is not None and reg_state.status in (
+            RunStatus.RUNNING,
+            RunStatus.PENDING,
+        ):
+            # Active run — skip silently.
+            continue
+
+        jsonl = _RUNS_DIR / f"{run_id}.jsonl"
+        scorecard = _RUNS_DIR / f"{run_id}.scorecard.json"
+        control_jsonl = _RUNS_DIR / f"{run_id}-control.jsonl"
+        control_scorecard = _RUNS_DIR / f"{run_id}-control.scorecard.json"
+
+        for path in (jsonl, scorecard, control_jsonl, control_scorecard):
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        deleted += 1
+
+    return {"deleted": deleted}
 
 
 # ---------------------------------------------------------------------------

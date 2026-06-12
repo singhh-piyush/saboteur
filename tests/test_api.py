@@ -437,3 +437,100 @@ def test_replay_non_jsonl_returns_422():
     with TestClient(app) as client:
         resp = client.post("/replay", json={"jsonl_path": "somefile.txt"})
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# 6. DELETE /runs — single and bulk
+# ---------------------------------------------------------------------------
+
+
+def test_delete_running_run_returns_409(tmp_runs, clean_registry):
+    """DELETE a RUNNING run must return 409 — never touch active run files."""
+    from saboteur.api import app
+    from saboteur.api.state import RunState, RunStatus
+
+    run_id = "del-running-test"
+    clean_registry.add(
+        RunState(
+            run_id=run_id,
+            profile="calm_seas",
+            n_agents=2,
+            with_control=False,
+            status=RunStatus.RUNNING,
+        )
+    )
+    # Write a JSONL so it exists on disk — must NOT be deleted.
+    (tmp_runs / f"{run_id}.jsonl").write_text('{"run_id":"x"}\n')
+
+    with TestClient(app) as client:
+        resp = client.delete(f"/runs/{run_id}")
+
+    assert resp.status_code == 409
+    assert (tmp_runs / f"{run_id}.jsonl").exists(), "JSONL must survive a 409 refusal"
+
+
+def test_delete_finished_run_removes_files(tmp_runs, clean_registry):
+    """DELETE a finished run removes JSONL and scorecard from disk."""
+    from saboteur.api import app
+    from saboteur.api.state import RunState, RunStatus
+
+    run_id = "del-finished-test"
+    clean_registry.add(
+        RunState(
+            run_id=run_id,
+            profile="calm_seas",
+            n_agents=1,
+            with_control=False,
+            status=RunStatus.FINISHED,
+        )
+    )
+    jsonl = tmp_runs / f"{run_id}.jsonl"
+    scorecard = tmp_runs / f"{run_id}.scorecard.json"
+    jsonl.write_text('{"run_id":"x"}\n')
+    scorecard.write_text('{"run_id":"del-finished-test"}')
+
+    with TestClient(app) as client:
+        resp = client.delete(f"/runs/{run_id}")
+
+    assert resp.status_code == 204
+    assert not jsonl.exists(), "JSONL should have been deleted"
+    assert not scorecard.exists(), "scorecard should have been deleted"
+
+
+def test_bulk_delete_skips_running_runs(tmp_runs, clean_registry):
+    """DELETE /runs?status=finished removes finished runs but leaves running ones."""
+    from saboteur.api import app
+    from saboteur.api.state import RunState, RunStatus
+
+    # One RUNNING run — must survive.
+    running_id = "bulk-running"
+    clean_registry.add(
+        RunState(
+            run_id=running_id,
+            profile="calm_seas",
+            n_agents=2,
+            with_control=False,
+            status=RunStatus.RUNNING,
+        )
+    )
+    (tmp_runs / f"{running_id}.jsonl").write_text('{"run_id":"x"}\n')
+
+    # Two finished runs (no registry entry = archived).
+    for i in range(2):
+        rid = f"bulk-finished-{i}"
+        (tmp_runs / f"{rid}.jsonl").write_text('{"run_id":"x"}\n')
+        (tmp_runs / f"{rid}.scorecard.json").write_text('{"run_id":"x"}')
+
+    with TestClient(app) as client:
+        resp = client.delete("/runs", params={"status": "finished"})
+
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 2
+
+    # Running run's JSONL must still exist.
+    assert (tmp_runs / f"{running_id}.jsonl").exists()
+
+    # Finished runs' files must be gone.
+    for i in range(2):
+        assert not (tmp_runs / f"bulk-finished-{i}.jsonl").exists()
+

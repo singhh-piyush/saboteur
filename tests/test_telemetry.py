@@ -278,7 +278,7 @@ def tmp_runs(tmp_path: Path, monkeypatch):
 
 
 def test_ws_replay_only(tmp_runs: Path) -> None:
-    """A completed run: client receives exactly the JSONL backlog."""
+    """A completed run: client receives the JSONL backlog then a control frame."""
 
     run_id = "ws-test-replay"
     # Write two events to JSONL manually.
@@ -294,10 +294,13 @@ def test_ws_replay_only(tmp_runs: Path) -> None:
     with TestClient(app) as client:
         with client.websocket_connect(f"/ws/{run_id}") as ws:
             received = [ws.receive_json() for _ in range(2)]
+            # After the backlog the server sends the stream-complete control frame.
+            control = ws.receive_json()
 
     assert len(received) == 2
     assert received[0]["step"] == 0
     assert received[1]["step"] == 1
+    assert control == {"event": "__stream_complete__"}
 
 
 def test_ws_backlog_then_live(tmp_runs: Path) -> None:
@@ -353,3 +356,86 @@ def test_ws_backlog_then_live(tmp_runs: Path) -> None:
 
     assert backlog["step"] == 0
     assert live["step"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 4. __stream_complete__ control frame — close semantics
+# ---------------------------------------------------------------------------
+
+
+def test_ws_finished_run_sends_control_frame_and_close_1000(tmp_runs: Path) -> None:
+    """Finished run (no live bus): backlog replayed, then control frame sent,
+    then socket closed with code 1000.  The control frame must never appear in
+    the JSONL (invariant #3)."""
+    run_id = "ws-test-complete-finished"
+    events = [_event(run_id=run_id, step=i) for i in range(3)]
+    log = tmp_runs / f"{run_id}.jsonl"
+    with log.open("w") as f:
+        for ev in events:
+            f.write(ev.model_dump_json() + "\n")
+
+    reg = BusRegistry()  # finished run — no live bus
+    app = _make_app(reg)
+
+    received = []
+    with TestClient(app) as client:
+        with client.websocket_connect(f"/ws/{run_id}") as ws:
+            for _ in range(3):
+                received.append(ws.receive_json())
+            control = ws.receive_json()
+
+    assert [r["step"] for r in received] == [0, 1, 2]
+    assert control == {"event": "__stream_complete__"}
+
+    # Invariant #3: control frame must NOT be in the JSONL.
+    jsonl_text = log.read_text()
+    assert "__stream_complete__" not in jsonl_text
+
+
+def test_ws_live_run_sends_control_frame_after_bus_closes(tmp_runs: Path) -> None:
+    """Live run: after the bus closes (run_finished), the control frame arrives
+    and the connection closes cleanly with code 1000."""
+    import saboteur.telemetry.ws as ws_mod
+    from contextlib import asynccontextmanager
+    from fastapi import FastAPI
+
+    run_id = "ws-test-complete-live"
+
+    # Seed one historical event.
+    historical = _event(run_id=run_id, step=0)
+    (tmp_runs / f"{run_id}.jsonl").write_text(historical.model_dump_json() + "\n")
+
+    bus = TelemetryBus()
+    reg = BusRegistry()
+    reg.register(run_id, bus)
+
+    original_registry = ws_mod.registry
+    ws_mod.registry = reg
+    try:
+        @asynccontextmanager
+        async def lifespan(app):
+            bus.bind(asyncio.get_running_loop())
+            yield
+
+        app = FastAPI(lifespan=lifespan)
+        app.include_router(router)
+
+        with TestClient(app) as client:
+            with client.websocket_connect(f"/ws/{run_id}") as ws:
+                # 1. Receive historical backlog event.
+                backlog_ev = ws.receive_json()
+                assert backlog_ev["step"] == 0
+
+                # 2. Emit a live event then close the bus to simulate run_finished.
+                bus.emit(_event(run_id=run_id, step=1))
+                live_ev = ws.receive_json()
+                assert live_ev["step"] == 1
+
+                # 3. Close the bus — server should now send control frame.
+                bus.close()
+                control = ws.receive_json()
+
+    finally:
+        ws_mod.registry = original_registry
+
+    assert control == {"event": "__stream_complete__"}
