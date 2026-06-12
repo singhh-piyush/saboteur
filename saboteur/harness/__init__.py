@@ -1,10 +1,28 @@
-"""Battle-royale runner, per-agent instrumentation, and scorecard computation.
+"""Harness: concurrent battle royale, scoring, and run orchestration.
 
-Build step 3 — to be implemented after agents and chaos engine are ready.
+Public API::
 
-Planned modules:
-    battle_royale   — asyncio.gather(..., return_exceptions=True) over N agents;
-                      each agent loop runs via asyncio.to_thread (smolagents is sync)
-    instrumentation — wraps the agent loop to emit telemetry events
-    scoring         — pure function over event stream → ResilienceScorecard
+    from saboteur.harness import (
+        battle_royale, RunReport, AgentFactory,
+        score, Scorecard,
+        orchestrate,
+        to_telemetry, make_on_event,
+    )
 """
+
+from .battle import AgentFactory, RunReport, battle_royale
+from .instrumentation import make_on_event, to_telemetry
+from .runner import make_run_id, orchestrate
+from .scoring import Scorecard, score
+
+__all__ = [
+    "AgentFactory",
+    "RunReport",
+    "Scorecard",
+    "battle_royale",
+    "make_on_event",
+    "make_run_id",
+    "orchestrate",
+    "score",
+    "to_telemetry",
+]
