@@ -202,14 +202,26 @@ async def start_run(req: RunRequest) -> RunResponse:
                 agent_factory=_agent_factory,
             )
             state.status = RunStatus.FINISHED
-        except Exception as exc:
+        except BaseException as exc:
             state.status = RunStatus.FAILED
             state.error = repr(exc)
+            raise
         finally:
             state.finished_at = datetime.now(tz=timezone.utc)
 
-    asyncio.create_task(_background())
+    task = asyncio.create_task(_background())
+    state.task = task
     return RunResponse(run_id=run_id)
+
+@router.post("/{run_id}/cancel", status_code=200)
+def cancel_run(run_id: str) -> dict:
+    """Cancel an active run."""
+    state = run_registry.get(run_id)
+    if state is None or state.status not in (RunStatus.PENDING, RunStatus.RUNNING):
+        raise HTTPException(400, "Run is not active")
+    if state.task is not None:
+        state.task.cancel()
+    return {"status": "cancelled"}
 
 
 @router.get("/{run_id}/download/jsonl")

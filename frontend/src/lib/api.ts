@@ -145,6 +145,17 @@ export async function deleteRun(runId: string): Promise<void> {
   }
 }
 
+/** Cancel a running or pending run. */
+export async function cancelRun(runId: string): Promise<void> {
+  const resp = await fetch(`/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new ApiError(resp.status, `${resp.status}: ${body}`);
+  }
+}
+
 /** Bulk-delete all finished runs. Returns the count deleted. */
 export async function bulkDeleteRuns(): Promise<{ deleted: number }> {
   return request<{ deleted: number }>("/runs?status=finished", {

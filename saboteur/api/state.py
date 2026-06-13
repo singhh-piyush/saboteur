@@ -9,6 +9,7 @@ loop (no threads write to RunState), so no locking is needed.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import asyncio
 from datetime import datetime
 from enum import Enum
 
@@ -30,6 +31,7 @@ class RunState:
     started_at: datetime | None = None
     finished_at: datetime | None = None
     error: str | None = None
+    task: asyncio.Task | None = None
 
 
 class RunRegistry:

@@ -4,6 +4,15 @@ import { fetchProfiles, startRun, type ProfileInfo } from "../lib/api";
 import { faultStyle } from "../lib/faults";
 import { pct } from "../lib/format";
 import { useRun } from "../state/RunContext";
+import { PanelHeader } from "./PanelHeader";
+import { Tooltip } from "./Tooltip";
+
+/** Shared input style applied to text, number, and select controls */
+const INPUT_CLS =
+  "w-full rounded-sm border border-line bg-raised px-2 py-1.5 text-sm text-ink outline-none " +
+  "transition-colors duration-150 " +
+  "focus:border-accent/60 focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--color-accent)_18%,transparent)] " +
+  "placeholder:text-ink-faint";
 
 export function ControlPanel() {
   const { watchRun, state } = useRun();
@@ -45,7 +54,7 @@ export function ControlPanel() {
       if (parsedSeed !== null && Number.isFinite(parsedSeed))
         body.seed_override = parsedSeed;
       const { run_id } = await startRun(body);
-      watchRun(run_id);
+      watchRun(run_id, nAgents);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -54,19 +63,19 @@ export function ControlPanel() {
   }
 
   return (
-    <section className="border-b border-line">
-      <header className="border-b border-line px-3 py-2">
-        <h2 className="font-display text-sm font-semibold tracking-widest text-ink-dim">
-          CHAOS CONTROL
-        </h2>
-      </header>
+    <section>
+      <PanelHeader title="CHAOS CONTROL" />
 
       <div className="space-y-3 p-3">
-        <Field label="profile">
+        {/* Profile selector */}
+        <Field
+          label="profile"
+          tooltip="The chaos profile defines which faults are injected and at what probability"
+        >
           <select
             value={profileName}
             onChange={(e) => setProfileName(e.target.value)}
-            className="w-full rounded-sm border border-line bg-raised px-2 py-1.5 text-sm text-ink outline-none focus:border-line-strong"
+            className={`${INPUT_CLS} sb-select`}
           >
             {profiles.map((p) => (
               <option key={p.name} value={p.name}>
@@ -76,75 +85,127 @@ export function ControlPanel() {
           </select>
         </Field>
 
+        {/* Profile description + fault chips */}
         {profile && (
           <div className="rounded-sm border border-line bg-panel px-2.5 py-2">
-            <p className="text-sm leading-snug text-ink-dim">
+            <p className="text-sm font-medium leading-relaxed text-ink">
               {profile.description || "No description."}
             </p>
             <div className="mt-2 flex flex-wrap gap-1">
               {profile.faults.length === 0 ? (
-                <span className="text-xs uppercase tracking-widest text-ok">
-                  zero faults — control profile
+                <span className="text-xs font-medium uppercase tracking-widest text-ok">
+                  zero faults - control profile
                 </span>
               ) : (
-                profile.faults.map((f) => (
-                  <span
-                    key={f.type}
-                    className="rounded-sm border border-line px-1.5 py-0.5 text-xs font-medium"
-                    style={{ color: faultStyle(f.type).color }}
-                  >
-                    {f.type} {pct(f.probability)}
-                  </span>
-                ))
+                profile.faults.map((f) => {
+                  const fs = faultStyle(f.type);
+                  return (
+                    <Tooltip
+                      key={f.type}
+                      label={`${fs.layer.toUpperCase()} LAYER\n${fs.description}`}
+                      side="bottom"
+                    >
+                      <span
+                        className="cursor-default rounded-sm border border-line px-1.5 py-0.5 text-xs font-medium transition-colors duration-150 hover:border-current"
+                        style={{ color: fs.color }}
+                      >
+                        {f.type} {pct(f.probability)}
+                      </span>
+                    </Tooltip>
+                  );
+                })
               )}
             </div>
           </div>
         )}
 
+        {/* Agents + Seed */}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="agents">
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={nAgents}
-              onChange={(e) =>
-                setNAgents(
-                  Math.max(1, Math.min(50, Number(e.target.value) || 1)),
-                )
-              }
-              className="w-full rounded-sm border border-line bg-raised px-2 py-1.5 text-sm text-ink outline-none focus:border-line-strong"
-            />
+          <Field
+            label="agents"
+            tooltip={`Number of agents to run concurrently\n(1-8 local / up to 50 on MI300X)`}
+          >
+            {/* Custom number stepper: hide native spinners, add +/- buttons */}
+            <div className="relative flex">
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={nAgents}
+                onChange={(e) =>
+                  setNAgents(
+                    Math.max(1, Math.min(50, Number(e.target.value) || 1)),
+                  )
+                }
+                className={`${INPUT_CLS} pr-7`}
+              />
+              <div className="absolute inset-y-0 right-0 flex flex-col border-l border-line">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label="Increase agents"
+                  onClick={() => setNAgents((n) => Math.min(50, n + 1))}
+                  className="flex flex-1 items-center justify-center px-1.5 text-ink-faint transition-colors duration-100 hover:bg-raised hover:text-accent"
+                >
+                  <svg width="8" height="5" viewBox="0 0 8 5" fill="none" aria-hidden>
+                    <path d="M1 4l3-3 3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label="Decrease agents"
+                  onClick={() => setNAgents((n) => Math.max(1, n - 1))}
+                  className="flex flex-1 items-center justify-center border-t border-line px-1.5 text-ink-faint transition-colors duration-100 hover:bg-raised hover:text-accent"
+                >
+                  <svg width="8" height="5" viewBox="0 0 8 5" fill="none" aria-hidden>
+                    <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </Field>
-          <Field label={`seed${profile ? ` (${profile.seed})` : ""}`}>
+
+          <Field
+            label={`seed${profile ? ` (${profile.seed})` : ""}`}
+            tooltip={`Random seed for fault injection\nSame seed = identical fault sequence`}
+          >
             <input
               type="text"
               inputMode="numeric"
               placeholder={profile ? String(profile.seed) : "profile default"}
               value={seed}
               onChange={(e) => setSeed(e.target.value)}
-              className="w-full rounded-sm border border-line bg-raised px-2 py-1.5 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-line-strong"
+              className={INPUT_CLS}
             />
           </Field>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-dim">
-          <input
-            type="checkbox"
-            checked={withControl}
-            onChange={(e) => setWithControl(e.target.checked)}
-            className="accent-(--color-accent)"
-          />
-          pair with calm-seas control cohort
-        </label>
+        {/* Control cohort checkbox */}
+        <Tooltip
+          label="Run a parallel calm-seas cohort (no faults) as a baseline for waste factor and survival comparison"
+          side="bottom"
+          className="w-full"
+        >
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-dim transition-colors duration-150 hover:text-ink">
+            <input
+              type="checkbox"
+              checked={withControl}
+              onChange={(e) => setWithControl(e.target.checked)}
+              className="sb-check"
+            />
+            pair with calm-seas control cohort
+          </label>
+        </Tooltip>
 
+        {/* Launch */}
         <button
           type="button"
           onClick={() => void launch()}
           disabled={busy || profile === null}
           className="font-display w-full rounded-sm border border-accent/60 bg-accent/10 px-3 py-2.5 text-base font-bold tracking-widest text-accent transition-all duration-200 hover:bg-accent/20 hover:shadow-[0_0_24px_-6px_var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? "LAUNCHING…" : "LAUNCH RUN"}
+          {busy ? "LAUNCHING..." : "LAUNCH RUN"}
         </button>
 
         {error && (
@@ -159,16 +220,30 @@ export function ControlPanel() {
 
 function Field({
   label,
+  tooltip,
   children,
 }: {
   label: string;
+  tooltip?: string;
   children: React.ReactNode;
 }) {
+  const labelEl = (
+    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
+      {label}
+    </span>
+  );
+
   return (
     <label className="block">
-      <span className="mb-1 block text-xs uppercase tracking-widest text-ink-faint">
-        {label}
-      </span>
+      {tooltip ? (
+        <Tooltip label={tooltip} side="top" className="inline-flex">
+          <span className="mb-1 block cursor-default border-b border-dashed border-ink-faint/40 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim transition-colors duration-150 hover:text-ink hover:border-ink-dim/40">
+            {label}
+          </span>
+        </Tooltip>
+      ) : (
+        labelEl
+      )}
       {children}
     </label>
   );

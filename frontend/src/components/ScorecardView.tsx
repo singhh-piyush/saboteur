@@ -18,6 +18,8 @@ import {
   type Scorecard,
 } from "../lib/api";
 import { num, pct } from "../lib/format";
+import { PanelHeader } from "./PanelHeader";
+import { Tooltip as HoverTip } from "./Tooltip";
 import { foldEvents } from "../state/reducer";
 import { survivalRate, survivalSeries, type SurvivalPoint } from "../state/selectors";
 import { useRun } from "../state/RunContext";
@@ -70,7 +72,7 @@ export function ScorecardView() {
         setData(null);
         setNote(
           err instanceof ApiError && err.status === 425
-            ? "Run still in progress — the scorecard lands when the cohort finishes."
+            ? "Run still in progress - the scorecard lands when the cohort finishes."
             : "No scorecard for this run yet.",
         );
       }
@@ -100,24 +102,28 @@ export function ScorecardView() {
     <div className="h-full space-y-4 overflow-y-auto p-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Tile
-          label="survival — chaos"
+          label="survival - chaos"
           value={pct(sc.survival_rate)}
           tone={sc.survival_rate >= 0.75 ? "ok" : sc.survival_rate >= 0.4 ? "warn" : "crit"}
+          tooltip="% of agents that completed the task under fault injection"
         />
         <Tile
-          label="survival — control"
+          label="survival - control"
           value={pct(controlSurvival)}
           tone="win"
+          tooltip="% of agents that completed under the calm-seas baseline (no faults)"
         />
         <Tile
           label="MTTR (steps)"
-          value={sc.mttr_steps === null ? "—" : num(sc.mttr_steps, 2)}
+          value={sc.mttr_steps === null ? "-" : num(sc.mttr_steps, 2)}
           tone="plain"
+          tooltip="Mean time to recovery - avg steps from a fault to the next successful action"
         />
         <Tile
           label="waste factor"
-          value={sc.waste_factor === null ? "—" : `${num(sc.waste_factor, 2)}×`}
+          value={sc.waste_factor === null ? "-" : `${num(sc.waste_factor, 2)}x`}
           tone="plain"
+          tooltip="Chaos tokens used vs control tokens - ratio >1 means fault recovery burned extra tokens"
         />
         <Tile
           label="deception caught"
@@ -129,6 +135,7 @@ export function ScorecardView() {
                 ? "ok"
                 : "crit"
           }
+          tooltip="% of agents that detected a silent_lie fault (correct data shape, wrong values)"
         />
       </div>
 
@@ -208,7 +215,7 @@ export function ScorecardView() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="FAILURE MODES">
           {failureEntries.length === 0 ? (
-            <Empty>None — every agent completed.</Empty>
+            <Empty>None - every agent completed.</Empty>
           ) : (
             <ul className="space-y-1.5">
               {failureEntries.map(([mode, count]) => (
@@ -251,16 +258,26 @@ function Tile({
   label,
   value,
   tone,
+  tooltip,
 }: {
   label: string;
   value: string;
   tone: keyof typeof TONES;
+  tooltip?: string;
 }) {
   return (
     <div className="rounded-md border border-line bg-panel px-3 py-2.5">
-      <div className="text-xs uppercase tracking-widest text-ink-faint">
-        {label}
-      </div>
+      {tooltip ? (
+        <HoverTip label={tooltip} side="bottom">
+          <div className="inline-block cursor-default border-b border-dashed border-ink-faint/40 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim transition-colors duration-150 hover:text-ink">
+            {label}
+          </div>
+        </HoverTip>
+      ) : (
+        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
+          {label}
+        </div>
+      )}
       <div className={`font-display mt-1 text-3xl font-bold ${TONES[tone]}`}>
         {value}
       </div>
@@ -271,11 +288,7 @@ function Tile({
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-md border border-line bg-panel">
-      <header className="border-b border-line px-3 py-2">
-        <h3 className="font-display text-xs font-semibold tracking-widest text-ink-dim">
-          {title}
-        </h3>
-      </header>
+      <PanelHeader title={title} />
       <div className="p-3">{children}</div>
     </section>
   );
@@ -288,8 +301,8 @@ function Empty({ children }: { children: React.ReactNode }) {
 function Row({ k, v, mono = false }: { k: string; v: string; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="shrink-0 uppercase tracking-widest text-ink-faint">{k}</dt>
-      <dd className={`truncate text-ink-dim ${mono ? "font-mono text-xs" : ""}`}>
+      <dt className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">{k}</dt>
+      <dd className={`truncate font-medium text-ink-dim ${mono ? "font-mono text-xs" : ""}`}>
         {v}
       </dd>
     </div>

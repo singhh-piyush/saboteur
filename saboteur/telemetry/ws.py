@@ -134,6 +134,26 @@ async def websocket_run(websocket: WebSocket, run_id: str) -> None:
 
     bus = registry.get(run_id)
 
+    # If the control cohort is running, the chaos run's bus won't be registered yet.
+    # Wait until it appears, sending keepalives so the client doesn't time out.
+    from saboteur.api.state import run_registry, RunStatus
+    state = run_registry.get(run_id)
+    if bus is None and state is not None and state.status in (RunStatus.PENDING, RunStatus.RUNNING):
+        ticks = 0
+        while bus is None:
+            await asyncio.sleep(0.5)
+            bus = registry.get(run_id)
+            state = run_registry.get(run_id)
+            if state is None or state.status not in (RunStatus.PENDING, RunStatus.RUNNING):
+                break
+            
+            ticks += 1
+            if ticks % 10 == 0:
+                try:
+                    await websocket.send_bytes(b"")
+                except Exception:
+                    raise WebSocketDisconnect(code=1001)
+
     try:
         if bus is not None:
             # Live run: subscribe first (no gap), replay backlog, then stream.

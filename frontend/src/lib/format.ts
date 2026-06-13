@@ -7,12 +7,12 @@ export function clockTime(iso: string): string {
 }
 
 export function pct(v: number | null | undefined, digits = 0): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "-";
   return `${(v * 100).toFixed(digits)}%`;
 }
 
 export function num(v: number | null | undefined, digits = 2): string {
-  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (v === null || v === undefined || Number.isNaN(v)) return "-";
   return v.toFixed(digits);
 }
 
@@ -32,9 +32,9 @@ export function agentLabel(id: number): string {
 
 /** Human-friendly relative time ("2 min ago", "3h ago", "just now"). */
 export function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const ms = Date.now() - Date.parse(iso);
-  if (Number.isNaN(ms) || ms < 0) return "—";
+  if (Number.isNaN(ms) || ms < 0) return "-";
   const sec = Math.floor(ms / 1000);
   if (sec < 10) return "just now";
   if (sec < 60) return `${sec}s ago`;
@@ -48,9 +48,9 @@ export function relativeTime(iso: string | null | undefined): string {
 
 /** Format a date string to a compact local time string. */
 export function shortDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString(undefined, {
     month: "short",
     day: "numeric",

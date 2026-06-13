@@ -48,8 +48,11 @@ interface RunContextValue {
   page: Page;
   /** Navigate to a page. */
   navigate: (page: Page) => void;
-  /** Connect the live WebSocket for a run (stops any replay). */
-  watchRun: (runId: string) => void;
+  /** Connect the live WebSocket for a run (stops any replay).
+   *  `expectedAgents` is a UI hint for the skeleton grid size. */
+  watchRun: (runId: string, expectedAgents?: number) => void;
+  /** How many agents this run is expected to have (skeleton hint). */
+  expectedAgents: number | null;
   /** Start replaying a recorded event array (stops any live socket). */
   startReplay: (runId: string, events: TelemetryEvent[]) => void;
   replay: ReplayControls | null;
@@ -81,6 +84,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reduce, initialState);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [page, setPage] = useState<Page>(parseHash);
+  const [expectedAgents, setExpectedAgents] = useState<number | null>(null);
   const [replayTick, setReplayTick] = useState<{
     position: number;
     length: number;
@@ -112,9 +116,10 @@ export function RunProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const watchRun = useCallback(
-    (runId: string) => {
+    (runId: string, agents?: number) => {
       teardown();
       setActiveRunId(runId);
+      setExpectedAgents(agents ?? null);
       dispatch({ type: "reset" });
       dispatch({ type: "conn", conn: "connecting" });
       const socket = new RunSocket(runId, {
@@ -155,6 +160,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => {
     teardown();
     setActiveRunId(null);
+    setExpectedAgents(null);
     dispatch({ type: "reset" });
     dispatch({ type: "conn", conn: "idle" });
   }, [teardown]);
@@ -186,8 +192,8 @@ export function RunProvider({ children }: { children: ReactNode }) {
   }, [replayTick]);
 
   const value = useMemo<RunContextValue>(
-    () => ({ state, activeRunId, page, navigate, watchRun, startReplay, replay, stop, reconnect }),
-    [state, activeRunId, page, navigate, watchRun, startReplay, replay, stop, reconnect],
+    () => ({ state, activeRunId, page, navigate, watchRun, expectedAgents, startReplay, replay, stop, reconnect }),
+    [state, activeRunId, page, navigate, watchRun, expectedAgents, startReplay, replay, stop, reconnect],
   );
 
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;

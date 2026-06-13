@@ -11,6 +11,7 @@ import {
 import { relativeTime } from "../lib/format";
 import { useRun } from "../state/RunContext";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PanelHeader } from "./PanelHeader";
 import {
   BoltIcon,
   CheckIcon,
@@ -48,7 +49,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function SurvivalBadge({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-sm text-ink-faint">—</span>;
+  if (pct === null) return <span className="text-sm font-medium text-ink-faint">-</span>;
   const color =
     pct >= 75 ? "var(--color-ok)" : pct >= 40 ? "var(--color-warn)" : "var(--color-crit)";
   return (
@@ -127,42 +128,42 @@ export function RunsPage() {
   }
 
   function openRun(run: RunListEntry) {
-    watchRun(run.run_id);
+    watchRun(run.run_id, run.n_agents > 0 ? run.n_agents : undefined);
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-line px-5 py-3">
-        <h2 className="font-display text-xl font-bold tracking-widest text-ink">
-          RUNS
-        </h2>
-        <div className="flex items-center gap-2">
-          {finishedCount > 0 && (
+      <PanelHeader
+        title="RUNS"
+        right={
+          <div className="flex items-center gap-2">
+            {finishedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkConfirm(true)}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-crit/40 bg-crit/5 px-3 py-1.5 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/10"
+              >
+                <TrashIcon size={13} />
+                Clear finished ({finishedCount})
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setBulkConfirm(true)}
-              className="inline-flex items-center gap-1.5 rounded-sm border border-crit/40 bg-crit/5 px-3 py-1.5 text-xs font-semibold text-crit hover:bg-crit/10"
+              onClick={refresh}
+              className="rounded-sm border border-line px-3 py-1.5 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink"
             >
-              <TrashIcon size={13} />
-              Clear finished ({finishedCount})
+              Refresh
             </button>
-          )}
-          <button
-            type="button"
-            onClick={refresh}
-            className="rounded-sm border border-line px-3 py-1.5 text-xs font-medium text-ink-dim hover:bg-raised hover:text-ink"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       {/* Run list */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading && runs.length === 0 && (
-          <div className="flex h-40 items-center justify-center text-sm text-ink-faint">
-            Loading runs…
+          <div className="flex h-40 items-center justify-center text-sm font-medium text-ink-faint">
+            Loading runs...
           </div>
         )}
         {!loading && runs.length === 0 && (
@@ -203,7 +204,7 @@ export function RunsPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-0.5 flex items-center gap-3 text-sm text-ink-dim">
+                    <div className="mt-0.5 flex items-center gap-3 text-sm font-medium text-ink-dim">
                       <span className="font-mono text-xs text-ink-faint truncate max-w-xs">
                         {run.run_id}
                       </span>

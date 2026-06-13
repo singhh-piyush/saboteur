@@ -9,20 +9,50 @@ interface Props {
   onSelect: (id: number | null) => void;
 }
 
+const GRID_STYLE = { gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" };
+
 export function BattleGrid({ selectedAgent, onSelect }: Props) {
-  const { state } = useRun();
+  const { state, expectedAgents } = useRun();
   const agents = agentList(state);
 
   if (agents.length === 0) {
+    if (state.conn === "live" || state.conn === "connecting") {
+      // Skeleton mirrors the real card layout, sized to the launched cohort.
+      return (
+        <div className="grid h-full content-start gap-3 overflow-y-auto p-3" style={GRID_STYLE}>
+          {Array.from({ length: expectedAgents ?? 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex h-[132px] w-full flex-col rounded-md border border-line bg-panel p-3 animate-pulse"
+              style={{ animationDelay: `${Math.min(i, 24) * 40}ms` }}
+            >
+              {/* Header: label + glyph */}
+              <div className="flex items-start justify-between pt-0.5">
+                <div className="h-3.5 w-14 rounded bg-line-strong" />
+                <div className="h-3 w-3 rounded-full bg-line-strong" />
+              </div>
+              {/* Step block */}
+              <div className="mt-3">
+                <div className="mb-1 h-2.5 w-8 rounded bg-line" />
+                <div className="h-3.5 w-10 rounded bg-line-strong" />
+              </div>
+              {/* Status pill */}
+              <div className="mt-2 h-[18px] w-16 rounded-sm bg-line" />
+              {/* Progress track */}
+              <div className="mt-2.5 h-[3px] w-full rounded-full bg-line-strong" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
         <div className="font-display text-2xl font-semibold tracking-widest text-ink-faint">
           NO ACTIVE COHORT
         </div>
         <p className="max-w-md text-sm text-ink-dim">
-          {state.conn === "live" || state.conn === "connecting"
-            ? "Standing by — the calm-seas control cohort runs first; agents appear here when the chaos cohort launches."
-            : "Select a chaos profile and launch a run, or open an archived one from the Runs page."}
+          Select a chaos profile and launch a run, or open an archived one from the Runs page.
         </p>
       </div>
     );
@@ -30,8 +60,8 @@ export function BattleGrid({ selectedAgent, onSelect }: Props) {
 
   return (
     <div
-      className="grid content-start gap-2.5 overflow-y-auto p-3"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}
+      className={`grid h-full content-start gap-3 overflow-y-auto p-3 ${selectedAgent !== null ? "has-selection" : ""}`}
+      style={GRID_STYLE}
     >
       {agents.map((agent) => (
         <AgentCell

@@ -3,7 +3,8 @@ import React from "react";
 import type { AgentState } from "../state/reducer";
 import { agentLabel } from "../lib/format";
 import { faultStyle } from "../lib/faults";
-import { BoltIcon, CircleIcon, CrossIcon, DashedCircleIcon, FlagIcon, LoopIcon } from "./Icons";
+import { BoltIcon, CircleIcon, CrossIcon, DashedCircleIcon, EyeIcon, FlagIcon, LoopIcon } from "./Icons";
+import { Tooltip } from "./Tooltip";
 
 const STATUS_COLOR: Record<AgentState["status"], string> = {
   pending: "var(--color-ink-faint)",
@@ -21,6 +22,14 @@ const STATUS_WORD: Record<AgentState["status"], string> = {
   succeeded: "complete",
 };
 
+const STATUS_EXPLAIN: Record<AgentState["status"], string> = {
+  pending: "Waiting to start",
+  healthy: "Running normally - no active fault",
+  recovering: "Hit a fault and retrying/replanning to self-heal",
+  crashed: "Terminated with an unrecoverable error",
+  succeeded: "Completed the task successfully",
+};
+
 interface Props {
   agent: AgentState;
   maxSteps: number;
@@ -32,80 +41,121 @@ interface Props {
 export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, selected, onSelect }: Props) {
   const color = STATUS_COLOR[agent.status];
   const pending = agent.status === "pending";
+  const progress =
+    agent.status === "succeeded"
+      ? 1
+      : Math.min(agent.step / maxSteps, 1);
+
+  const tip = [
+    `${agentLabel(agent.id)} - ${STATUS_EXPLAIN[agent.status]}`,
+    `step ${agent.step}/${maxSteps} · ${agent.faultCount} fault${agent.faultCount === 1 ? "" : "s"}`,
+    "click to inspect trace",
+  ].join("\n");
 
   return (
-    <div className="agent-cell-wrap">
-      <button
-        type="button"
-        onClick={() => onSelect(agent.id)}
-        className={`agent-cell group relative flex w-full flex-col justify-between rounded-md border bg-panel p-3 text-left hover:bg-raised ${
-          selected ? "border-line-strong" : "border-line"
-        }`}
-        style={{
-          borderLeftWidth: 3,
-          borderLeftColor: color,
-          opacity: pending ? 0.55 : 1,
-        }}
-      >
-        {/* One-shot flash on state change — CSS animation, not remount */}
-        {agent.seq > 0 && (
-          <span
-            key={agent.seq}
-            aria-hidden
-            className="animate-state-flash pointer-events-none absolute inset-0 rounded-md"
-            style={{ ["--ring" as string]: color }}
-          />
-        )}
-
-        <div className="flex items-start justify-between">
-          <span className="font-display text-base font-semibold leading-none tracking-wide">
-            {agentLabel(agent.id)}
-          </span>
-          <StatusGlyph status={agent.status} color={color} />
-        </div>
-
-        <div className="mt-3 flex items-end justify-between">
-          <div>
-            <div className="text-xs uppercase tracking-widest text-ink-faint">
-              step
-            </div>
-            <div className="text-sm text-ink-dim">
-              <span className="text-ink">{agent.step}</span>
-              <span className="text-ink-faint">/{maxSteps}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {agent.activeFault !== null && (
-              <span
-                className="max-w-20 truncate text-xs"
-                style={{ color: faultStyle(agent.activeFault).color }}
-              >
-                {agent.activeFault}
-              </span>
-            )}
-            {agent.faultCount > 0 && (
-              <span
-                className="inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-xs font-semibold"
-                style={{
-                  color: "var(--color-accent)",
-                  background: "oklch(70% 0.19 45 / 12%)",
-                }}
-                title={`${agent.faultCount} fault(s) injected`}
-              >
-                <BoltIcon size={10} />
-                {agent.faultCount}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div
-          className="mt-1.5 text-xs uppercase tracking-widest"
-          style={{ color }}
+    <div
+      className={`agent-cell-wrap ${selected ? "is-selected-wrap" : ""}`}
+      style={{
+        animationName: "card-in",
+        animationDuration: "0.35s",
+        animationTimingFunction: "ease-out",
+        animationFillMode: "backwards",
+        animationDelay: `${Math.min(agent.id, 24) * 15}ms`,
+      }}
+    >
+      <Tooltip portal label={tip} side="top">
+        <button
+          type="button"
+          onClick={() => onSelect(agent.id)}
+          className={`agent-cell group relative flex w-full flex-col rounded-md border p-3 text-left ${selected ? "is-selected" : ""}`}
+          style={{
+            "--state": color,
+            opacity: pending ? 0.55 : 1,
+          } as React.CSSProperties}
         >
-          {STATUS_WORD[agent.status]}
-        </div>
-      </button>
+          {/* One-shot flash on state change */}
+          {agent.seq > 0 && (
+            <span
+              key={agent.seq}
+              aria-hidden
+              className="animate-state-flash pointer-events-none absolute inset-0 rounded-md"
+              style={{ ["--ring" as string]: color }}
+            />
+          )}
+
+          {/* Header: agent ID + status glyph (+ eye marker when inspected) */}
+          <div className="flex items-start justify-between pt-0.5">
+            <span className="text-sm font-semibold leading-none tracking-wide text-ink transition-colors duration-200 group-hover:text-white">
+              {agentLabel(agent.id)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              {selected && <EyeIcon size={13} className="shrink-0 text-accent" />}
+              <StatusGlyph status={agent.status} color={color} />
+            </span>
+          </div>
+
+          {/* Middle: step counter + fault info */}
+          <div className="mt-3 flex items-end justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                step
+              </div>
+              <div className="text-sm text-ink-dim">
+                <span className="font-medium text-ink">{agent.step}</span>
+                <span className="text-ink-faint">/{maxSteps}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {agent.activeFault !== null && (
+                <span
+                  className="max-w-[72px] truncate text-[10px] font-medium"
+                  style={{ color: faultStyle(agent.activeFault).color }}
+                  title={faultStyle(agent.activeFault).description}
+                >
+                  {agent.activeFault}
+                </span>
+              )}
+              {agent.faultCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    color: "var(--color-accent)",
+                    background: "oklch(70% 0.19 45 / 12%)",
+                  }}
+                >
+                  <BoltIcon size={10} />
+                  {agent.faultCount}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Status pill */}
+          <div className="mt-2">
+            <span
+              className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest transition-colors duration-200"
+              style={{
+                color,
+                background: `color-mix(in oklch, ${color} 13%, transparent)`,
+              }}
+            >
+              {STATUS_WORD[agent.status]}
+            </span>
+          </div>
+
+          {/* Progress footer: step progress tinted by state (symmetric) */}
+          <div className="mt-2.5 h-[3px] w-full overflow-hidden rounded-full bg-line-strong">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${progress * 100}%`,
+                background: color,
+                transition: "width 300ms ease, background-color 200ms ease",
+              }}
+            />
+          </div>
+        </button>
+      </Tooltip>
     </div>
   );
 }, (prev, next) =>
@@ -127,15 +177,15 @@ function StatusGlyph({
 }) {
   switch (status) {
     case "succeeded":
-      return <FlagIcon size={14} className="shrink-0" style={{ color }} />;
+      return <FlagIcon size={14} className="shrink-0 transition-colors duration-200" style={{ color }} />;
     case "crashed":
-      return <CrossIcon size={13} className="shrink-0" style={{ color }} />;
+      return <CrossIcon size={13} className="shrink-0 transition-colors duration-200" style={{ color }} />;
     case "recovering":
-      return <LoopIcon size={13} className="shrink-0" style={{ color }} />;
+      return <LoopIcon size={13} className="shrink-0 transition-colors duration-200" style={{ color }} />;
     case "healthy":
-      return <CircleIcon size={12} className="shrink-0" style={{ color }} />;
+      return <CircleIcon size={12} className="shrink-0 transition-colors duration-200" style={{ color }} />;
     case "pending":
     default:
-      return <DashedCircleIcon size={12} className="shrink-0" style={{ color }} />;
+      return <DashedCircleIcon size={12} className="shrink-0 transition-colors duration-200" style={{ color }} />;
   }
 }

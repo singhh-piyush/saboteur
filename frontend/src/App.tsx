@@ -5,13 +5,16 @@ import { ChaosLog } from "./components/ChaosLog";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { ControlPanel } from "./components/ControlPanel";
 import { ReplayBar } from "./components/ReplayBar";
+import { RunBar } from "./components/RunBar";
 import { RunsPage } from "./components/RunsPage";
 import { ScorecardView } from "./components/ScorecardView";
 import { TimelineDrawer } from "./components/TimelineDrawer";
 import { RunProvider, useRun } from "./state/RunContext";
-import { runCounts } from "./state/selectors";
 
 type Tab = "grid" | "scorecard";
+
+/** Shared card framing for the modular gapped shell. */
+const CARD = "rounded-lg border border-line bg-panel";
 
 export default function App() {
   return (
@@ -22,21 +25,39 @@ export default function App() {
 }
 
 function Shell() {
-  const { state, activeRunId, page, navigate } = useRun();
+  const { state, page, navigate } = useRun();
   const [tab, setTab] = useState<Tab>("grid");
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
+  // Last non-null selection: keeps the drawer content rendered while its
+  // width animates closed.
+  const [lastAgent, setLastAgent] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const counts = runCounts(state);
+  const [feedCollapsed, setFeedCollapsed] = useState(false);
+
+  const selectAgent = (id: number | null) => {
+    if (id !== null) setLastAgent(id);
+    setSelectedAgent(id);
+  };
+
+  const drawerAgent = selectedAgent ?? lastAgent;
+  const drawerOpen =
+    selectedAgent !== null &&
+    state.agents[selectedAgent] !== undefined &&
+    page.kind === "live";
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col gap-2 bg-void p-2">
       {/* ---------------------------------------------------------------- */}
-      <header className="flex items-center gap-4 border-b border-line bg-panel px-4 py-2.5">
+      {/* Header card: brand + connection only. Run context lives in RunBar. */}
+      <header
+        className={`${CARD} flex items-center gap-4 px-4 py-2.5`}
+        style={{ animation: "card-in 0.3s ease-out backwards" }}
+      >
         {/* Sidebar toggle for tablet/mobile */}
         <button
           type="button"
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="rounded-sm border border-line p-1.5 text-ink-dim hover:bg-raised hover:text-ink xl:hidden"
+          className="rounded-sm border border-line p-1.5 text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink xl:hidden"
           title={sidebarOpen ? "Hide panel" : "Show panel"}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
@@ -47,68 +68,67 @@ function Shell() {
         <button
           type="button"
           onClick={() => navigate({ kind: "runs" })}
-          className="font-display text-2xl font-bold leading-none tracking-[0.18em] hover:text-accent transition-colors"
+          className="flex items-center gap-3"
         >
-          SABOTEUR
-          <span className="hidden sm:inline-block ml-2 align-middle text-[11px] font-semibold tracking-[0.3em] text-accent">
+          <span className="font-brand text-[32px] font-extrabold leading-none tracking-[0.22em] text-ink transition-all duration-200 hover:text-accent hover:[text-shadow:0_0_20px_color-mix(in_oklch,var(--color-accent)_50%,transparent)]">
+            SABOTEUR
+          </span>
+          <span className="hidden rounded-sm border border-accent/50 bg-accent/10 px-2 py-1 text-[10px] font-bold leading-none tracking-[0.3em] text-accent sm:inline-block">
             CHAOS CONSOLE
           </span>
         </button>
 
-        {page.kind === "live" && (
-          <>
-            <div className="hidden md:block min-w-0 flex-1 truncate text-center font-mono text-xs text-ink-faint">
-              {activeRunId ?? ""}
-              {state.profile && (
-                <span className="ml-2 text-ink-dim">
-                  {state.profile}
-                  {state.seed !== null && ` · seed ${state.seed}`}
-                </span>
-              )}
-            </div>
-
-            {counts.total > 0 && (
-              <div className="hidden items-center gap-3 text-sm md:flex">
-                <Count label="nominal" value={counts.healthy} className="text-ok" />
-                <Count label="recovering" value={counts.recovering} className="text-warn" />
-                <Count label="down" value={counts.crashed} className="text-crit" />
-                <Count label="complete" value={counts.succeeded} className="text-win" />
-              </div>
-            )}
-          </>
-        )}
-
-        <div className={page.kind !== "live" ? "ml-auto" : "ml-auto md:ml-0"}>
+        <div className="ml-auto">
           <ConnectionBadge conn={state.conn} />
         </div>
       </header>
 
       {/* ---------------------------------------------------------------- */}
-      <div className="flex min-h-0 flex-1 relative overflow-hidden">
-        {/* Sidebar — off-canvas on mobile, visible on xl */}
-        <aside 
-          className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col border-r border-line bg-panel/95 backdrop-blur-md transition-transform xl:relative xl:flex xl:translate-x-0 ${
+      <div className="relative flex min-h-0 flex-1 gap-2 overflow-hidden">
+        {/* Sidebar — two stacked cards; off-canvas on mobile, visible on xl */}
+        <aside
+          className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col gap-2 transition-transform xl:relative xl:flex xl:translate-x-0 ${
             sidebarOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
           }`}
+          style={{ animation: "card-in 0.3s ease-out 60ms backwards" }}
         >
-          <ControlPanel />
-          {page.kind === "live" && <ChaosLog />}
+          <div className={`${CARD} overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md`}>
+            <ControlPanel />
+          </div>
+          {page.kind === "live" && (
+            <div
+              className={`${CARD} flex min-h-0 flex-col overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md ${
+                feedCollapsed ? "" : "flex-1"
+              }`}
+            >
+              <ChaosLog
+                collapsed={feedCollapsed}
+                onToggle={() => setFeedCollapsed((c) => !c)}
+              />
+            </div>
+          )}
         </aside>
 
         {/* Backdrop for mobile sidebar */}
         {sidebarOpen && (
-          <div 
+          <div
             className="fixed inset-0 z-30 bg-void/50 xl:hidden"
             onClick={() => setSidebarOpen(false)}
             aria-hidden
           />
         )}
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Main card */}
+        <main
+          className={`${CARD} flex min-w-0 flex-1 flex-col overflow-hidden`}
+          style={{ animation: "card-in 0.3s ease-out 120ms backwards" }}
+        >
           {page.kind === "runs" ? (
             <RunsPage />
           ) : (
             <>
+              <RunBar />
+
               <nav className="flex items-center gap-1 border-b border-line px-3 py-1.5">
                 <TabButton active={tab === "grid"} onClick={() => setTab("grid")}>
                   BATTLE GRID
@@ -126,17 +146,18 @@ function Shell() {
                 <button
                   type="button"
                   onClick={() => navigate({ kind: "runs" })}
-                  className="rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim hover:bg-raised hover:text-ink"
+                  className="rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink"
                 >
                   ← Runs
                 </button>
               </nav>
 
-              <div className="min-h-0 flex-1">
+              {/* key={tab}: fade content in on tab switch */}
+              <div key={tab} className="animate-feed-in min-h-0 flex-1">
                 {tab === "grid" ? (
                   <BattleGrid
                     selectedAgent={selectedAgent}
-                    onSelect={setSelectedAgent}
+                    onSelect={selectAgent}
                   />
                 ) : (
                   <ScorecardView />
@@ -148,36 +169,25 @@ function Shell() {
           )}
         </main>
 
-        {/* Timeline drawer — full-screen sheet on mobile */}
-        {selectedAgent !== null && state.agents[selectedAgent] && page.kind === "live" && (
-          <TimelineDrawer
-            agentId={selectedAgent}
-            onClose={() => setSelectedAgent(null)}
-          />
-        )}
+        {/* Timeline drawer card — width animates so the grid reflows smoothly.
+            Content stays mounted (lastAgent) during the close transition. */}
+        <div
+          className={`shrink-0 overflow-hidden transition-[width] duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] ${
+            drawerOpen ? "w-[20.5rem] xl:w-[23rem]" : "w-0"
+          }`}
+        >
+          <div className="h-full pl-2">
+            {drawerAgent !== null && state.agents[drawerAgent] && page.kind === "live" && (
+              <TimelineDrawer
+                agentId={drawerAgent}
+                open={drawerOpen}
+                onClose={() => setSelectedAgent(null)}
+              />
+            )}
+          </div>
+        </div>
       </div>
     </div>
-  );
-}
-
-function Count({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: number;
-  className: string;
-}) {
-  return (
-    <span className="flex items-baseline gap-1" title={label}>
-      <span className={`font-display text-lg font-bold leading-none ${className}`}>
-        {value}
-      </span>
-      <span className="text-xs uppercase tracking-widest text-ink-faint">
-        {label}
-      </span>
-    </span>
   );
 }
 
@@ -194,13 +204,18 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`font-display rounded-sm px-3 py-1 text-xs font-semibold tracking-widest transition-colors ${
+      className={`relative px-3 py-1 text-xs font-semibold tracking-widest transition-colors duration-200 ${
         active
-          ? "bg-raised text-ink"
-          : "text-ink-faint hover:bg-raised/60 hover:text-ink-dim"
+          ? "text-ink"
+          : "text-ink-faint hover:text-ink-dim"
       }`}
     >
       {children}
+      {/* Animated accent underline */}
+      <span
+        className="absolute inset-x-0 -bottom-px h-[2px] bg-accent transition-all duration-200"
+        style={{ opacity: active ? 1 : 0, transform: active ? "scaleX(1)" : "scaleX(0.3)" }}
+      />
     </button>
   );
 }
