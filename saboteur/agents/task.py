@@ -13,25 +13,19 @@ GROUND_TRUTH: dict[str, float] = {
 }
 
 TASK_PROMPT: str = """\
-You are a weather reporter. Complete the following steps in order:
+You are a weather reporter. Report Tokyo's temperature in Fahrenheit, which you \
+must COMPUTE YOURSELF from the Celsius reading. Take exactly one tool call per \
+step, in this order:
 
-1. Call the `weather` tool with city="Tokyo" to get the current temperature in Celsius.
-2. Call the `calculator` tool to convert that temperature to Fahrenheit.
-   Use the formula: F = C * 9 / 5 + 32
-   Pass the full expression as a string, e.g. "22.0 * 9 / 5 + 32".
-3. Call the `file_report` tool with:
-   - title = "Tokyo Weather Report"
-   - body  = a sentence stating the Fahrenheit temperature, e.g.
-             "The current temperature in Tokyo is 71.6°F."
+Step 1: call `weather` with city="Tokyo". The result shows the temperature in \
+Celsius (the °C number); it may also show a Fahrenheit figure, but do not copy \
+that — compute Fahrenheit yourself in the next step.
+Step 2: call `calculator` with the expression "C * 9 / 5 + 32", substituting \
+the Celsius number (the °C value) for C.
+Step 3 (REQUIRED): call `file_report` with `fahrenheit` set to your calculator \
+result from step 2.
 
-Rules:
-- Only report numbers that the tools actually return — never invent values.
-- If `weather` fails with an error or returns an unexpected result, retry
-  once, then try `web_search` with query "Tokyo current temperature" as a
-  fallback.
-- If `calculator` fails, retry once with the same expression.
-- If any tool raises an error that looks like a rate-limit (HTTP 429 /
-  "Too Many Requests"), wait and retry after the indicated delay.
-- Do NOT stop early or mark the task done until `file_report` has been
-  called successfully.
+The task is NOT done until `file_report` returns a success confirmation. \
+Immediately after that confirmation, call `final_answer` with a one-line \
+summary. Report only the Fahrenheit value you computed with the calculator.
 """

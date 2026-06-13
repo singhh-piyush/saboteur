@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run a full battle royale locally (needs a live LLM) and print the scorecard.
+"""Run a full cohort run locally (needs a live LLM) and print the scorecard.
 
 This is the WP5 acceptance harness: a calm_seas control cohort followed by a
 chaos cohort under the given profile, both at N agents, producing
@@ -13,8 +13,8 @@ check is that ``--jinja`` was passed — before suspecting this code.
 
 Usage::
 
-    .venv/bin/python scripts/run_battle.py
-    .venv/bin/python scripts/run_battle.py profiles/hell_mode.yaml 8
+    .venv/bin/python scripts/run_cohort.py
+    .venv/bin/python scripts/run_cohort.py profiles/hell_mode.yaml 8
 """
 
 from __future__ import annotations

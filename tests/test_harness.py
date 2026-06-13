@@ -21,7 +21,7 @@ import pytest
 from saboteur.agents.outcomes import AgentEvent, AgentRunResult, Outcome
 from saboteur.chaos.profile import ChaosProfile
 from saboteur.harness import (
-    battle_royale,
+    cohort_run,
     orchestrate,
     score,
     to_telemetry,
@@ -193,7 +193,7 @@ async def test_one_crashing_agent_never_affects_others() -> None:
     }
     specs[2] = {"raises": RuntimeError("boom")}
 
-    report = await battle_royale(
+    report = await cohort_run(
         RUN_ID,
         4,
         _profile(),
@@ -327,7 +327,7 @@ async def test_concurrency_limit_respected() -> None:
         for i in range(6)
     }
 
-    await battle_royale(
+    await cohort_run(
         RUN_ID,
         6,
         _profile(),
@@ -350,7 +350,7 @@ async def test_concurrency_zero_means_unlimited() -> None:
         for i in range(6)
     }
 
-    await battle_royale(
+    await cohort_run(
         RUN_ID,
         6,
         _profile(),

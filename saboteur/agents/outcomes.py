@@ -39,13 +39,23 @@ class Outcome(StrEnum):
 
 
 class RecoveryKind(StrEnum):
-    """How an agent reacted to a fault (CLAUDE.md scorecard categories)."""
+    """How an agent reacted to a fault.
 
-    RETRY = "retry"
-    BACKOFF = "backoff"
-    FALLBACK_TOOL = "fallback_tool"
-    REPLAN = "replan"
-    GAVE_UP = "gave_up"
+    Only kinds distinguishable from telemetry alone (the post-fault tool call,
+    or its absence) are kept. The former ``backoff`` was dropped — we can't
+    observe from the event stream whether the agent actually *waited* before a
+    rate-limit re-call, so it was indistinguishable from ``retry``. The former
+    ``replan`` was split into the two distinct things it conflated:
+    ``reformulate`` (a real reattempt with new arguments) and ``no_action`` (no
+    tool call at all — usually a parse failure / stall, which is *not* a
+    recovery and does not count toward MTTR or survival).
+    """
+
+    RETRY = "retry"               # same tool, same arguments
+    REFORMULATE = "reformulate"   # same tool, different arguments
+    FALLBACK_TOOL = "fallback_tool"  # a different tool toward the same goal
+    NO_ACTION = "no_action"       # no tool call this step (stall / parse failure)
+    GAVE_UP = "gave_up"           # run ended on a faulted step with no follow-up
 
 
 # ---------------------------------------------------------------------------
@@ -118,25 +128,22 @@ class AgentRunResult:
 # Recovery classifier (pure)
 # ---------------------------------------------------------------------------
 
-# Faults whose correct response is to wait out a Retry-After before retrying.
-_BACKOFF_FAULT = "rate_limit"
-
-
 def classify_recoveries(
     history: list[StepRecord], *, terminal: bool = True
 ) -> list[RecoveryEvent]:
     """Classify each agent reaction that follows a faulted step.
 
     Pure function over the step history (no LLM, no I/O). For every step whose
-    *previous* step carried a fault, we classify the transition into one of the
-    CLAUDE.md scorecard categories:
+    *previous* step carried a fault, we classify the transition using only what
+    telemetry can actually witness — the post-fault tool call, or its absence:
 
-    - ``BACKOFF`` — prior fault was a rate-limit and the agent re-called the
-      same tool (it honored the Retry-After rather than blindly hammering).
-    - ``RETRY`` — same tool, same arguments again.
+    - ``RETRY`` — same tool, same arguments again (includes a re-call after a
+      rate-limit: we can't see whether the agent waited, so we don't over-claim
+      a separate "backoff").
+    - ``REFORMULATE`` — same tool, *different* arguments (a real reattempt).
     - ``FALLBACK_TOOL`` — a *different* tool toward the same subgoal.
-    - ``REPLAN`` — no tool call this step, or a tool whose arguments signal a
-      changed approach (e.g. moving on to ``file_report``).
+    - ``NO_ACTION`` — no tool call this step (stall / parse failure). Surfaced
+      for visibility but **not** a productive recovery (excluded from MTTR).
     - ``GAVE_UP`` — only when ``terminal`` and the run ended on a faulted step
       with no follow-up: the fault was the agent's last productive moment.
 
@@ -153,7 +160,7 @@ def classify_recoveries(
             continue
 
         after = prev.fault_types[-1] if prev.fault_types else ""
-        kind = _classify_transition(prev, cur, after)
+        kind = _classify_transition(prev, cur)
         events.append(RecoveryEvent(step=cur.step, kind=kind, after_fault=after))
 
     # If the run ended on a faulted step with no follow-up at all, that fault
@@ -168,21 +175,21 @@ def classify_recoveries(
     return events
 
 
-def _classify_transition(prev: StepRecord, cur: StepRecord, after_fault: str) -> RecoveryKind:
-    # No tool call at all on the recovery step → the agent changed approach
-    # (or stalled). Treat as a replan rather than a retry.
+def _classify_transition(prev: StepRecord, cur: StepRecord) -> RecoveryKind:
+    # No tool call at all on the step after a fault → the agent emitted no
+    # action (most often a parse failure / stall). This is not a productive
+    # recovery; surface it honestly rather than calling it a "replan".
     if cur.tool_name is None:
-        return RecoveryKind.REPLAN
+        return RecoveryKind.NO_ACTION
 
-    same_tool = cur.tool_name == prev.tool_name
-    if same_tool:
-        if after_fault == _BACKOFF_FAULT:
-            return RecoveryKind.BACKOFF
+    if cur.tool_name == prev.tool_name:
+        # Same tool, same arguments → a blind retry. A re-call after a
+        # rate-limit lands here too: telemetry can't tell whether the agent
+        # actually waited, so we don't claim a distinct "backoff".
         if cur.arguments == prev.arguments:
             return RecoveryKind.RETRY
-        # Same tool, different arguments → a reformulated attempt, not a
-        # blind retry: closest scorecard bucket is a replan.
-        return RecoveryKind.REPLAN
+        # Same tool, different arguments → a genuine reformulated attempt.
+        return RecoveryKind.REFORMULATE
 
     # A different tool toward the same goal is the canonical fallback.
     return RecoveryKind.FALLBACK_TOOL

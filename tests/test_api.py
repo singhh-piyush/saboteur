@@ -2,7 +2,7 @@
 
 Coverage:
   1. OpenAPI schema renders.
-  2. GET /profiles — all four profiles listed with required fields.
+  2. GET /profiles — all bundled profiles listed with required fields.
   3. POST /runs lifecycle — starts, transitions to finished, scorecard readable.
   4. Unknown profile → 404.  Scorecard before finish → 425.
   5. GET /runs/{id}/events — pagination and after_ts filter.
@@ -117,14 +117,20 @@ def test_health():
 # ---------------------------------------------------------------------------
 
 
-def test_list_profiles_returns_all_four():
+def test_list_profiles_returns_all_profiles():
     from saboteur.api import app
 
     with TestClient(app) as client:
         resp = client.get("/profiles")
     assert resp.status_code == 200
     names = {p["name"] for p in resp.json()}
-    assert names == {"calm_seas", "flaky_friday", "hell_mode", "rate_limit_storm"}
+    assert names == {
+        "calm_seas",
+        "flaky_friday",
+        "hell_mode",
+        "rate_limit_storm",
+        "liars_den",
+    }
 
 
 def test_list_profiles_have_required_fields():

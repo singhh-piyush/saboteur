@@ -35,14 +35,16 @@ class Settings(BaseSettings):
     openai_base_url: str = "http://localhost:8080/v1"
     openai_api_key: str = "none"
     model_id: str = "llama-3.1-8b-instruct"
-    # Greedy + seeded by default so two runs with the same profile+seed produce
-    # the same tool-call sequence — a precondition for invariant #1's identical
-    # fault sequences on live LLM runs. Raise TEMPERATURE in the demo .env for
-    # livelier behavior (at the cost of run-to-run reproducibility).
-    # If tool-call reliability is still poor after enabling tool_choice=required,
-    # the documented fallback is TEMPERATURE=0.3 with the fixed MODEL_SEED —
-    # this trades some run-to-run reproducibility for output variety.
-    temperature: float = 0.0
+    # Small local models (Llama-3.1-8B-Q4) deterministically stall at temp=0:
+    # after computing the answer they emit empty "Action:" turns with no tool
+    # call, looping to the step cap (the WP3 control-validity bug). A little
+    # temperature breaks that greedy loop and lifts local control survival to
+    # ceiling, so 0.3 is the default. Note: end-to-end reproducibility is
+    # already not guaranteed on live runs (llama.cpp -np N batching is
+    # non-deterministic even at temp=0); invariant #1 holds for an *identical
+    # tool-call sequence*, which is independent of temperature. Set TEMPERATURE=0
+    # if a backend ever needs strict greedy decoding. MODEL_SEED stays fixed.
+    temperature: float = 0.3
     model_seed: int | None = 42
     # Force the model to emit a tool call on every turn. llama.cpp (--jinja)
     # and vLLM both enforce this via constrained generation. Set TOOL_CHOICE=auto

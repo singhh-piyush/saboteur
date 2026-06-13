@@ -24,7 +24,7 @@ from saboteur.telemetry.bus import TelemetryBus
 from saboteur.telemetry.jsonl import JsonlWriter
 from saboteur.telemetry.ws import registry
 
-from .battle import AgentFactory, RunReport, battle_royale
+from .cohort import AgentFactory, RunReport, cohort_run
 from .scoring import Scorecard, score
 
 from saboteur.agents.factory import build_agent
@@ -75,7 +75,7 @@ async def orchestrate(
 
     if control_report is None:
         control_profile = load_profile(control_profile_path)
-        control_report = await _run_cohort(
+        control_report = await _execute_cohort(
             f"{run_id}-control",
             n,
             control_profile,
@@ -84,7 +84,7 @@ async def orchestrate(
             agent_factory=agent_factory,
         )
 
-    report = await _run_cohort(
+    report = await _execute_cohort(
         run_id,
         n,
         profile,
@@ -108,7 +108,7 @@ async def orchestrate(
     return scorecard
 
 
-async def _run_cohort(
+async def _execute_cohort(
     run_id: str,
     n_agents: int,
     profile: ChaosProfile,
@@ -117,7 +117,7 @@ async def _run_cohort(
     concurrency_limit: int | None,
     agent_factory: AgentFactory,
 ) -> RunReport:
-    """One cohort: fresh bus + JSONL writer + WS registration, then battle.
+    """One cohort: fresh bus + JSONL writer + WS registration, then the cohort run.
 
     The bus is always closed, the writer always awaited, and the registry
     entry always removed — a failed cohort never leaks a registered bus.
@@ -128,7 +128,7 @@ async def _run_cohort(
     writer = JsonlWriter(bus, run_id, runs_dir=runs_dir)
     writer_task = asyncio.create_task(writer.run())
     try:
-        return await battle_royale(
+        return await cohort_run(
             run_id,
             n_agents,
             profile,

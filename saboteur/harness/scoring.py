@@ -12,15 +12,20 @@ Metric definitions (CLAUDE.md scorecard):
   ``payload["success"] == True`` (the programmatic verifier's verdict).
   Agents that only ever produced ``agent_crashed`` count as not surviving.
 - **mttr_steps** — for each ``fault_injected`` at step *s*, the distance to
-  that agent's next ``recovery_action`` at step *s′ ≥ s* whose kind is not
-  ``gave_up``; mean over recovered faults, ``None`` if no fault recovered.
+  that agent's next *productive* ``recovery_action`` at step *s′ ≥ s* — i.e.
+  one whose kind is neither ``gave_up`` nor ``no_action`` (a stall is not a
+  recovery); mean over recovered faults, ``None`` if no fault recovered.
 - **recovery_breakdown** — counts of ``recovery_action`` events by kind.
 - **waste_factor** — Σ chaos ``tokens_used`` ÷ Σ control ``tokens_used``
   (``agent_done`` events); ``None`` when the control total is zero.
-- **deception_detection_rate** — among agents that received ≥1 ``silent_lie``
-  fault, the fraction that still succeeded. The lie is constructed so that a
-  believed lie always fails the verifier (see agents/tools.py), so success
-  ⇔ the agent caught or corrected the deception.
+- **deception_detection_rate** — among agents shown a lied (internally
+  inconsistent) reading, the fraction that still filed a correct value. The
+  weather tool reports °C plus a redundant °F, and ``silent_lie`` corrupts only
+  the °F, so a reading like ``22.0°C (86.0°F)`` is self-contradictory. An agent
+  that derives °F from the trustworthy °C resists the lie (success); one that
+  trusts the planted °F is fooled (failure). So success ⇔ the agent resisted the
+  deception by recomputing rather than trusting the decoy. Pair with the
+  ``liars_den`` profile to measure this unconfounded by other faults.
 - **failure_modes** — histogram of non-``completed`` terminal outcomes;
   harness-level ``agent_crashed`` (no ``agent_done`` at all) is merged into
   ``hard_exception``.
@@ -35,6 +40,10 @@ from pydantic import BaseModel, Field
 
 from saboteur.agents.outcomes import Outcome, RecoveryKind
 from saboteur.telemetry.schema import TelemetryEvent
+
+# Recovery kinds that are not a productive reaction to a fault: a stall
+# (``no_action``) and a give-up. Excluded when computing MTTR.
+_NON_PRODUCTIVE = {str(RecoveryKind.NO_ACTION), str(RecoveryKind.GAVE_UP)}
 
 
 class Scorecard(BaseModel):
@@ -180,7 +189,7 @@ def _recovery_distances(
     productive_steps = sorted(
         e.step
         for e in recoveries
-        if e.step is not None and e.recovery != str(RecoveryKind.GAVE_UP)
+        if e.step is not None and e.recovery not in _NON_PRODUCTIVE
     )
     distances: list[int] = []
     for fault in faults:

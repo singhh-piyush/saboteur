@@ -241,6 +241,10 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
       break;
 
     case "recovery_action":
+      // `no_action` is a stall (no tool call / parse failure), not a
+      // productive recovery: don't count it, don't clear the fault, and leave
+      // the agent in `recovering` — it hasn't actually recovered yet.
+      if (ev.recovery === "no_action") break;
       agent.recoveryCount = prev.recoveryCount + 1;
       agent.activeFault = null;
       if (!terminal) setStatus(agent, "healthy");

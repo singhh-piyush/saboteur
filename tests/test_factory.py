@@ -56,14 +56,16 @@ class TestClassifyRecoveries:
         assert recs[0].after_fault == "api_error"
         assert recs[0].step == 2
 
-    def test_backoff_after_rate_limit(self) -> None:
+    def test_retry_after_rate_limit_is_not_a_distinct_backoff(self) -> None:
         history = [
             _step(1, "weather", {"city": "Tokyo"}, faults=("rate_limit",), errored=True),
             _step(2, "weather", {"city": "Tokyo"}),
         ]
         recs = classify_recoveries(history)
-        # A repeat after a 429 is a backoff, not a blind retry.
-        assert recs[0].kind is RecoveryKind.BACKOFF
+        # A same-tool/same-args re-call after a 429 is just a retry: telemetry
+        # can't witness whether the agent actually waited, so we don't claim a
+        # separate "backoff".
+        assert recs[0].kind is RecoveryKind.RETRY
 
     def test_fallback_to_different_tool(self) -> None:
         history = [
@@ -73,21 +75,22 @@ class TestClassifyRecoveries:
         recs = classify_recoveries(history)
         assert recs[0].kind is RecoveryKind.FALLBACK_TOOL
 
-    def test_replan_same_tool_different_args(self) -> None:
+    def test_reformulate_same_tool_different_args(self) -> None:
         history = [
             _step(1, "calculator", {"expression": "22 * 9 / 5 + 32"}, faults=("malformed",)),
             _step(2, "calculator", {"expression": "22.0 * 9 / 5 + 32"}),
         ]
         recs = classify_recoveries(history)
-        assert recs[0].kind is RecoveryKind.REPLAN
+        assert recs[0].kind is RecoveryKind.REFORMULATE
 
-    def test_replan_no_tool_call(self) -> None:
+    def test_no_action_when_no_tool_call(self) -> None:
         history = [
             _step(1, "weather", {"city": "Tokyo"}, faults=("api_error",)),
             _step(2, None),
         ]
         recs = classify_recoveries(history)
-        assert recs[0].kind is RecoveryKind.REPLAN
+        # No tool call after a fault is a stall, not a recovery.
+        assert recs[0].kind is RecoveryKind.NO_ACTION
 
     def test_gave_up_when_last_step_faulted(self) -> None:
         history = [
@@ -112,7 +115,7 @@ class TestClassifyRecoveries:
         history = [
             _step(1, "weather", {"city": "Tokyo"}),
             _step(2, "calculator", {"expression": "22.0 * 9 / 5 + 32"}),
-            _step(3, "file_report", {"title": "T", "body": "71.6F"}),
+            _step(3, "file_report", {"fahrenheit": "71.6"}),
         ]
         assert classify_recoveries(history) == []
 
@@ -188,7 +191,7 @@ class TestClassifyOutcome:
     def test_completed_when_report_filed(self) -> None:
         assert (
             classify_outcome(
-                [_step(1, "file_report", {"title": "T", "body": "71.6"})],
+                [_step(1, "file_report", {"fahrenheit": "71.6"})],
                 filed_report=True,
                 hit_step_cap=False,
                 raised=False,

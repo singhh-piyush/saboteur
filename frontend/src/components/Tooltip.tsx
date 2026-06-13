@@ -11,7 +11,7 @@ interface TooltipProps {
   /**
    * Render via a position:fixed portal instead of CSS-only absolute
    * positioning. Use inside overflow:auto/hidden ancestors (e.g. the
-   * battle grid) where the default variant would clip.
+   * cohort grid) where the default variant would clip.
    */
   portal?: boolean;
   children: React.ReactNode;

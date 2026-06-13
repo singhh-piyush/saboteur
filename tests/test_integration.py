@@ -4,7 +4,7 @@ All tests are LLM-free. They cover the cross-package seams that unit tests miss:
 
 1. Determinism survives concurrency (#1) — asyncio scheduling never changes which
    faults fire; decisions depend only on the per-agent call sequence.
-2. The literal acceptance — two N=8 battles with the same profile+seed produce
+2. The literal acceptance — two N=8 cohort runs with the same profile+seed produce
    identical ``fault_injected`` sequences in their JSONL logs.
 3. Crash isolation at every layer (#2) — tool, telemetry subscriber, and bus
    fan-out: one failure affects exactly one agent/connection.
@@ -30,7 +30,7 @@ from saboteur.agents.tools import FiledReport, ReportStore, build_tools
 from saboteur.chaos.engine import ChaosEngine
 from saboteur.chaos.events import FaultEvent, FaultType
 from saboteur.chaos.profile import ChaosProfile, FaultSpec
-from saboteur.harness import battle_royale, orchestrate, score
+from saboteur.harness import cohort_run, orchestrate, score
 from saboteur.harness.instrumentation import make_on_event
 from saboteur.telemetry.bus import TelemetryBus
 from saboteur.telemetry.jsonl import read_jsonl
@@ -131,7 +131,7 @@ async def test_concurrency_does_not_perturb_fault_sequences() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. The literal acceptance: identical fault_injected JSONL across two battles
+# 2. The literal acceptance: identical fault_injected JSONL across two cohort runs
 # ---------------------------------------------------------------------------
 
 class _ScriptedEngineAgent:
@@ -210,7 +210,7 @@ def _jsonl_fault_view(path: Path) -> dict[int, list[tuple]]:
     return by_agent
 
 
-async def test_two_battles_same_seed_identical_fault_jsonl(tmp_path: Path) -> None:
+async def test_two_cohort_runs_same_seed_identical_fault_jsonl(tmp_path: Path) -> None:
     """Acceptance: two N=8 runs, same profile+seed → identical fault_injected logs."""
     chaos_yaml = tmp_path / "chaos.yaml"
     chaos_yaml.write_text(
@@ -353,7 +353,7 @@ async def test_faulty_event_sink_agent_still_completes_others() -> None:
             return _FaultyEventAgent(agent_id, profile, store, on_event)
         return _ScriptedEngineAgent(agent_id, profile, store, on_event)
 
-    report = await battle_royale(
+    report = await cohort_run(
         "iso-run",
         3,
         _spicy_profile(),
@@ -479,6 +479,24 @@ def test_mttr_pairs_every_prior_fault_to_next_productive_recovery() -> None:
     assert card.recovery_breakdown == {"retry": 1}
 
 
+def test_mttr_skips_no_action_stall() -> None:
+    """A ``no_action`` stall is not a productive recovery: fault @2 → no_action
+    @3 → retry @5 pairs the fault to the retry (distance 3), not the stall."""
+    events = [
+        _tev(-1, "run_started", payload={"n_agents": 1}),
+        _tev(0, "fault_injected", step=2, fault="api_error"),
+        _tev(0, "recovery_action", step=3, recovery="no_action"),
+        _tev(0, "recovery_action", step=5, recovery="retry"),
+        _tev(0, "agent_done", tokens_used=100,
+             payload={"outcome": "completed", "success": True, "steps_taken": 6}),
+        _tev(-1, "run_finished", payload={"n_agents": 1}),
+    ]
+    card = score(events, events, run_id="score-run", profile="p")
+    assert card.mttr_steps == pytest.approx(3.0)
+    # The stall is still surfaced in the breakdown, just not counted for MTTR.
+    assert card.recovery_breakdown == {"no_action": 1, "retry": 1}
+
+
 def test_deception_rate_counts_only_lied_to_agents() -> None:
     events = [
         _tev(-1, "run_started", payload={"n_agents": 3}),
@@ -514,7 +532,7 @@ async def test_report_store_concurrent_writers_no_lost_or_crossed_writes() -> No
         # Fresh tools per agent (build_tools), as the factory does.
         file_tool = build_tools(agent_id, store)[-1]
         for k in range(writes_each):
-            file_tool.forward(title=f"t{k}", body=f"agent {agent_id} report {k}")
+            file_tool.forward(fahrenheit=f"agent {agent_id} report {k}")
 
     await asyncio.gather(*(asyncio.to_thread(_write, aid) for aid in range(n)))
 

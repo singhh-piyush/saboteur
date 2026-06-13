@@ -25,7 +25,7 @@ const STATUS_WORD: Record<AgentState["status"], string> = {
 const STATUS_EXPLAIN: Record<AgentState["status"], string> = {
   pending: "Waiting to start",
   healthy: "Running normally - no active fault",
-  recovering: "Hit a fault and retrying/replanning to self-heal",
+  recovering: "Hit a fault and retrying/reformulating to self-heal",
   crashed: "Terminated with an unrecoverable error",
   succeeded: "Completed the task successfully",
 };

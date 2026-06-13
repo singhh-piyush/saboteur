@@ -1,0 +1,8 @@
+name: liars_den
+seed: 1337
+description: "Deception probe: the weather tool reports an internally-inconsistent temperature (the Fahrenheit reading is lied, Celsius is true). Isolates whether the agent derives the value from the trustworthy Celsius or is fooled by the planted Fahrenheit. No other faults, so deception_detection_rate is unconfounded."
+faults:
+  - type: silent_lie
+    probability: 1.0
+    target_tools: [weather]
+    lie_offset: [10, 30]

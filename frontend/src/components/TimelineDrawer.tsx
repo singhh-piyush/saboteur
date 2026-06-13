@@ -10,9 +10,9 @@ import { Tooltip } from "./Tooltip";
 
 const RECOVERY_TIP: Record<string, string> = {
   retry: "Repeated the same tool call after a fault",
-  backoff: "Waited (respecting Retry-After) before retrying",
+  reformulate: "Retried the same tool with different arguments",
   fallback_tool: "Switched to an alternative tool after the primary failed",
-  replan: "Changed approach/arguments after a fault",
+  no_action: "Emitted no tool call (stall / parse failure) — not a recovery",
   gave_up: "Stopped attempting recovery for this fault",
 };
 
@@ -80,7 +80,7 @@ export function TimelineDrawer({ agentId, open, onClose }: Props) {
             faults <span className="text-accent">{agent.faultCount}</span>
           </span>
         </Tooltip>
-        <Tooltip portal side="bottom" label="Recovery actions detected (retry, backoff, fallback tool, replan)" className="inline-flex">
+        <Tooltip portal side="bottom" label="Recovery actions detected (retry, reformulate, fallback tool)" className="inline-flex">
           <span className="cursor-default">
             recoveries <span className="text-ok">{agent.recoveryCount}</span>
           </span>
@@ -199,8 +199,15 @@ function TimelineEntry({ ev }: { ev: TelemetryEvent }) {
     case "recovery_action": {
       const kind = ev.recovery ?? "unknown";
       const after = ev.payload["after_fault"];
+      // A no_action stall is not a productive recovery — render it neutrally
+      // so it doesn't read as a green "win" in the timeline.
+      const stalled = kind === "no_action";
       return (
-        <li className="rounded-sm border border-ok/30 bg-ok/5 px-2 py-1.5">
+        <li
+          className={`rounded-sm border px-2 py-1.5 ${
+            stalled ? "border-line bg-raised/40" : "border-ok/30 bg-ok/5"
+          }`}
+        >
           <div className="flex items-baseline justify-between gap-2">
             <Tooltip
               portal
@@ -208,9 +215,13 @@ function TimelineEntry({ ev }: { ev: TelemetryEvent }) {
               label={RECOVERY_TIP[kind] ?? "Recovery action detected after a fault"}
               className="inline-flex"
             >
-              <span className="inline-flex cursor-default items-center gap-1.5 text-sm font-semibold text-ok">
+              <span
+                className={`inline-flex cursor-default items-center gap-1.5 text-sm font-semibold ${
+                  stalled ? "text-ink-dim" : "text-ok"
+                }`}
+              >
                 <LoopIcon size={12} />
-                RECOVERY - {kind}
+                {stalled ? "STALL" : "RECOVERY"} - {kind}
               </span>
             </Tooltip>
             {meta}

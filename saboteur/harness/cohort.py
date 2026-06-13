@@ -1,4 +1,4 @@
-"""Battle royale — run N identical agents concurrently under one chaos profile.
+"""Cohort run — run N identical agents concurrently under one chaos profile.
 
 Crash isolation (invariant #2): every agent gets its own factory-built
 ``SaboteurAgent`` (own ChaosEngine, own tools, own history); the only shared
@@ -16,7 +16,7 @@ across agents (it groups by ``agent_id``).
 
 Bounded wall-clock (invariant #5): each ``SaboteurAgent.run()`` is capped by
 ``settings.agent_timeout_s`` and the semaphore admits at most
-``concurrency_limit`` agents at a time, so the whole battle finishes within
+``concurrency_limit`` agents at a time, so the whole cohort finishes within
 ~ceil(N / limit) × timeout.
 """
 
@@ -43,7 +43,7 @@ _COLLECTOR_DRAIN_TIMEOUT_S = 10.0
 
 
 class RunnableAgent(Protocol):
-    """What battle_royale needs from an agent: just an async run()."""
+    """What cohort_run needs from an agent: just an async run()."""
 
     async def run(self) -> AgentRunResult: ...
 
@@ -66,7 +66,7 @@ class RunReport:
     events: list[TelemetryEvent] = field(default_factory=list)
 
 
-async def battle_royale(
+async def cohort_run(
     run_id: str,
     n_agents: int,
     profile: ChaosProfile,

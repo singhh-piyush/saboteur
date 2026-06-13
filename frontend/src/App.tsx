@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { BattleGrid } from "./components/BattleGrid";
+import { CohortGrid } from "./components/CohortGrid";
 import { ChaosLog } from "./components/ChaosLog";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { ControlPanel } from "./components/ControlPanel";
@@ -131,7 +131,7 @@ function Shell() {
 
               <nav className="flex items-center gap-1 border-b border-line px-3 py-1.5">
                 <TabButton active={tab === "grid"} onClick={() => setTab("grid")}>
-                  BATTLE GRID
+                  COHORT
                 </TabButton>
                 <TabButton
                   active={tab === "scorecard"}
@@ -155,7 +155,7 @@ function Shell() {
               {/* key={tab}: fade content in on tab switch */}
               <div key={tab} className="animate-feed-in min-h-0 flex-1">
                 {tab === "grid" ? (
-                  <BattleGrid
+                  <CohortGrid
                     selectedAgent={selectedAgent}
                     onSelect={selectAgent}
                   />

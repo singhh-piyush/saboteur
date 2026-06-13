@@ -1,6 +1,6 @@
 """Run management routes.
 
-POST   /runs                       — start a battle-royale in the background; returns {run_id}
+POST   /runs                       — start a cohort run in the background; returns {run_id}
 GET    /runs                       — list all runs: id, profile, n_agents, status,
                                      started_at, finished_at, survival_pct (if scored)
 GET    /runs/{id}                  — status + per-agent summary
@@ -32,7 +32,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from saboteur.agents.factory import build_agent
-from saboteur.harness.battle import AgentFactory
+from saboteur.harness.cohort import AgentFactory
 from saboteur.harness.runner import make_run_id, orchestrate
 from saboteur.harness.scoring import Scorecard
 from saboteur.telemetry.jsonl import read_jsonl
@@ -171,7 +171,7 @@ def list_runs() -> list[RunListEntry]:
 
 @router.post("", response_model=RunResponse, status_code=202)
 async def start_run(req: RunRequest) -> RunResponse:
-    """Launch a battle-royale run in the background."""
+    """Launch a cohort run in the background."""
     profile_path = _PROFILES_DIR / f"{req.profile}.yaml"
     if not profile_path.exists():
         raise HTTPException(404, f"profile '{req.profile}' not found")

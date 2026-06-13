@@ -135,25 +135,25 @@ class TestFileReportTool:
     def test_report_stored_under_correct_agent(self) -> None:
         store: ReportStore = {}
         tool = FileReportTool(agent_id=1, store=store)
-        tool.forward("My Report", "Content here.")
+        tool.forward("71.6")
         assert 1 in store
         assert len(store[1]) == 1
-        assert store[1][0].title == "My Report"
+        assert store[1][0].body == "71.6"
 
     def test_two_agents_do_not_share_reports(self) -> None:
         store: ReportStore = {}
         t1 = FileReportTool(agent_id=1, store=store)
         t2 = FileReportTool(agent_id=2, store=store)
-        t1.forward("Agent 1 Report", "body1")
-        t2.forward("Agent 2 Report", "body2")
+        t1.forward("71.6")
+        t2.forward("80.0")
         assert 1 in store and 2 in store
-        assert all(r.title == "Agent 1 Report" for r in store[1])
-        assert all(r.title == "Agent 2 Report" for r in store[2])
+        assert all(r.body == "71.6" for r in store[1])
+        assert all(r.body == "80.0" for r in store[2])
 
     def test_returns_confirmation_string(self) -> None:
         store: ReportStore = {}
         tool = FileReportTool(agent_id=0, store=store)
-        result = tool.forward("T", "B")
+        result = tool.forward("71.6")
         assert isinstance(result, str)
         assert "filed" in result.lower()
 
@@ -279,10 +279,7 @@ class TestSilentLieIntegration:
         lied_result = tool_map["calculator"].forward("22.0 * 9 / 5 + 32")
 
         # File the corrupted result — the agent "believes" this is correct.
-        tool_map["file_report"].forward(
-            "Tokyo Weather Report",
-            f"The current temperature in Tokyo is {lied_result}°F.",
-        )
+        tool_map["file_report"].forward(str(lied_result))
 
         # Verify: the lie shifts the number by ≥10, so it's always WRONG_VALUE.
         result = verify(store, agent_id=0)
@@ -301,9 +298,33 @@ class TestSilentLieIntegration:
         calc_result = tool_map["calculator"].forward("22.0 * 9 / 5 + 32")
         assert calc_result == "71.6"
 
-        tool_map["file_report"].forward(
-            "Tokyo Weather Report",
-            f"The current temperature in Tokyo is {calc_result}°F.",
-        )
+        tool_map["file_report"].forward(calc_result)
         result = verify(store, agent_id=1)
         assert result.success is True
+
+    def test_silent_lie_on_weather_preserves_celsius_corrupts_fahrenheit(self) -> None:
+        """The two-unit weather reading is the deception surface (H1): the lie
+        must leave the Celsius value true and corrupt only the derived
+        Fahrenheit, so the pair is internally inconsistent and an agent that
+        recomputes from Celsius can resist it."""
+        import re
+
+        profile = ChaosProfile(
+            name="weather_liar",
+            seed=3,
+            faults=[
+                FaultSpec(
+                    type=FaultType.SILENT_LIE,
+                    probability=1.0,
+                    target_tools=["weather"],
+                )
+            ],
+        )
+        store: ReportStore = {}
+        tool_map = {t.name: t for t in build_tools(agent_id=0, store=store)}
+        ChaosEngine(profile, agent_id=0).sabotage_tool(tool_map["weather"])
+
+        out = tool_map["weather"].forward("Tokyo")
+        nums = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", out)]
+        assert nums[0] == 22.0  # Celsius untouched (the trustworthy source)
+        assert abs(nums[1] - 71.6) >= 10  # Fahrenheit shifted by the offset lie

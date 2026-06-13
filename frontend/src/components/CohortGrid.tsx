@@ -11,7 +11,7 @@ interface Props {
 
 const GRID_STYLE = { gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" };
 
-export function BattleGrid({ selectedAgent, onSelect }: Props) {
+export function CohortGrid({ selectedAgent, onSelect }: Props) {
   const { state, expectedAgents } = useRun();
   const agents = agentList(state);
 
