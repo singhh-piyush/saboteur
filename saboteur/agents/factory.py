@@ -21,6 +21,7 @@ inference seam) — never instantiated here.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any, Callable
 
 from smolagents import ToolCallingAgent
@@ -31,6 +32,7 @@ from saboteur.chaos.events import FaultEvent
 from saboteur.chaos.profile import ChaosProfile
 from saboteur.config import get_model, get_settings
 
+from .oracle import BuiltinReferenceOracle, Oracle, OracleRunContext
 from .outcomes import (
     AgentEvent,
     AgentRunResult,
@@ -82,10 +84,15 @@ class SaboteurAgent:
         agent_id: int,
         store: ReportStore,
         on_event: OnEvent | None = None,
+        oracle: Oracle | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.store = store
         self._on_event = on_event
+        # The success oracle, consulted once at run completion (invariant #4).
+        # Default is the deterministic reference verifier — identical numbers
+        # to the pre-oracle behavior.
+        self._oracle: Oracle = oracle or BuiltinReferenceOracle()
         self.agent: ToolCallingAgent | None = None
         self.engine: ChaosEngine | None = None
 
@@ -234,6 +241,19 @@ class SaboteurAgent:
             observation=getattr(memory_step, "observations", None),
         )
 
+    def _trace_records(self) -> list[dict[str, Any]]:
+        """Lightweight, JSON-able per-step trace for assertion/HTTP oracles."""
+        return [
+            {
+                "step": rec.step,
+                "tool": rec.tool_name,
+                "faulted": rec.faulted,
+                "fault_types": list(rec.fault_types),
+                "errored": rec.errored,
+            }
+            for rec in self._history
+        ]
+
     # ------------------------------------------------------------------
     # Run
     # ------------------------------------------------------------------
@@ -256,6 +276,7 @@ class SaboteurAgent:
         error: str | None = None
         run_result = None
 
+        t0 = time.perf_counter()
         try:
             run_result = await asyncio.wait_for(
                 asyncio.to_thread(
@@ -268,6 +289,7 @@ class SaboteurAgent:
         except Exception as exc:  # a non-AgentError escaped → real crash
             raised = True
             error = repr(exc)
+        duration_ms = (time.perf_counter() - t0) * 1000.0
 
         task_result = verify(self.store, self.agent_id)
         filed_report = bool(self.store.get(self.agent_id))
@@ -286,14 +308,38 @@ class SaboteurAgent:
         )
         recoveries = classify_recoveries(self._history)
 
+        # Judge success once, at completion (invariant #4). The verdict is
+        # frozen into telemetry; scoring only ever reads it (invariant #3), so
+        # effectful oracles run exactly once. ``verify()`` above supplies the
+        # reference verdict for the builtin oracle. Run off the event loop —
+        # assertion/HTTP oracles block.
+        raw_output = getattr(run_result, "output", None)
+        final_output = str(raw_output) if raw_output is not None else None
+        ctx = OracleRunContext(
+            agent_id=self.agent_id,
+            final_output=final_output,
+            outcome=str(outcome),
+            faults=[str(f.fault) for f in self._faults],
+            tokens_used=tokens,
+            steps_taken=len(self._history),
+            reference_success=task_result.success,
+            trace=self._trace_records(),
+        )
+        verdict = await asyncio.to_thread(self._oracle.judge, ctx)
+
         self._emit(
             "terminal",
             None,
             {
                 "outcome": str(outcome),
-                "success": task_result.success,
+                "success": verdict.success,
                 "tokens_used": tokens,
                 "steps_taken": len(self._history),
+                "oracle": self._oracle.name,
+                "deception_aware": self._oracle.deception_aware,
+                "oracle_detail": verdict.detail,
+                "final_output": final_output,
+                "duration_ms": duration_ms,
             },
         )
         # Terminal event is out; from here any orphan worker thread (from a
@@ -330,6 +376,8 @@ def build_agent(
     profile: ChaosProfile,
     store: ReportStore,
     on_event: OnEvent | None = None,
+    *,
+    oracle: Oracle | None = None,
 ) -> SaboteurAgent:
     """Assemble a sabotaged, instrumented agent for ``agent_id``.
 
@@ -338,11 +386,15 @@ def build_agent(
         profile: A :class:`saboteur.chaos.ChaosProfile`.
         store: Shared report store; this agent writes only ``store[agent_id]``.
         on_event: Optional sink for :class:`AgentEvent`s (telemetry seam).
+        oracle: Success oracle judged once at completion; defaults to the
+            deterministic :class:`~saboteur.agents.oracle.BuiltinReferenceOracle`.
 
     Returns:
         A :class:`SaboteurAgent` ready to ``await .run()``.
     """
-    shell = SaboteurAgent(agent_id=agent_id, store=store, on_event=on_event)
+    shell = SaboteurAgent(
+        agent_id=agent_id, store=store, on_event=on_event, oracle=oracle
+    )
 
     # Engine first: its on_fault is the shell's handler. The handler only runs
     # during run(), by which point shell.agent is set.

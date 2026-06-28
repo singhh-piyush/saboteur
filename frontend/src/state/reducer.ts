@@ -251,11 +251,16 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
       break;
 
     case "agent_done": {
-      const success = ev.payload["success"] === true;
+      const raw = ev.payload["success"];
+      // null ⇒ the run finished but no oracle judged it (BYO without an
+      // oracle). Keep success null (don't claim a verdict) and color the cell
+      // by the behavioral terminal outcome instead of flagging it a crash.
+      const success = raw === true ? true : raw === false ? false : null;
       agent.outcome = asString(ev.payload["outcome"]);
       agent.success = success;
       agent.tokensUsed = ev.tokens_used;
-      setStatus(agent, success ? "succeeded" : "crashed");
+      const ok = success === null ? agent.outcome === "completed" : success;
+      setStatus(agent, ok ? "succeeded" : "crashed");
       break;
     }
 

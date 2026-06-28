@@ -1,0 +1,102 @@
+{
+  "run_id": "hell_mode-20260613T100240-a9c9c4",
+  "profile": "hell_mode",
+  "n_agents": 4,
+  "survival_rate": 0.75,
+  "mttr_steps": 1.6818181818181819,
+  "recovery_breakdown": {
+    "no_action": 10,
+    "fallback_tool": 10
+  },
+  "waste_factor": null,
+  "deception_detection_rate": 1.0,
+  "failure_modes": {
+    "silent_abandonment": 1
+  },
+  "control_run_id": "hell_mode-20260613T100240-a9c9c4-control",
+  "per_agent": {
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14119,
+      "steps_taken": 8,
+      "faults": [
+        "latency",
+        "api_error",
+        "context_drop",
+        "rate_limit",
+        "latency",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "1": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 19194,
+      "steps_taken": 8,
+      "faults": [
+        "api_error",
+        "timeout",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "2": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14701,
+      "steps_taken": 8,
+      "faults": [
+        "rate_limit",
+        "silent_lie",
+        "rate_limit",
+        "latency",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "3": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 30873,
+      "steps_taken": 16,
+      "faults": [
+        "api_error",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "rate_limit",
+        "timeout",
+        "latency",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    }
+  }
+}

@@ -14,6 +14,7 @@ chaos profile changes).
 from __future__ import annotations
 
 import asyncio
+import functools
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,7 @@ from .cohort import AgentFactory, RunReport, cohort_run
 from .scoring import Scorecard, score
 
 from saboteur.agents.factory import build_agent
+from saboteur.agents.oracle import BuiltinReferenceOracle, Oracle
 
 _DEFAULT_RUNS_DIR = Path("runs")
 _DEFAULT_CONTROL_PROFILE = Path("profiles/calm_seas.yaml")
@@ -51,10 +53,16 @@ async def orchestrate(
     control_profile_path: str | Path = _DEFAULT_CONTROL_PROFILE,
     concurrency_limit: int | None = None,
     agent_factory: AgentFactory = build_agent,
+    oracle: Oracle | None = None,
 ) -> Scorecard:
     """Run control + chaos cohorts and return the persisted Scorecard.
 
     Must be awaited from a running event loop (binds each bus to it).
+
+    The success ``oracle`` (default: the deterministic reference verifier) is
+    judged once per agent at completion and frozen into telemetry; both cohorts
+    use the same oracle so survival is comparable. It is bound onto the factory
+    via ``functools.partial``, so the cohort/factory seam stays unchanged.
     """
     settings = get_settings()
     profile = load_profile(profile_path)
@@ -64,6 +72,10 @@ async def orchestrate(
 
     if run_id is None:
         run_id = make_run_id(profile.name)
+
+    bound_factory: AgentFactory = functools.partial(
+        agent_factory, oracle=oracle or BuiltinReferenceOracle()
+    )
 
     if not with_control:
         control_report = RunReport(
@@ -81,7 +93,7 @@ async def orchestrate(
             control_profile,
             runs_dir,
             concurrency_limit=concurrency_limit,
-            agent_factory=agent_factory,
+            agent_factory=bound_factory,
         )
 
     report = await _execute_cohort(
@@ -90,7 +102,7 @@ async def orchestrate(
         profile,
         runs_dir,
         concurrency_limit=concurrency_limit,
-        agent_factory=agent_factory,
+        agent_factory=bound_factory,
     )
 
     scorecard = score(

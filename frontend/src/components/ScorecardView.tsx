@@ -100,12 +100,21 @@ export function ScorecardView() {
 
   return (
     <div className="h-full space-y-4 overflow-y-auto p-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Tile
           label="survival - chaos"
           value={pct(sc.survival_rate)}
-          tone={sc.survival_rate >= 0.75 ? "ok" : sc.survival_rate >= 0.4 ? "warn" : "crit"}
-          tooltip="% of agents that completed the task under fault injection"
+          hint={sc.survival_rate === null ? reasonLabel(sc.survival_rate_reason) : undefined}
+          tone={
+            sc.survival_rate === null
+              ? "plain"
+              : sc.survival_rate >= 0.75
+                ? "ok"
+                : sc.survival_rate >= 0.4
+                  ? "warn"
+                  : "crit"
+          }
+          tooltip="% of agents the oracle judged successful under fault injection (null without an oracle)"
         />
         <Tile
           label="survival - control"
@@ -114,10 +123,33 @@ export function ScorecardView() {
           tooltip="% of agents that completed under the calm-seas baseline (no faults)"
         />
         <Tile
+          label="deception caught"
+          value={pct(sc.deception_detection_rate)}
+          hint={
+            sc.deception_detection_rate === null
+              ? reasonLabel(sc.deception_detection_rate_reason)
+              : undefined
+          }
+          tone={
+            sc.deception_detection_rate === null
+              ? "plain"
+              : sc.deception_detection_rate >= 0.5
+                ? "ok"
+                : "crit"
+          }
+          tooltip="% of lied-to agents that resisted the silent_lie decoy (reference oracle only)"
+        />
+        <Tile
+          label="crash rate"
+          value={pct(sc.crash_rate)}
+          tone={sc.crash_rate > 0 ? "crit" : "plain"}
+          tooltip="% of agents that hard-crashed (hard_exception). NOT 1 - survival - excludes timeout / stall / abandonment"
+        />
+        <Tile
           label="MTTR (steps)"
           value={sc.mttr_steps === null ? "-" : num(sc.mttr_steps, 2)}
           tone="plain"
-          tooltip="Mean time to recovery - avg steps from a fault to the next successful action"
+          tooltip="Mean time to recovery - avg steps from a fault to the next productive action"
         />
         <Tile
           label="waste factor"
@@ -126,16 +158,16 @@ export function ScorecardView() {
           tooltip="Chaos tokens used vs control tokens - ratio >1 means fault recovery burned extra tokens"
         />
         <Tile
-          label="deception caught"
-          value={pct(sc.deception_detection_rate)}
-          tone={
-            sc.deception_detection_rate === null
-              ? "plain"
-              : sc.deception_detection_rate >= 0.5
-                ? "ok"
-                : "crit"
-          }
-          tooltip="% of agents that detected a silent_lie fault (correct data shape, wrong values)"
+          label="latency degr. (rough)"
+          value={sc.latency_degradation === null ? "-" : `${num(sc.latency_degradation, 2)}x`}
+          tone="plain"
+          tooltip="Mean chaos run duration vs control - rough: also reflects batching contention, not isolated injected latency"
+        />
+        <Tile
+          label="oracle"
+          value={sc.oracle ?? "-"}
+          tone="plain"
+          tooltip="Which success oracle judged this run (builtin_reference / regex / assertion_command / http_callback)"
         />
       </div>
 
@@ -254,16 +286,29 @@ const TONES: Record<string, string> = {
   plain: "text-ink",
 };
 
+const REASON_LABELS: Record<string, string> = {
+  no_oracle: "no oracle",
+  deception_requires_reference_oracle: "needs reference oracle",
+  no_deception_probe: "no silent_lie probe",
+};
+
+function reasonLabel(reason: string | null): string | undefined {
+  if (!reason) return undefined;
+  return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
+}
+
 function Tile({
   label,
   value,
   tone,
   tooltip,
+  hint,
 }: {
   label: string;
   value: string;
   tone: keyof typeof TONES;
   tooltip?: string;
+  hint?: string;
 }) {
   return (
     <div className="rounded-md border border-line bg-panel px-3 py-2.5">
@@ -281,6 +326,11 @@ function Tile({
       <div className={`font-display mt-1 text-3xl font-bold ${TONES[tone]}`}>
         {value}
       </div>
+      {hint ? (
+        <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-ink-faint">
+          {hint}
+        </div>
+      ) : null}
     </div>
   );
 }

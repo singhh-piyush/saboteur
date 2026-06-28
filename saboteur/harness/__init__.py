@@ -7,8 +7,21 @@ Public API::
         score, Scorecard,
         orchestrate,
         to_telemetry, make_on_event,
+        Oracle, OracleVerdict, OracleRunContext,
+        BuiltinReferenceOracle, RegexOracle,
+        AssertionCommandOracle, HttpCallbackOracle,
     )
 """
+
+from saboteur.agents.oracle import (
+    AssertionCommandOracle,
+    BuiltinReferenceOracle,
+    HttpCallbackOracle,
+    Oracle,
+    OracleRunContext,
+    OracleVerdict,
+    RegexOracle,
+)
 
 from .cohort import AgentFactory, RunReport, cohort_run
 from .instrumentation import make_on_event, to_telemetry
@@ -17,6 +30,13 @@ from .scoring import Scorecard, score
 
 __all__ = [
     "AgentFactory",
+    "AssertionCommandOracle",
+    "BuiltinReferenceOracle",
+    "HttpCallbackOracle",
+    "Oracle",
+    "OracleRunContext",
+    "OracleVerdict",
+    "RegexOracle",
     "RunReport",
     "Scorecard",
     "cohort_run",

@@ -194,7 +194,7 @@ class _ScriptedEngineAgent:
         )
 
 
-def _scripted_factory(agent_id, profile, store, on_event):
+def _scripted_factory(agent_id, profile, store, on_event, oracle=None):
     return _ScriptedEngineAgent(agent_id, profile, store, on_event)
 
 

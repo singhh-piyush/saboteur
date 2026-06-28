@@ -142,7 +142,7 @@ class FakeAgent:
 def _fake_factory(specs: dict[int, dict[str, Any]]):
     """Build an AgentFactory that returns scripted FakeAgents."""
 
-    def factory(agent_id, profile, store, on_event):
+    def factory(agent_id, profile, store, on_event, oracle=None):
         return FakeAgent(agent_id, on_event, **specs[agent_id])
 
     return factory

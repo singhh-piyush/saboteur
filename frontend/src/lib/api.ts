@@ -32,18 +32,25 @@ export interface Scorecard {
   run_id: string;
   profile: string;
   n_agents: number;
-  survival_rate: number;
+  // Behavioral tier (always present).
   mttr_steps: number | null;
   recovery_breakdown: Record<string, number>;
   waste_factor: number | null;
-  deception_detection_rate: number | null;
   failure_modes: Record<string, number>;
+  crash_rate: number;
+  latency_degradation: number | null;
+  // Oracle-gated tier (null + reason when no/ineligible oracle).
+  survival_rate: number | null;
+  survival_rate_reason: string | null;
+  deception_detection_rate: number | null;
+  deception_detection_rate_reason: string | null;
+  oracle: string | null;
   control_run_id: string | null;
   per_agent: Record<
     string,
     {
       outcome: string;
-      success: boolean;
+      success: boolean | null;
       tokens_used: number;
       steps_taken: number;
       faults: string[];

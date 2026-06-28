@@ -1,0 +1,22 @@
+{
+  "run_id": "flaky_friday-20260612T085313-2306eb",
+  "profile": "flaky_friday",
+  "n_agents": 1,
+  "survival_rate": 1.0,
+  "mttr_steps": null,
+  "recovery_breakdown": {},
+  "waste_factor": 0.9983258928571429,
+  "deception_detection_rate": null,
+  "failure_modes": {},
+  "control_run_id": "flaky_friday-20260612T085313-2306eb-control",
+  "per_agent": {
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7156,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    }
+  }
+}

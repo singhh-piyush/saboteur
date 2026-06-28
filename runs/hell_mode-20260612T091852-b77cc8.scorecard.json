@@ -1,0 +1,1105 @@
+{
+  "run_id": "hell_mode-20260612T091852-b77cc8",
+  "profile": "hell_mode",
+  "n_agents": 50,
+  "survival_rate": 0.28,
+  "mttr_steps": 0.5059880239520959,
+  "recovery_breakdown": {
+    "replan": 161,
+    "fallback_tool": 83,
+    "retry": 2
+  },
+  "waste_factor": null,
+  "deception_detection_rate": 0.21052631578947367,
+  "failure_modes": {
+    "silent_abandonment": 19,
+    "timeout": 6
+  },
+  "control_run_id": "hell_mode-20260612T091852-b77cc8-control",
+  "per_agent": {
+    "6": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 17798,
+      "steps_taken": 8,
+      "faults": [
+        "latency",
+        "context_drop",
+        "api_error",
+        "timeout",
+        "rate_limit",
+        "rate_limit",
+        "malformed"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "7": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 29791,
+      "steps_taken": 16,
+      "faults": [
+        "malformed",
+        "malformed",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "5": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 24499,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "api_error",
+        "silent_lie",
+        "latency",
+        "context_drop",
+        "context_drop",
+        "latency",
+        "api_error",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "2": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 29292,
+      "steps_taken": 11,
+      "faults": [
+        "timeout",
+        "latency",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "rate_limit",
+        "latency",
+        "timeout",
+        "timeout",
+        "latency",
+        "api_error",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "3": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 13294,
+      "steps_taken": 16,
+      "faults": [
+        "api_error",
+        "latency",
+        "context_drop",
+        "context_drop",
+        "context_drop",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "4": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 9473,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    },
+    "0": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 30197,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "malformed",
+        "context_drop",
+        "context_drop",
+        "api_error",
+        "latency",
+        "malformed"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan"
+      ]
+    },
+    "1": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 17407,
+      "steps_taken": 7,
+      "faults": [
+        "latency",
+        "timeout",
+        "rate_limit",
+        "malformed",
+        "latency",
+        "api_error",
+        "latency"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "8": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7186,
+      "steps_taken": 5,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "context_drop",
+        "latency",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "9": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 25721,
+      "steps_taken": 10,
+      "faults": [
+        "latency",
+        "rate_limit",
+        "api_error",
+        "silent_lie",
+        "latency",
+        "latency",
+        "malformed"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "fallback_tool",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "10": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 29850,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "latency",
+        "malformed",
+        "context_drop",
+        "malformed",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "11": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 7112,
+      "steps_taken": 5,
+      "faults": [
+        "api_error",
+        "timeout",
+        "latency",
+        "tool_vanish",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "12": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 9602,
+      "steps_taken": 5,
+      "faults": [
+        "silent_lie",
+        "context_drop",
+        "latency",
+        "rate_limit",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "13": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 13,
+      "faults": [
+        "api_error",
+        "context_drop",
+        "tool_vanish",
+        "tool_vanish",
+        "tool_vanish",
+        "tool_vanish",
+        "context_drop",
+        "tool_vanish",
+        "tool_vanish",
+        "tool_vanish",
+        "tool_vanish",
+        "tool_vanish"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "14": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14744,
+      "steps_taken": 8,
+      "faults": [
+        "api_error",
+        "api_error",
+        "latency",
+        "silent_lie",
+        "context_drop",
+        "latency"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "15": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 14811,
+      "steps_taken": 10,
+      "faults": [
+        "latency",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "api_error",
+        "rate_limit",
+        "context_drop",
+        "context_drop",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "16": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 24188,
+      "steps_taken": 16,
+      "faults": [
+        "silent_lie",
+        "latency",
+        "silent_lie",
+        "context_drop",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "17": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 36429,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "api_error",
+        "latency",
+        "api_error",
+        "latency",
+        "context_drop",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "18": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 36039,
+      "steps_taken": 16,
+      "faults": [
+        "api_error",
+        "latency",
+        "malformed",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan"
+      ]
+    },
+    "19": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 12176,
+      "steps_taken": 7,
+      "faults": [
+        "api_error",
+        "api_error",
+        "latency",
+        "api_error",
+        "latency",
+        "timeout",
+        "context_drop",
+        "api_error"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "20": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7088,
+      "steps_taken": 4,
+      "faults": [
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "21": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 12096,
+      "steps_taken": 5,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "latency"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "22": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 17592,
+      "steps_taken": 9,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "rate_limit",
+        "api_error",
+        "api_error",
+        "api_error",
+        "api_error",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "23": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 29875,
+      "steps_taken": 16,
+      "faults": [
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan"
+      ]
+    },
+    "24": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 30037,
+      "steps_taken": 16,
+      "faults": [
+        "silent_lie",
+        "rate_limit",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan"
+      ]
+    },
+    "25": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 15,
+      "faults": [
+        "silent_lie",
+        "api_error",
+        "api_error"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "26": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 23279,
+      "steps_taken": 11,
+      "faults": [
+        "latency",
+        "malformed",
+        "latency",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "api_error",
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "27": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 15,
+      "faults": [
+        "rate_limit",
+        "malformed",
+        "context_drop",
+        "context_drop",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "28": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 20473,
+      "steps_taken": 9,
+      "faults": [
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "api_error",
+        "api_error",
+        "latency",
+        "api_error",
+        "latency"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "29": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 9458,
+      "steps_taken": 4,
+      "faults": [
+        "latency",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "30": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 17604,
+      "steps_taken": 9,
+      "faults": [
+        "api_error",
+        "api_error",
+        "latency",
+        "api_error",
+        "latency",
+        "api_error",
+        "timeout",
+        "latency",
+        "context_drop",
+        "api_error",
+        "latency",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "31": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 34838,
+      "steps_taken": 13,
+      "faults": [
+        "api_error",
+        "timeout",
+        "silent_lie",
+        "api_error",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "32": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14783,
+      "steps_taken": 8,
+      "faults": [
+        "api_error",
+        "api_error",
+        "latency",
+        "api_error",
+        "latency",
+        "context_drop",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "33": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 15,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "latency",
+        "context_drop",
+        "api_error",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "34": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 4734,
+      "steps_taken": 4,
+      "faults": [
+        "latency",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "35": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 29804,
+      "steps_taken": 16,
+      "faults": [
+        "silent_lie",
+        "latency",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan"
+      ]
+    },
+    "36": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 35733,
+      "steps_taken": 16,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "api_error",
+        "context_drop",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan"
+      ]
+    },
+    "37": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 35707,
+      "steps_taken": 16,
+      "faults": [
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan"
+      ]
+    },
+    "38": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 7363,
+      "steps_taken": 9,
+      "faults": [
+        "latency",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "api_error",
+        "context_drop",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "latency",
+        "silent_lie",
+        "rate_limit",
+        "malformed",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "39": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 14,
+      "faults": [
+        "latency",
+        "rate_limit",
+        "api_error",
+        "api_error",
+        "api_error",
+        "api_error",
+        "context_drop",
+        "rate_limit",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "rate_limit",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "rate_limit",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "40": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 41979,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan"
+      ]
+    },
+    "41": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 20683,
+      "steps_taken": 10,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "malformed",
+        "context_drop",
+        "api_error",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "retry",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "42": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 42560,
+      "steps_taken": 16,
+      "faults": [
+        "api_error",
+        "malformed",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "retry",
+        "fallback_tool"
+      ]
+    },
+    "43": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 13271,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "context_drop",
+        "context_drop",
+        "context_drop",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "44": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 15,
+      "faults": [
+        "latency",
+        "api_error",
+        "rate_limit",
+        "latency",
+        "context_drop",
+        "timeout",
+        "context_drop",
+        "silent_lie",
+        "context_drop",
+        "latency",
+        "rate_limit",
+        "rate_limit",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "api_error",
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "45": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 29852,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "malformed",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "46": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 19079,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "latency",
+        "api_error",
+        "context_drop",
+        "api_error",
+        "malformed",
+        "context_drop",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan"
+      ]
+    },
+    "47": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 26590,
+      "steps_taken": 14,
+      "faults": [
+        "latency",
+        "api_error",
+        "rate_limit",
+        "api_error",
+        "rate_limit",
+        "latency",
+        "context_drop",
+        "rate_limit",
+        "rate_limit",
+        "api_error",
+        "api_error",
+        "latency",
+        "silent_lie",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "48": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 15108,
+      "steps_taken": 10,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "latency",
+        "context_drop",
+        "api_error",
+        "rate_limit",
+        "rate_limit",
+        "rate_limit",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "fallback_tool",
+        "replan",
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "49": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 24271,
+      "steps_taken": 16,
+      "faults": [
+        "context_drop",
+        "malformed",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "replan",
+        "replan"
+      ]
+    }
+  }
+}

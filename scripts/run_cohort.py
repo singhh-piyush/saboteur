@@ -44,6 +44,12 @@ def _fmt(value: float | None, suffix: str = "") -> str:
     return "n/a" if value is None else f"{value:.2f}{suffix}"
 
 
+def _pct(value: float | None, reason: str | None = None) -> str:
+    if value is None:
+        return f"n/a ({reason})" if reason else "n/a"
+    return f"{value:.0%}"
+
+
 async def _main(profile_path: str, n_agents: int | None) -> int:
     settings = get_settings()
     if not _server_is_up():
@@ -70,11 +76,20 @@ async def _main(profile_path: str, n_agents: int | None) -> int:
     print(f"run_id                   : {scorecard.run_id}")
     print(f"profile                  : {scorecard.profile}")
     print(f"agents                   : {scorecard.n_agents}")
-    print(f"survival rate            : {scorecard.survival_rate:.0%}")
+    print(f"oracle                   : {scorecard.oracle or 'n/a'}")
+    print(
+        f"survival rate            : "
+        f"{_pct(scorecard.survival_rate, scorecard.survival_rate_reason)}"
+    )
     print(f"MTTR (steps)             : {_fmt(scorecard.mttr_steps)}")
     print(f"recovery breakdown       : {scorecard.recovery_breakdown}")
     print(f"waste factor             : {_fmt(scorecard.waste_factor, 'x')}")
-    print(f"deception detection rate : {_fmt(scorecard.deception_detection_rate)}")
+    print(f"crash rate               : {scorecard.crash_rate:.0%}")
+    print(f"latency degradation      : {_fmt(scorecard.latency_degradation, 'x')}")
+    print(
+        f"deception detection rate : "
+        f"{_pct(scorecard.deception_detection_rate, scorecard.deception_detection_rate_reason)}"
+    )
     print(f"failure modes            : {scorecard.failure_modes}")
     print("=" * 60)
     print("artifacts:")

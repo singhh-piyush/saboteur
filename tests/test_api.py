@@ -46,7 +46,7 @@ class _FakeAgent:
         return self.result
 
 
-def _fake_factory(agent_id, profile, store, on_event):
+def _fake_factory(agent_id, profile, store, on_event, oracle=None):
     return _FakeAgent(agent_id, on_event)
 
 

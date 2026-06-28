@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+smolagents
+openai
+pyyaml
+pydantic>=2
+pydantic-settings
+python-dotenv
+pytest
+pytest-asyncio
+
+[dev]
+mypy
+ruff
+types-PyYAML

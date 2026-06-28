@@ -66,7 +66,7 @@ class RunResponse(BaseModel):
 
 
 class AgentSummary(BaseModel):
-    status: str  # running | recovering | crashed | succeeded | failed
+    status: str  # running | recovering | crashed | succeeded | failed | unknown
     step: int | None
     faults: int
     recoveries: int
@@ -455,7 +455,16 @@ def _agent_summaries(events: list[TelemetryEvent]) -> dict[str, AgentSummary]:
         recoveries = sum(1 for e in aevents if e.event == "recovery_action")
 
         if done is not None:
-            status = "succeeded" if done.payload.get("success") else "failed"
+            verdict = done.payload.get("success")
+            # None ⇒ the run finished but no oracle judged it (BYO without an
+            # oracle); don't call that a failure.
+            status = (
+                "unknown"
+                if verdict is None
+                else "succeeded"
+                if verdict
+                else "failed"
+            )
         elif crashed:
             status = "crashed"
         elif any(e.event == "recovery_action" for e in aevents):

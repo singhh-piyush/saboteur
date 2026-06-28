@@ -233,6 +233,26 @@ describe("agent status transitions", () => {
     expect(done(true).tokensUsed).toBe(1234);
   });
 
+  it("agent_done with null success (no oracle) colors by outcome, not crashed", () => {
+    const doneNull = (outcome: string) =>
+      foldEvents([
+        ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
+        ev({
+          event: "agent_done",
+          tokens_used: 50,
+          payload: { outcome, success: null, steps_taken: 4 },
+          ts: "2026-06-10T12:00:01+00:00",
+        }),
+      ]).agents[0];
+
+    // Unjudged but ran to completion → not flagged a crash; verdict stays null.
+    const completed = doneNull("completed");
+    expect(completed.status).toBe("succeeded");
+    expect(completed.success).toBeNull();
+    // Unjudged and ended in a failure outcome → crashed.
+    expect(doneNull("timeout").status).toBe("crashed");
+  });
+
   it("agent_crashed is terminal and sticky against later faults", () => {
     const state = foldEvents([
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),

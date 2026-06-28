@@ -1,0 +1,105 @@
+{
+  "run_id": "flaky_friday-20260612T091006-22b4af",
+  "profile": "flaky_friday",
+  "n_agents": 8,
+  "survival_rate": 0.875,
+  "mttr_steps": 0.4444444444444444,
+  "recovery_breakdown": {
+    "fallback_tool": 5,
+    "replan": 4
+  },
+  "waste_factor": 1.2438092246479242,
+  "deception_detection_rate": null,
+  "failure_modes": {},
+  "control_run_id": "flaky_friday-20260612T091006-22b4af-control",
+  "per_agent": {
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7155,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    },
+    "1": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7150,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    },
+    "2": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7169,
+      "steps_taken": 4,
+      "faults": [
+        "latency"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "7": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7153,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    },
+    "4": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7151,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    },
+    "6": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 21212,
+      "steps_taken": 10,
+      "faults": [
+        "rate_limit",
+        "api_error",
+        "api_error",
+        "rate_limit",
+        "latency",
+        "api_error"
+      ],
+      "recoveries": [
+        "replan",
+        "replan",
+        "replan",
+        "fallback_tool",
+        "replan",
+        "fallback_tool"
+      ]
+    },
+    "3": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 7125,
+      "steps_taken": 4,
+      "faults": [
+        "malformed",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "5": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 7159,
+      "steps_taken": 4,
+      "faults": [],
+      "recoveries": []
+    }
+  }
+}

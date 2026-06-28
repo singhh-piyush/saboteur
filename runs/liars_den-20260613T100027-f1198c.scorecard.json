@@ -1,0 +1,112 @@
+{
+  "run_id": "liars_den-20260613T100027-f1198c",
+  "profile": "liars_den",
+  "n_agents": 8,
+  "survival_rate": 1.0,
+  "mttr_steps": 1.0,
+  "recovery_breakdown": {
+    "fallback_tool": 8
+  },
+  "waste_factor": null,
+  "deception_detection_rate": 1.0,
+  "failure_modes": {},
+  "control_run_id": "liars_den-20260613T100027-f1198c-control",
+  "per_agent": {
+    "1": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 9005,
+      "steps_taken": 4,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "3": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 9007,
+      "steps_taken": 4,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "6": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 9013,
+      "steps_taken": 4,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "4": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 8996,
+      "steps_taken": 4,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "2": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 11760,
+      "steps_taken": 5,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 11779,
+      "steps_taken": 5,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "7": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14320,
+      "steps_taken": 6,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "5": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 11733,
+      "steps_taken": 5,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    }
+  }
+}

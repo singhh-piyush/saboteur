@@ -1,0 +1,1057 @@
+{
+  "run_id": "hell_mode-20260613T143323-ba47ce",
+  "profile": "hell_mode",
+  "n_agents": 50,
+  "survival_rate": 0.28,
+  "mttr_steps": 1.4864864864864864,
+  "recovery_breakdown": {
+    "no_action": 129,
+    "fallback_tool": 89
+  },
+  "waste_factor": null,
+  "deception_detection_rate": 0.375,
+  "failure_modes": {
+    "silent_abandonment": 5,
+    "timeout": 34
+  },
+  "control_run_id": "hell_mode-20260613T143323-ba47ce-control",
+  "per_agent": {
+    "6": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 23805,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "api_error",
+        "latency",
+        "api_error",
+        "api_error",
+        "silent_lie",
+        "context_drop",
+        "timeout",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "api_error",
+        "context_drop",
+        "rate_limit",
+        "api_error"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "5": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 34663,
+      "steps_taken": 16,
+      "faults": [
+        "rate_limit",
+        "malformed",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "4": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 34739,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "api_error",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14103,
+      "steps_taken": 8,
+      "faults": [
+        "latency",
+        "api_error",
+        "context_drop",
+        "rate_limit",
+        "latency",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "1": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14671,
+      "steps_taken": 6,
+      "faults": [
+        "api_error",
+        "timeout",
+        "latency",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "2": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 20110,
+      "steps_taken": 8,
+      "faults": [
+        "rate_limit",
+        "silent_lie",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "3": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 9,
+      "faults": [
+        "api_error",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "rate_limit",
+        "timeout",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "7": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 10,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "api_error",
+        "rate_limit",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "8": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 15,
+      "faults": [
+        "latency",
+        "rate_limit",
+        "rate_limit",
+        "context_drop",
+        "rate_limit",
+        "api_error",
+        "context_drop",
+        "context_drop",
+        "api_error",
+        "latency",
+        "timeout",
+        "tool_vanish",
+        "rate_limit",
+        "context_drop",
+        "rate_limit",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "9": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 14,
+      "faults": [
+        "api_error",
+        "rate_limit",
+        "context_drop",
+        "timeout",
+        "api_error",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "silent_lie",
+        "context_drop",
+        "rate_limit",
+        "context_drop",
+        "latency",
+        "api_error",
+        "context_drop",
+        "timeout",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "10": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 20231,
+      "steps_taken": 8,
+      "faults": [
+        "api_error",
+        "tool_vanish",
+        "api_error",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "11": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 8993,
+      "steps_taken": 4,
+      "faults": [
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool"
+      ]
+    },
+    "12": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 3,
+      "faults": [
+        "api_error",
+        "api_error",
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action"
+      ]
+    },
+    "13": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 6703,
+      "steps_taken": 4,
+      "faults": [
+        "latency",
+        "latency",
+        "context_drop",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "14": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 28620,
+      "steps_taken": 16,
+      "faults": [
+        "malformed",
+        "malformed",
+        "latency",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "15": {
+      "outcome": "timeout",
+      "success": true,
+      "tokens_used": 0,
+      "steps_taken": 9,
+      "faults": [
+        "latency",
+        "latency",
+        "timeout",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "16": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 11849,
+      "steps_taken": 8,
+      "faults": [
+        "rate_limit",
+        "context_drop",
+        "latency",
+        "timeout",
+        "timeout",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "17": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 7,
+      "faults": [
+        "latency",
+        "timeout",
+        "latency",
+        "api_error",
+        "context_drop",
+        "malformed",
+        "api_error",
+        "timeout",
+        "context_drop",
+        "latency"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "18": {
+      "outcome": "timeout",
+      "success": true,
+      "tokens_used": 0,
+      "steps_taken": 7,
+      "faults": [
+        "latency",
+        "latency",
+        "timeout",
+        "latency",
+        "silent_lie",
+        "context_drop",
+        "rate_limit",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "19": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 8,
+      "faults": [
+        "tool_vanish",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "20": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 12,
+      "faults": [
+        "rate_limit",
+        "malformed",
+        "context_drop",
+        "rate_limit",
+        "api_error",
+        "context_drop",
+        "latency",
+        "api_error",
+        "context_drop",
+        "silent_lie",
+        "context_drop",
+        "silent_lie",
+        "malformed",
+        "context_drop",
+        "latency",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "21": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14441,
+      "steps_taken": 6,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "silent_lie",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "22": {
+      "outcome": "silent_abandonment",
+      "success": false,
+      "tokens_used": 11898,
+      "steps_taken": 9,
+      "faults": [
+        "api_error",
+        "rate_limit",
+        "context_drop",
+        "latency",
+        "api_error",
+        "malformed",
+        "latency",
+        "tool_vanish",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "23": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 11,
+      "faults": [
+        "malformed",
+        "api_error",
+        "tool_vanish",
+        "context_drop",
+        "tool_vanish",
+        "rate_limit",
+        "api_error",
+        "tool_vanish",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "24": {
+      "outcome": "timeout",
+      "success": true,
+      "tokens_used": 0,
+      "steps_taken": 9,
+      "faults": [
+        "latency",
+        "latency",
+        "malformed",
+        "context_drop",
+        "api_error",
+        "timeout",
+        "latency",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "latency",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "25": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 10,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "silent_lie",
+        "malformed",
+        "context_drop",
+        "latency",
+        "api_error"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "26": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 7,
+      "faults": [
+        "timeout",
+        "timeout"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "27": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 6,
+      "faults": [
+        "latency",
+        "timeout",
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "28": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 14,
+      "faults": [
+        "latency",
+        "silent_lie",
+        "latency",
+        "malformed",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "29": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14291,
+      "steps_taken": 6,
+      "faults": [
+        "latency",
+        "latency",
+        "malformed"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "30": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 12,
+      "faults": [
+        "api_error",
+        "malformed",
+        "latency",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "31": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 6,
+      "faults": [
+        "api_error",
+        "latency",
+        "timeout",
+        "api_error",
+        "context_drop",
+        "api_error",
+        "silent_lie",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "32": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 10,
+      "faults": [
+        "latency",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "no_action"
+      ]
+    },
+    "33": {
+      "outcome": "timeout",
+      "success": true,
+      "tokens_used": 0,
+      "steps_taken": 5,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "latency",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "34": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 5,
+      "faults": [
+        "api_error",
+        "api_error",
+        "rate_limit",
+        "context_drop",
+        "api_error"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "35": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 5,
+      "faults": [
+        "malformed",
+        "api_error",
+        "api_error",
+        "api_error",
+        "timeout"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "36": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 7,
+      "faults": [
+        "malformed",
+        "malformed",
+        "api_error",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "37": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 5,
+      "faults": [
+        "latency",
+        "api_error",
+        "latency",
+        "api_error"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "38": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 11898,
+      "steps_taken": 5,
+      "faults": [
+        "api_error",
+        "latency"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "39": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 8,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "latency"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "40": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 9,
+      "faults": [
+        "timeout",
+        "malformed",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action"
+      ]
+    },
+    "41": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 11883,
+      "steps_taken": 5,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "malformed"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "42": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 7,
+      "faults": [
+        "api_error",
+        "api_error",
+        "silent_lie",
+        "context_drop",
+        "api_error",
+        "rate_limit",
+        "api_error"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "43": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 6,
+      "faults": [
+        "timeout",
+        "latency",
+        "malformed",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "rate_limit",
+        "api_error"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "44": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 8,
+      "faults": [
+        "api_error",
+        "context_drop",
+        "api_error",
+        "api_error",
+        "context_drop",
+        "api_error",
+        "context_drop",
+        "api_error"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "45": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 11,
+      "faults": [
+        "latency",
+        "api_error",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "46": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 11,
+      "faults": [
+        "latency",
+        "malformed",
+        "api_error"
+      ],
+      "recoveries": [
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "47": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 7,
+      "faults": [
+        "silent_lie",
+        "context_drop",
+        "api_error",
+        "rate_limit",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "silent_lie",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "48": {
+      "outcome": "timeout",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 11,
+      "faults": [
+        "rate_limit",
+        "api_error",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "rate_limit"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool"
+      ]
+    },
+    "49": {
+      "outcome": "timeout",
+      "success": true,
+      "tokens_used": 0,
+      "steps_taken": 9,
+      "faults": [
+        "rate_limit",
+        "latency",
+        "malformed",
+        "latency",
+        "rate_limit",
+        "context_drop",
+        "context_drop",
+        "context_drop",
+        "latency",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    }
+  }
+}
