@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     openai_base_url: str = "http://localhost:8080/v1"
     openai_api_key: str = "none"
     model_id: str = "llama-3.1-8b-instruct"
+
+    # --- Wire proxy (saboteur.proxy) ---
+    # Where the proxy forwards. A BYO agent points its OPENAI_BASE_URL at the
+    # proxy (the dashboard app, :8000); the proxy injects faults and forwards
+    # here, to the real upstream (local llama.cpp / the MI300X vLLM). No
+    # separate proxy_port: the proxy is a router on the dashboard app.
+    upstream_base_url: str = "http://localhost:8080/v1"
+    # Finish a proxy run (score + run_finished) after this many seconds with no
+    # request from any of its sessions. Bounded runs (invariant #5).
+    proxy_idle_timeout_s: int = 120
+    # The externally reachable URL of THIS app (where the proxy is mounted). The
+    # BYO cohort spawner hands subprocesses OPENAI_BASE_URL=<this>/v1 so their
+    # traffic flows back through the proxy. Override if the app isn't on :8000.
+    proxy_public_base_url: str = "http://localhost:8000"
     # Small local models (Llama-3.1-8B-Q4) deterministically stall at temp=0:
     # after computing the answer they emit empty "Action:" turns with no tool
     # call, looping to the step cap (the WP3 control-validity bug). A little

@@ -36,7 +36,7 @@ from .events import (
     SimulatedTimeout,
     ToolVanishedError,
 )
-from .profile import FaultSpec
+from .profile import ChaosProfile, FaultSpec
 from .rng import ChaosRandom
 
 Detail = dict[str, Any]
@@ -72,10 +72,18 @@ class ApiErrorInterceptor(Interceptor):
     kind = "raising"
     fault = FaultType.API_ERROR
 
-    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+    def draw_status(self, emit: EmitFn) -> int:
+        """Draw the 5xx status, emit the fault, and return it (no raise).
+
+        Shared by the tool path (``inject``) and the wire proxy, so both draw
+        the status identically — same RNG sequence ⇒ same fault (invariant #1).
+        """
         status = self.rng.choice(self.spec.status_codes)
         emit(self.fault, {"status_code": status})
-        raise SimulatedAPIError(status)
+        return status
+
+    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+        raise SimulatedAPIError(self.draw_status(emit))
 
 
 class RateLimitInterceptor(Interceptor):
@@ -105,12 +113,16 @@ class RateLimitInterceptor(Interceptor):
         window.append(not limited)
         return limited
 
-    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+    def draw_retry_after(self, emit: EmitFn) -> float:
+        """Draw the Retry-After hint, emit the fault, and return it (no raise)."""
         # Profile validation guarantees retry_after_s is set for rate_limit.
         assert self.spec.retry_after_s is not None
         retry_after = round(self.rng.uniform(*self.spec.retry_after_s), 1)
         emit(self.fault, {"retry_after_s": retry_after})
-        raise SimulatedRateLimit(retry_after)
+        return retry_after
+
+    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+        raise SimulatedRateLimit(self.draw_retry_after(emit))
 
 
 class ToolVanishInterceptor(Interceptor):
@@ -126,9 +138,17 @@ class ToolVanishInterceptor(Interceptor):
     def is_vanished(self, tool_name: str) -> bool:
         return tool_name in self._vanished
 
-    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+    def vanish(self, tool_name: str, emit: EmitFn) -> None:
+        """Mark a tool gone for the rest of the session + emit (no raise).
+
+        Shared by the tool path (``inject``, which then raises) and the wire
+        proxy (which strips the tool from the request's ``tools`` array).
+        """
         self._vanished.add(tool_name)
         emit(self.fault, {"sticky": False})
+
+    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+        self.vanish(tool_name, emit)
         raise ToolVanishedError(tool_name)
 
 
@@ -136,11 +156,22 @@ class TimeoutInterceptor(Interceptor):
     kind = "raising"
     fault = FaultType.TIMEOUT
 
-    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+    def draw_deadline(self, emit: EmitFn) -> float:
+        """Emit the fault and return the deadline (no sleep, no raise).
+
+        The wire proxy awaits the sleep asynchronously, then returns a 504;
+        the tool path sleeps synchronously, then raises. Both consume zero
+        RNG draws here (the deadline is a fixed profile param), so the draw
+        sequence is unaffected (invariant #1).
+        """
         # Profile validation guarantees timeout_after_s is set for timeout.
         deadline = self.spec.timeout_after_s
         assert deadline is not None
         emit(self.fault, {"timeout_after_s": deadline})
+        return deadline
+
+    def inject(self, tool_name: str, emit: EmitFn) -> NoReturn:
+        deadline = self.draw_deadline(emit)
         time.sleep(deadline)
         raise SimulatedTimeout(deadline)
 
@@ -149,12 +180,21 @@ class LatencyInterceptor(Interceptor):
     kind = "latency"
     fault = FaultType.LATENCY
 
-    def apply(self, tool_name: str, emit: EmitFn) -> None:
+    def draw_delay(self, emit: EmitFn) -> float:
+        """Draw the delay, emit the fault, and return it (no sleep).
+
+        The wire proxy awaits the sleep asynchronously; the tool path
+        (``apply``) sleeps synchronously. The single ``uniform`` draw is shared,
+        so both paths see the same RNG sequence (invariant #1).
+        """
         # Profile validation guarantees delay_s is set for latency.
         assert self.spec.delay_s is not None
         delay = round(self.rng.uniform(*self.spec.delay_s), 3)
         emit(self.fault, {"delay_s": delay})
-        time.sleep(delay)
+        return delay
+
+    def apply(self, tool_name: str, emit: EmitFn) -> None:
+        time.sleep(self.draw_delay(emit))
 
 
 class MalformedInterceptor(Interceptor):
@@ -293,3 +333,25 @@ INTERCEPTOR_TYPES: dict[FaultType, type[Interceptor]] = {
     FaultType.LATENCY: LatencyInterceptor,
     FaultType.TIMEOUT: TimeoutInterceptor,
 }
+
+
+def build_interceptors(
+    profile: ChaosProfile, rng: ChaosRandom
+) -> tuple[list[Interceptor], list[ContextDropInterceptor]]:
+    """Construct a profile's interceptors against one seeded RNG, in profile order.
+
+    Shared by :class:`~saboteur.chaos.engine.ChaosEngine` (the tool path) and the
+    wire proxy (``saboteur.proxy``) so both build the exact same interceptor set
+    from a profile — the only thing the two surfaces do differently is *act* on
+    the decisions (raise/sleep vs. an HTTP response). Returns the tool-layer
+    interceptors and the context-layer interceptors separately; ``context_drop``
+    is not a per-call wrapper (it runs between turns / requests).
+    """
+    tool_interceptors: list[Interceptor] = []
+    context_interceptors: list[ContextDropInterceptor] = []
+    for spec in profile.faults:
+        if spec.type is FaultType.CONTEXT_DROP:
+            context_interceptors.append(ContextDropInterceptor(spec, rng))
+        else:
+            tool_interceptors.append(INTERCEPTOR_TYPES[spec.type](spec, rng))
+    return tool_interceptors, context_interceptors

@@ -35,6 +35,8 @@ from saboteur.agents.factory import build_agent
 from saboteur.harness.cohort import AgentFactory
 from saboteur.harness.runner import make_run_id, orchestrate
 from saboteur.harness.scoring import Scorecard
+from saboteur.harness.spawn import run_byo_cohort
+from saboteur.harness.targets import target_store
 from saboteur.telemetry.jsonl import read_jsonl
 from saboteur.telemetry.schema import TelemetryEvent
 
@@ -47,6 +49,9 @@ _PROFILES_DIR = Path("profiles")
 
 # Override in tests: monkeypatch.setattr(runs_mod, "_agent_factory", fake)
 _agent_factory: AgentFactory = build_agent
+# Test seams for the BYO path: the target store and the cohort spawner.
+_target_store = target_store
+_byo_runner = run_byo_cohort
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +64,7 @@ class RunRequest(BaseModel):
     n_agents: int | None = None
     seed_override: int | None = None
     with_control: bool = True
+    target: str = "reference"  # "reference" = the built-in smolagents agent
 
 
 class RunResponse(BaseModel):
@@ -171,13 +177,22 @@ def list_runs() -> list[RunListEntry]:
 
 @router.post("", response_model=RunResponse, status_code=202)
 async def start_run(req: RunRequest) -> RunResponse:
-    """Launch a cohort run in the background."""
+    """Launch a cohort run in the background.
+
+    ``target == "reference"`` (default) runs Saboteur's own smolagents cohort
+    via :func:`orchestrate` (control + chaos) — unchanged. Any other target is
+    a registered BYO ``command``: spawned as subprocesses through the wire proxy
+    via :func:`run_byo_cohort` (chaos cohort only — no control in v1).
+    """
     profile_path = _PROFILES_DIR / f"{req.profile}.yaml"
     if not profile_path.exists():
         raise HTTPException(404, f"profile '{req.profile}' not found")
 
     from saboteur.config import get_settings
     n = req.n_agents or get_settings().n_agents
+
+    if req.target != "reference":
+        return await _start_byo_run(req, n)
 
     run_id = make_run_id(req.profile)
     state = RunState(
@@ -213,9 +228,59 @@ async def start_run(req: RunRequest) -> RunResponse:
     state.task = task
     return RunResponse(run_id=run_id)
 
+
+async def _start_byo_run(req: RunRequest, n: int) -> RunResponse:
+    """Background-launch a BYO command target as a cohort through the proxy."""
+    from saboteur.chaos.profile import load_profile
+
+    target = _target_store.get(req.target)
+    if target is None:
+        raise HTTPException(404, f"target '{req.target}' not found")
+    if target.kind != "command":
+        raise HTTPException(400, f"target '{req.target}' is not a command target")
+
+    profile = load_profile(_PROFILES_DIR / f"{req.profile}.yaml")
+    if req.seed_override is not None:
+        profile = profile.model_copy(update={"seed": req.seed_override})
+
+    run_id = make_run_id(req.target)
+    # Pre-register so GET /runs and the WS "wait for bus" path see no gap before
+    # the spawner's manager.create runs (which won't clobber this — see session).
+    state = RunState(
+        run_id=run_id,
+        profile=req.profile,
+        n_agents=n,
+        with_control=False,
+        status=RunStatus.RUNNING,
+        started_at=datetime.now(tz=timezone.utc),
+    )
+    run_registry.add(state)
+
+    async def _background() -> None:
+        try:
+            await _byo_runner(run_id, target, profile, n, runs_dir=_RUNS_DIR)
+            state.status = RunStatus.FINISHED
+        except BaseException as exc:
+            state.status = RunStatus.FAILED
+            state.error = repr(exc)
+            raise
+        finally:
+            state.finished_at = datetime.now(tz=timezone.utc)
+
+    state.task = asyncio.create_task(_background())
+    return RunResponse(run_id=run_id)
+
 @router.post("/{run_id}/cancel", status_code=200)
-def cancel_run(run_id: str) -> dict:
-    """Cancel an active run."""
+async def cancel_run(run_id: str) -> dict:
+    """Stop an active run (cohort task cancel, or proxy-run finish + score)."""
+    # Proxy runs have no background task — STOP means "finish + score them".
+    from saboteur.proxy.session import manager as proxy_manager
+
+    proxy_run = proxy_manager.get(run_id)
+    if proxy_run is not None:
+        await proxy_run.finish()
+        return {"status": "finished"}
+
     state = run_registry.get(run_id)
     if state is None or state.status not in (RunStatus.PENDING, RunStatus.RUNNING):
         raise HTTPException(400, "Run is not active")

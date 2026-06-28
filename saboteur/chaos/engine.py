@@ -21,11 +21,9 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .events import FaultEvent, FaultType, ToolVanishedError
 from .interceptors import (
-    INTERCEPTOR_TYPES,
-    ContextDropInterceptor,
     Detail,
-    Interceptor,
     ToolVanishInterceptor,
+    build_interceptors,
 )
 from .profile import ChaosProfile
 from .rng import seeded_rng
@@ -50,17 +48,9 @@ class ChaosEngine:
         self._on_fault = on_fault
         self._rng = seeded_rng(profile.seed, agent_id)
         self._call_index = 0
-        self._tool_interceptors: list[Interceptor] = []
-        self._context_interceptors: list[ContextDropInterceptor] = []
-        for spec in profile.faults:
-            if spec.type is FaultType.CONTEXT_DROP:
-                self._context_interceptors.append(
-                    ContextDropInterceptor(spec, self._rng)
-                )
-            else:
-                self._tool_interceptors.append(
-                    INTERCEPTOR_TYPES[spec.type](spec, self._rng)
-                )
+        self._tool_interceptors, self._context_interceptors = build_interceptors(
+            profile, self._rng
+        )
 
     # ------------------------------------------------------------------
     # Wrapping

@@ -540,3 +540,93 @@ def test_bulk_delete_skips_running_runs(tmp_runs, clean_registry):
     for i in range(2):
         assert not (tmp_runs / f"bulk-finished-{i}.jsonl").exists()
 
+
+# ---------------------------------------------------------------------------
+# POST /runs target routing (BYO vs reference)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def byo_seam(monkeypatch, tmp_path):
+    """A registered command target + a recording stub for the spawner."""
+    import saboteur.api.runs as runs_mod
+    from saboteur.harness.targets import Target, TargetStore
+
+    store = TargetStore(tmp_path / "targets.json")
+    store.add(Target(name="byo", kind="command", cmd=["python", "-c", "pass"]))
+    monkeypatch.setattr(runs_mod, "_target_store", store)
+
+    calls: list[tuple] = []
+
+    async def _fake_byo(run_id, target, profile, n, *, runs_dir):
+        calls.append((run_id, target.name, profile.name, n))
+
+    monkeypatch.setattr(runs_mod, "_byo_runner", _fake_byo)
+    return calls
+
+
+def test_run_reference_target_unchanged(tmp_runs, clean_registry, fake_factory, byo_seam):
+    """Default target='reference' runs the smolagents path; spawner untouched."""
+    from saboteur.api import app
+
+    with TestClient(app) as client:
+        resp = client.post(
+            "/runs", json={"profile": "calm_seas", "n_agents": 1, "with_control": False}
+        )
+        assert resp.status_code == 202
+        run_id = resp.json()["run_id"]
+        for _ in range(20):
+            if client.get(f"/runs/{run_id}").json()["status"] == "finished":
+                break
+            time.sleep(0.1)
+
+    assert byo_seam == []  # the BYO spawner was never invoked
+
+
+def test_run_byo_target_invokes_spawner(tmp_runs, clean_registry, byo_seam):
+    from saboteur.api import app
+
+    with TestClient(app) as client:
+        resp = client.post(
+            "/runs", json={"target": "byo", "profile": "hell_mode", "n_agents": 4}
+        )
+        assert resp.status_code == 202
+        run_id = resp.json()["run_id"]
+        for _ in range(20):
+            if client.get(f"/runs/{run_id}").json()["status"] == "finished":
+                break
+            time.sleep(0.1)
+
+    assert len(byo_seam) == 1
+    called_run_id, target_name, profile_name, n = byo_seam[0]
+    assert called_run_id == run_id
+    assert target_name == "byo"
+    assert profile_name == "hell_mode"
+    assert n == 4
+
+
+def test_run_unknown_target_returns_404(tmp_runs, clean_registry, byo_seam):
+    from saboteur.api import app
+
+    with TestClient(app) as client:
+        resp = client.post("/runs", json={"target": "nope", "profile": "calm_seas"})
+    assert resp.status_code == 404
+
+
+def test_run_non_command_target_returns_400(tmp_runs, clean_registry, monkeypatch):
+    """A registered target that isn't a command kind → 400 (defensive)."""
+    import saboteur.api.runs as runs_mod
+    from saboteur.harness.targets import Target
+
+    class _FakeStore:
+        def get(self, name):
+            return Target(name=name, kind="reference")
+
+    monkeypatch.setattr(runs_mod, "_target_store", _FakeStore())
+
+    from saboteur.api import app
+
+    with TestClient(app) as client:
+        resp = client.post("/runs", json={"target": "weird", "profile": "calm_seas"})
+    assert resp.status_code == 400
+
