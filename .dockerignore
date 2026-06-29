@@ -5,10 +5,16 @@
 .venv
 .venv-verify
 runs
-frontend
 tests
 scripts
 node_modules
+# Exclude the frontend's deps + generated build, but KEEP its source so
+# Dockerfile.server's node build stage can compile it. (This file is honored by
+# BOTH the legacy and BuildKit builders, so the server image builds regardless
+# of whether buildx is installed.) The CI image (root Dockerfile) doesn't COPY
+# frontend, so the extra source in its context is harmless.
+frontend/node_modules
+frontend/dist
 *.egg-info
 __pycache__
 .pytest_cache

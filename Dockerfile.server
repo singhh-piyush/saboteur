@@ -1,0 +1,65 @@
+# Saboteur — console/server image (the dashboard app).
+#
+# One process serves everything: the FastAPI orchestrator, the wire-level chaos
+# proxy (mounted router, NOT a separate server — it shares the in-process
+# ws.registry + runs/), and the built React frontend (StaticFiles). This is the
+# image docker-compose.yml runs.
+#
+# NOTE: this is a DIFFERENT image from the root `Dockerfile`, which is the CI
+# resilience-gate image (ENTRYPOINT ["saboteur"]) built by the GitHub Action.
+# The build context is governed by the root `.dockerignore` (which keeps
+# frontend/ SOURCE but drops node_modules/dist) — honored by both the legacy and
+# BuildKit builders, so this builds whether or not buildx is installed.
+#
+#   docker build -f Dockerfile.server -t saboteur-console .
+#   docker run --rm -p 8000:8000 -v "$PWD/runs:/app/runs" \
+#     --add-host host.docker.internal:host-gateway \
+#     -e OPENAI_BASE_URL=http://host.docker.internal:8080/v1 saboteur-console
+
+# ---- Stage 1: build the frontend (Vite → static dist) ----
+FROM node:22-slim AS frontend
+WORKDIR /fe
+# Install deps from the lockfile first (better layer caching), then build.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build   # → /fe/dist
+
+# ---- Stage 2: the Python app (uvicorn) ----
+FROM python:3.11-slim AS app
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# curl is only needed for the container HEALTHCHECK below.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install the package EDITABLE so `import saboteur` resolves to /app/saboteur:
+# the API computes the static-frontend path from __file__
+# (saboteur/api/__init__.py: __file__.parent.parent.parent / "frontend" / "dist"),
+# which must land on /app/frontend/dist. Editable keeps __file__ on the source
+# tree, so this resolves with zero code change. All runtime paths are relative
+# (runs/, profiles/, runs/saboteur.db) → WORKDIR must stay /app.
+COPY pyproject.toml README.md ./
+COPY saboteur ./saboteur
+COPY profiles ./profiles
+COPY examples ./examples
+RUN pip install -e .
+
+# Built frontend from stage 1.
+COPY --from=frontend /fe/dist ./frontend/dist
+
+# Artifact dir (also the SQLite index location). Bind-mounted by compose so it
+# persists on the host across down/up.
+RUN mkdir -p runs
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
+    CMD curl -fsS http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "saboteur.api:app", "--host", "0.0.0.0", "--port", "8000"]

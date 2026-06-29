@@ -1,0 +1,76 @@
+# Saboteur console stack.
+#
+# ONE service: the FastAPI app serves the orchestrator API, the wire-level chaos
+# proxy (mounted router), and the built React frontend (static) — all in-process,
+# sharing the in-process telemetry registry + runs/ dir, so the grid/scorecard/
+# replay render live. There is no separate "proxy" or "frontend" container by
+# design (the proxy can't be split out without breaking live render).
+#
+# Quickstart:
+#   1. Start the host llama-server (the ONLY host process). It MUST bind 0.0.0.0
+#      so the container can reach it via host.docker.internal:
+#        llama-server -m /path/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
+#          --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
+#   2. make up   (or: docker compose --env-file compose.env up --build)
+#   3. open http://localhost:8000  → launch a reference cohort (UI or `make run`)
+#
+# Env precedence: shell env > --env-file (compose.env) > the defaults below.
+
+services:
+  console:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    image: saboteur-console:latest
+    container_name: saboteur-console
+    ports:
+      - "8000:8000"
+    # JSONL event logs + scorecards + the SQLite index live here. Bind-mounted
+    # to the host so artifacts are collectable and survive down/up (the index is
+    # rebuilt from the bind-mounted JSONL on startup — invariant #3).
+    volumes:
+      - ./runs:/app/runs
+    # Reach the host's llama-server (and any host-side upstream) by name.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # ---- Inference: host llama.cpp by default ----
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://host.docker.internal:8080/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-none}
+      MODEL_ID: ${MODEL_ID:-llama-3.1-8b-instruct}
+      # ---- Wire proxy upstream (the real backend the proxy forwards to) ----
+      UPSTREAM_BASE_URL: ${UPSTREAM_BASE_URL:-http://host.docker.internal:8080/v1}
+      PROXY_IDLE_TIMEOUT_S: ${PROXY_IDLE_TIMEOUT_S:-120}
+      # BYO cohort subprocesses run INSIDE this container, so they loop back to
+      # our own uvicorn — localhost:8000 is correct here (not host.docker.internal).
+      PROXY_PUBLIC_BASE_URL: ${PROXY_PUBLIC_BASE_URL:-http://localhost:8000}
+      # ---- Harness knobs ----
+      N_AGENTS: ${N_AGENTS:-8}
+      MAX_STEPS: ${MAX_STEPS:-15}
+      AGENT_TIMEOUT_S: ${AGENT_TIMEOUT_S:-180}
+      TEMPERATURE: ${TEMPERATURE:-0.3}
+      MODEL_SEED: ${MODEL_SEED:-42}
+      TOOL_CHOICE: ${TOOL_CHOICE:-required}
+      CONCURRENCY_LIMIT: ${CONCURRENCY_LIMIT:-8}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  # =====================================================================
+  # CLOUD: vLLM/MI300X or Fireworks — swap upstream_base_url here.
+  # ---------------------------------------------------------------------
+  # Post-deadline, point inference at the cloud GPU. These are RUNTIME env
+  # only (no rebuild). Set them in your shell or in compose.env:
+  #
+  #   OPENAI_BASE_URL=http://<mi300x-ip>:8000/v1
+  #   UPSTREAM_BASE_URL=http://<mi300x-ip>:8000/v1
+  #   MODEL_ID=meta-llama/Llama-3.1-8B-Instruct
+  #   CONCURRENCY_LIMIT=0          # unlimited on the MI300X (N=50)
+  #
+  # Then: docker compose --env-file compose.env up   (no --build needed).
+  # The extra_hosts host-gateway mapping stays harmless when unused.
+  # =====================================================================

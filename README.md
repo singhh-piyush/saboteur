@@ -75,6 +75,58 @@ docker build -t saboteur:ci . && docker run --rm -v "$PWD/runs:/app/runs" \
 
 Built for the AMD Developer Hackathon: ACT II.
 
+## Run it with Docker
+
+The whole console (orchestrator API + wire-level chaos proxy + dashboard) runs in
+one container. Inference stays on the host (llama.cpp), so the only thing you run
+outside Docker is `llama-server`.
+
+**1. Start the host llama-server** (the only host process). It **must** bind
+`0.0.0.0` so the container can reach it — the default `127.0.0.1` is unreachable
+from inside Docker:
+
+```bash
+llama-server -m /path/to/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
+  --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
+```
+
+(`--jinja` enables tool calling; `-np 8` gives 8 parallel slots for the N=8 cohort.
+One-time GGUF download instructions are in `scripts/run_local.sh`.)
+
+**2. Bring up the console:**
+
+```bash
+make up                 # = docker compose --env-file compose.env up --build -d
+```
+
+**3. Open the dashboard** at **http://localhost:8000** and launch a run from the UI,
+or fire a reference cohort from the CLI:
+
+```bash
+make run                # POST a reference flaky_friday cohort
+# or pick a profile:  PROFILE=hell_mode make run
+```
+
+Watch the agent grid animate live; the Resilience Scorecard renders when the cohort
+finishes. Event logs + scorecards land in `./runs/` on the host.
+
+```bash
+make logs               # follow container logs
+make down               # stop the container (runs/ persists on the host)
+```
+
+`runs/` is bind-mounted, so history survives `make down` / `make up` (the SQLite
+index is rebuilt from the JSONL logs on startup).
+
+### Pointing at the cloud (post-deadline)
+
+Inference is a runtime-env swap — no rebuild. Edit `compose.env` (or set shell env)
+to point `OPENAI_BASE_URL` / `UPSTREAM_BASE_URL` at the MI300X vLLM endpoint and set
+`CONCURRENCY_LIMIT=0`, then `docker compose --env-file compose.env up`. See the
+commented `# CLOUD` block in `docker-compose.yml`.
+
 ## Status
 
-Early. The repo is being set up. Code, setup steps, and a demo are coming.
+Containerized console stack shipped (`Dockerfile.server` + `docker-compose.yml`):
+fresh clone + host `llama-server` → `make up` → live dashboard + reference cohort
+end-to-end, no host Python beyond llama.cpp.
