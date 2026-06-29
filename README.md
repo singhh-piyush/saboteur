@@ -29,6 +29,42 @@ Think of it as a Chaos Monkey, but for AI agents.
 - Context drops: the agent loses part of its memory
 - Vanishing tools: a tool disappears in the middle of a run
 
+## CI gate: block the merge if resilience drops
+
+Saboteur ships as a GitHub Action so resilience becomes a required check —
+chaos-test the agent on every PR, fail the merge when a metric falls below a
+threshold, and comment the per-metric delta vs the base branch's last run.
+
+```yaml
+# .github/workflows/resilience.yml (a working copy lives in this repo)
+permissions: { contents: read, pull-requests: write, actions: read }
+jobs:
+  resilience:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/saboteur-resilience
+        with:
+          target: reference
+          profile: hell_mode
+          metric: survival_rate
+          threshold: "0.85"   # raise to "0.95" to watch it block the merge
+          mock: "true"        # offline demo; set "false" + pass your endpoint
+```
+
+It runs **offline** out of the box: a bundled deterministic mock model
+(`saboteur/mock_inference.py`) drives the real agent with no GPU or secrets, so
+the demo is green/red and reproducible. To gate **your** agent, set
+`mock: "false"` and pass `openai-base-url` / `openai-api-key` / `model-id`
+(from repo secrets). The same gate runs locally via the CLI or Docker:
+
+```bash
+saboteur run --target reference --mock --profile hell_mode --ci --threshold 0.85
+# or in CI's container:
+docker build -t saboteur:ci . && docker run --rm -v "$PWD/runs:/app/runs" \
+  saboteur:ci run --target reference --mock --profile hell_mode --ci --threshold 0.85
+```
+
 ## Built with
 
 - smolagents for the agent loop

@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import os
+import socket
 import sys
 import time
 from pathlib import Path
@@ -169,6 +171,42 @@ def _stop_server(proc: subprocess.Popen | None) -> None:
         proc.kill()
 
 
+def _start_mock() -> subprocess.Popen:
+    """Launch the bundled deterministic mock model and point inference at it.
+
+    Sets ``OPENAI_BASE_URL`` (+ key/model) to the mock and clears the settings
+    cache so ``orchestrate``→``get_model()`` targets it. Returns the process so
+    the caller can tear it down. Used by ``run --mock`` for offline/CI demos.
+    """
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    base = f"http://127.0.0.1:{port}"
+    click.echo(f"starting mock inference server on {base} …", err=True)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "uvicorn", "saboteur.mock_inference:app",
+         "--host", "127.0.0.1", "--port", str(port)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for _ in range(60):  # up to ~30 s
+        if _server_up(base):
+            break
+        if proc.poll() is not None:
+            _stop_server(proc)
+            _die("mock inference server failed to start")
+        time.sleep(0.5)
+    else:
+        _stop_server(proc)
+        _die("mock inference server did not become healthy")
+    os.environ["OPENAI_BASE_URL"] = f"{base}/v1"
+    os.environ["OPENAI_API_KEY"] = "none"
+    os.environ["MODEL_ID"] = "saboteur-mock"
+    get_settings.cache_clear()
+    return proc
+
+
 # ---------------------------------------------------------------------------
 # Executors (the test seams — monkeypatched to return canned scorecards)
 # ---------------------------------------------------------------------------
@@ -303,6 +341,7 @@ def main() -> None:
 @click.option("--threshold", type=float, default=0.7, show_default=True, help="CI floor: fail if metric < threshold.")
 @click.option("--metric", default="survival_rate", show_default=True, help="Metric to gate on in --ci mode.")
 @click.option("--api", default=None, help="API base for BYO targets (default: settings.proxy_public_base_url).")
+@click.option("--mock", is_flag=True, help="Use the bundled deterministic mock model (reference, offline — no GPU/secrets).")
 def run_cmd(
     target: str,
     profile: str,
@@ -312,6 +351,7 @@ def run_cmd(
     threshold: float,
     metric: str,
     api: str | None,
+    mock: bool,
 ) -> None:
     """Run a cohort under a chaos profile and print the scorecard.
 
@@ -327,16 +367,21 @@ def run_cmd(
         _die(f"unknown target {target!r}; see `saboteur targets`.")
     if not (_PROFILES_DIR / f"{profile}.yaml").exists():
         _die(f"unknown profile {profile!r}; see `saboteur profiles`.")
+    if mock and resolved.kind != "reference":
+        _die("--mock is only supported for the reference target.")
     if ci:
         _preflight_ci(resolved, metric, control)
 
     n = n_agents if n_agents is not None else get_settings().n_agents
 
     proc: subprocess.Popen | None = None
+    mock_proc: subprocess.Popen | None = None
     try:
         if resolved.kind == "reference":
+            if mock:
+                mock_proc = _start_mock()
             click.echo(f"running reference cohort: profile={profile} n={n} "
-                       f"control={control} …", err=True)
+                       f"control={control}{' mock' if mock else ''} …", err=True)
             sc = _run_reference(profile, n, control)
         else:
             base, proc = _ensure_server(_api_base(api))
@@ -345,6 +390,7 @@ def run_cmd(
             sc = _run_byo_via_api(base, target, profile, n)
     finally:
         _stop_server(proc)
+        _stop_server(mock_proc)
 
     _print_scorecard(sc, target)
     _print_artifacts(sc.get("run_id", ""), control=control and resolved.kind == "reference")
@@ -382,6 +428,90 @@ def targets_cmd() -> None:
             if len(cmd) > 48:
                 cmd = cmd[:45] + "…"
             click.echo(f"{t.name:<18} command     oracle={t.oracle.kind:<8} {cmd}")
+
+
+# ---------------------------------------------------------------------------
+# compare
+# ---------------------------------------------------------------------------
+
+
+def _fetch_compare(base: str, a: str, b: str) -> dict:
+    """GET /runs/compare (the PWP4 endpoint). Test seam."""
+    with httpx.Client(base_url=base, timeout=30.0) as client:
+        resp = client.get("/runs/compare", params={"a": a, "b": b})
+    if resp.status_code >= 400:
+        _die(f"compare failed ({resp.status_code}): {resp.text}")
+    return resp.json()
+
+
+def _fmt_metric(v: float | None) -> str:
+    return "—" if v is None else f"{v:.3f}"
+
+
+def _arrow(m: dict) -> str:
+    if m.get("regressed"):
+        return "🔴 regressed"
+    delta = m.get("delta")
+    if not delta:
+        return "·"
+    better = (delta > 0) == m.get("higher_is_better", True)
+    return "🟢 improved" if better else "🟡"
+
+
+def _render_compare(data: dict, *, markdown: bool) -> str:
+    metrics: dict = data.get("metrics", {})
+    regressions = data.get("regressions") or []
+    if markdown:
+        rows = [
+            "### 🛡️ Saboteur resilience delta",
+            f"base `{data.get('a')}` → PR `{data.get('b')}`",
+            "",
+            "| metric | base | PR | Δ | |",
+            "|---|---|---|---|---|",
+        ]
+        for name, m in metrics.items():
+            rows.append(
+                f"| `{name}` | {_fmt_metric(m.get('a'))} | {_fmt_metric(m.get('b'))} "
+                f"| {_fmt_metric(m.get('delta'))} | {_arrow(m)} |"
+            )
+        rows.append("")
+        rows.append(
+            "**Regressions:** " + ", ".join(f"`{r}`" for r in regressions)
+            if regressions
+            else "**No resilience regressions** ✅"
+        )
+        return "\n".join(rows)
+
+    lines = [f"compare  base={data.get('a')}  PR={data.get('b')}", "─" * 60]
+    for name, m in metrics.items():
+        flag = "REGRESSED" if m.get("regressed") else ""
+        lines.append(
+            f"  {name:<24} base={_fmt_metric(m.get('a'))} "
+            f"PR={_fmt_metric(m.get('b'))} Δ={_fmt_metric(m.get('delta'))} {flag}"
+        )
+    lines.append("─" * 60)
+    lines.append(f"regressions: {', '.join(regressions) if regressions else 'none'}")
+    return "\n".join(lines)
+
+
+@main.command("compare")
+@click.argument("a")
+@click.argument("b")
+@click.option("--api", default=None, help="API base (default: settings.proxy_public_base_url).")
+@click.option("--markdown", is_flag=True, help="Render a Markdown table (for PR comments).")
+def compare_cmd(a: str, b: str, api: str | None, markdown: bool) -> None:
+    """Compare two runs A and B: per-metric delta (B−A) + regressions.
+
+    Uses the /runs/compare endpoint; auto-starts a server if one isn't up (its
+    startup indexes runs/, so both runs must have their JSONL+scorecard there).
+    Prints a table to stdout — with --markdown, suitable for a PR comment body.
+    """
+    base, proc = _ensure_server(_api_base(api))
+    try:
+        data = _fetch_compare(base, a, b)
+    finally:
+        _stop_server(proc)
+    click.echo(_render_compare(data, markdown=markdown))
 
 
 @main.command("replay")

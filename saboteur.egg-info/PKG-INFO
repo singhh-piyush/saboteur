@@ -5,6 +5,8 @@ Summary: Chaos engineering test harness for AI agents
 Requires-Python: >=3.11
 Requires-Dist: fastapi
 Requires-Dist: uvicorn[standard]
+Requires-Dist: httpx
+Requires-Dist: click
 Requires-Dist: smolagents
 Requires-Dist: openai
 Requires-Dist: pyyaml

@@ -83,6 +83,7 @@ export class ApiError extends Error {
 /** Full RunListEntry matching the backend RunListEntry model. */
 export interface RunListEntry {
   run_id: string;
+  target: string;
   profile: string;
   n_agents: number;
   status: "pending" | "running" | "finished" | "failed" | "archived";
@@ -92,16 +93,30 @@ export interface RunListEntry {
   survival_pct: number | null;
 }
 
+export interface RunListFilters {
+  target?: string;
+  profile?: string;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
 export function fetchProfiles(): Promise<ProfileInfo[]> {
   return request<ProfileInfo[]>("/profiles");
 }
 
-export function fetchRunList(): Promise<RunListEntry[]> {
-  return request<RunListEntry[]>("/runs");
+export function fetchRunList(filters?: RunListFilters): Promise<RunListEntry[]> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters ?? {})) {
+    if (v) params.set(k, v);
+  }
+  const qs = params.toString();
+  return request<RunListEntry[]>(qs ? `/runs?${qs}` : "/runs");
 }
 
 export function startRun(body: {
   profile: string;
+  target?: string;
   n_agents?: number;
   seed_override?: number;
   with_control?: boolean;
@@ -178,4 +193,159 @@ export function downloadJsonlUrl(runId: string): string {
 /** Direct download URL for a run's scorecard JSON. */
 export function downloadScorecardUrl(runId: string): string {
   return `/runs/${encodeURIComponent(runId)}/download/scorecard`;
+}
+
+// ---------------------------------------------------------------------------
+// Targets (registry of runnable agents)
+// ---------------------------------------------------------------------------
+
+export type OracleKind = "none" | "regex" | "command" | "http";
+
+export interface OracleConfig {
+  kind: OracleKind;
+  pattern?: string | null;
+  command?: string | null;
+  url?: string | null;
+}
+
+export interface Target {
+  name: string;
+  kind: "reference" | "command";
+  cmd?: string[] | null;
+  cwd?: string | null;
+  env?: Record<string, string>;
+  oracle?: OracleConfig;
+}
+
+export function fetchTargets(): Promise<Target[]> {
+  return request<Target[]>("/targets");
+}
+
+export function createTarget(target: Target): Promise<Target> {
+  return request<Target>("/targets", {
+    method: "POST",
+    body: JSON.stringify(target),
+  });
+}
+
+export function updateTarget(name: string, target: Target): Promise<Target> {
+  return request<Target>(`/targets/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body: JSON.stringify(target),
+  });
+}
+
+export async function deleteTarget(name: string): Promise<void> {
+  const resp = await fetch(`/targets/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new ApiError(resp.status, `${resp.status}: ${body}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Profile builder (fault catalog + validate + save)
+// ---------------------------------------------------------------------------
+
+export type ParamKind = "range" | "int" | "float" | "int_list";
+
+export interface ParamSpec {
+  name: string;
+  kind: ParamKind;
+  required: boolean;
+  default: unknown;
+}
+
+export interface FaultCatalogEntry {
+  type: string;
+  layer: "tool" | "transport" | "context";
+  required: string[];
+  params: ParamSpec[];
+}
+
+/** One fault entry in a profile draft. Loose record: validated server-side. */
+export type FaultDraft = Record<string, unknown> & { type: string; probability: number };
+
+export interface ProfileDraft {
+  name: string;
+  seed: number;
+  description: string;
+  faults: FaultDraft[];
+}
+
+export interface ValidationItem {
+  loc: string;
+  msg: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationItem[];
+}
+
+/** A full saved profile (every fault field), for loading into the builder. */
+export interface FullProfile {
+  name: string;
+  seed: number;
+  description: string;
+  faults: Record<string, unknown>[];
+}
+
+export function fetchFaults(): Promise<FaultCatalogEntry[]> {
+  return request<FaultCatalogEntry[]>("/faults");
+}
+
+export function fetchProfile(name: string): Promise<FullProfile> {
+  return request<FullProfile>(`/profiles/${encodeURIComponent(name)}`);
+}
+
+export function validateProfile(draft: ProfileDraft): Promise<ValidationResult> {
+  return request<ValidationResult>("/profiles/validate", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export function saveProfile(draft: ProfileDraft): Promise<ProfileInfo> {
+  return request<ProfileInfo>("/profiles", {
+    method: "POST",
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function deleteProfile(name: string): Promise<void> {
+  const resp = await fetch(`/profiles/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new ApiError(resp.status, `${resp.status}: ${body}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compare (per-metric delta between two runs)
+// ---------------------------------------------------------------------------
+
+export interface MetricDelta {
+  a: number | null;
+  b: number | null;
+  delta: number | null;
+  regressed: boolean;
+  higher_is_better: boolean;
+  threshold: number;
+}
+
+export interface RunComparison {
+  a: string;
+  b: string;
+  metrics: Record<string, MetricDelta>;
+  regressions: string[];
+}
+
+export function fetchComparison(a: string, b: string): Promise<RunComparison> {
+  const params = new URLSearchParams({ a, b });
+  return request<RunComparison>(`/runs/compare?${params.toString()}`);
 }

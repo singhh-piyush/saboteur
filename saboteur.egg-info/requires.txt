@@ -1,5 +1,7 @@
 fastapi
 uvicorn[standard]
+httpx
+click
 smolagents
 openai
 pyyaml

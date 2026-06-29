@@ -34,6 +34,22 @@ _REQUIRED_PARAMS: dict[FaultType, tuple[str, ...]] = {
     FaultType.CONTEXT_DROP: ("drop_last_k",),
 }
 
+# The FaultSpec params that are *relevant* to each fault type (a superset of
+# _REQUIRED_PARAMS — includes the optional knobs). The single source of truth
+# for the /faults catalog and the dashboard's Profile Builder, so the editable
+# fields can never drift from the schema. ``probability`` and ``target_tools``
+# are common to every fault and intentionally omitted here.
+FAULT_PARAMS: dict[FaultType, tuple[str, ...]] = {
+    FaultType.API_ERROR: ("status_codes",),
+    FaultType.RATE_LIMIT: ("retry_after_s", "burst_budget", "window_calls"),
+    FaultType.MALFORMED: (),
+    FaultType.SILENT_LIE: ("lie_offset", "lie_factor"),
+    FaultType.TOOL_VANISH: (),
+    FaultType.LATENCY: ("delay_s",),
+    FaultType.TIMEOUT: ("timeout_after_s",),
+    FaultType.CONTEXT_DROP: ("drop_last_k",),
+}
+
 
 class FaultSpec(BaseModel):
     """One fault entry in a chaos profile."""

@@ -1,0 +1,103 @@
+name: "Saboteur Resilience Gate"
+description: >-
+  Chaos-test an AI agent and fail the check when a resilience metric drops below
+  a threshold. Uploads the scorecard as an artifact and, on pull requests,
+  comments the per-metric delta vs the base branch's last run.
+author: "Saboteur"
+branding:
+  icon: "shield"
+  color: "orange"
+
+inputs:
+  target:
+    description: "Target to test ('reference' or a registered BYO target)."
+    required: false
+    default: "reference"
+  profile:
+    description: "Chaos profile: calm_seas | flaky_friday | rate_limit_storm | hell_mode | liars_den."
+    required: false
+    default: "hell_mode"
+  n:
+    description: "Cohort size (number of concurrent agents)."
+    required: false
+    default: "8"
+  threshold:
+    description: "CI floor — the check fails if the metric is below this value."
+    required: false
+    default: "0.85"
+  metric:
+    description: "Metric to gate on: survival_rate | crash_rate | mttr_steps | deception_detection_rate | waste_factor | latency_degradation."
+    required: false
+    default: "survival_rate"
+  mock:
+    description: "Use the bundled deterministic mock model (offline; no GPU or secrets). Set 'false' to use your own endpoint."
+    required: false
+    default: "true"
+  openai-base-url:
+    description: "OpenAI-compatible endpoint (used when mock=false)."
+    required: false
+    default: ""
+  openai-api-key:
+    description: "API key for the endpoint (used when mock=false)."
+    required: false
+    default: ""
+  model-id:
+    description: "Model id to request (used when mock=false)."
+    required: false
+    default: ""
+  github-token:
+    description: "Token for the PR comment and base-run artifact download."
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build Saboteur image
+      shell: bash
+      run: docker build -t saboteur:ci "${{ github.workspace }}"
+
+    - name: Resilience gate
+      id: gate
+      shell: bash
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_N: ${{ inputs.n }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_METRIC: ${{ inputs.metric }}
+        INPUT_MOCK: ${{ inputs.mock }}
+        INPUT_OPENAI_BASE_URL: ${{ inputs.openai-base-url }}
+        INPUT_OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        INPUT_MODEL_ID: ${{ inputs.model-id }}
+      run: bash "$GITHUB_ACTION_PATH/entrypoint.sh" gate
+
+    - name: Upload scorecard artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: saboteur-scorecard
+        path: |
+          ${{ github.workspace }}/runs/*.scorecard.json
+          ${{ github.workspace }}/runs/*.jsonl
+        if-no-files-found: warn
+
+    - name: Resilience delta comment
+      if: always() && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        INPUT_MOCK: ${{ inputs.mock }}
+        INPUT_OPENAI_BASE_URL: ${{ inputs.openai-base-url }}
+        INPUT_OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        INPUT_MODEL_ID: ${{ inputs.model-id }}
+      run: bash "$GITHUB_ACTION_PATH/entrypoint.sh" compare "${{ steps.gate.outputs.pr_run_id }}"
+
+    - name: Enforce gate
+      if: always()
+      shell: bash
+      run: |
+        code="${{ steps.gate.outputs.gate_exit }}"
+        echo "Saboteur resilience gate exit code: ${code:-1}"
+        exit "${code:-1}"

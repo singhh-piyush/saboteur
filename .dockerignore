@@ -1,0 +1,19 @@
+# Keep the build context (and image) lean. The Dockerfile COPYs only what it
+# needs, but this also speeds up the context upload.
+.git
+.github
+.venv
+.venv-verify
+runs
+frontend
+tests
+scripts
+node_modules
+*.egg-info
+__pycache__
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.vite
+*.log
+.env

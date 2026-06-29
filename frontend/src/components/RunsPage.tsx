@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   bulkDeleteRuns,
   deleteRun,
   downloadJsonlUrl,
   downloadScorecardUrl,
+  fetchAllEvents,
   fetchRunList,
   type RunListEntry,
+  type RunListFilters,
 } from "../lib/api";
 import { relativeTime } from "../lib/format";
 import { useRun } from "../state/RunContext";
@@ -20,8 +22,12 @@ import {
   DashedCircleIcon,
   DownloadIcon,
   EyeIcon,
+  PlayIcon,
   TrashIcon,
 } from "./Icons";
+
+const SELECT_CLS =
+  "rounded-sm border border-line bg-raised px-2 py-1 text-xs text-ink outline-none focus:border-accent/60 sb-select";
 
 // ---------------------------------------------------------------------------
 // Status badge display
@@ -68,10 +74,15 @@ function SurvivalBadge({ pct }: { pct: number | null }) {
 // ---------------------------------------------------------------------------
 
 export function RunsPage() {
-  const { watchRun } = useRun();
+  const { watchRun, navigate, startReplay } = useRun();
   const [runs, setRuns] = useState<RunListEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filters (target / profile / status / date range).
+  const [filters, setFilters] = useState<RunListFilters>({});
+  // Run ids selected for comparison (max 2; must have a scorecard).
+  const [selected, setSelected] = useState<string[]>([]);
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<RunListEntry | null>(null);
@@ -79,7 +90,7 @@ export function RunsPage() {
   const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const refresh = useCallback(() => {
-    fetchRunList()
+    fetchRunList(filters)
       .then((list) => {
         setRuns(list);
         setLoading(false);
@@ -88,7 +99,7 @@ export function RunsPage() {
         setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       });
-  }, []);
+  }, [filters]);
 
   // Poll: fast while any run is active, slow otherwise.
   useEffect(() => {
@@ -98,6 +109,35 @@ export function RunsPage() {
     const id = setInterval(refresh, interval);
     return () => clearInterval(id);
   }, [refresh, runs.length > 0 && runs.some((r) => r.status === "running" || r.status === "pending")]);
+
+  // Distinct filter option values (computed from whatever is loaded).
+  const targetOptions = useMemo(
+    () => Array.from(new Set(runs.map((r) => r.target))).sort(),
+    [runs],
+  );
+  const profileOptions = useMemo(
+    () => Array.from(new Set(runs.map((r) => r.profile))).sort(),
+    [runs],
+  );
+
+  function toggleSelected(runId: string) {
+    setSelected((cur) =>
+      cur.includes(runId)
+        ? cur.filter((id) => id !== runId)
+        : cur.length >= 2
+          ? [cur[1], runId] // keep most recent two
+          : [...cur, runId],
+    );
+  }
+
+  async function replayRun(run: RunListEntry) {
+    try {
+      const events = await fetchAllEvents(run.run_id);
+      startReplay(run.run_id, events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   const finishedCount = runs.filter(
     (r) => r.status === "finished" || r.status === "failed" || r.status === "archived",
@@ -138,6 +178,15 @@ export function RunsPage() {
         title="RUNS"
         right={
           <div className="flex items-center gap-2">
+            {selected.length === 2 && (
+              <button
+                type="button"
+                onClick={() => navigate({ kind: "compare", a: selected[0], b: selected[1] })}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-accent/60 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20"
+              >
+                Compare selected
+              </button>
+            )}
             {finishedCount > 0 && (
               <button
                 type="button"
@@ -158,6 +207,63 @@ export function RunsPage() {
           </div>
         }
       />
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-2">
+        <select
+          value={filters.target ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, target: e.target.value || undefined }))}
+          className={SELECT_CLS}
+        >
+          <option value="">all targets</option>
+          {targetOptions.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+        <select
+          value={filters.profile ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, profile: e.target.value || undefined }))}
+          className={SELECT_CLS}
+        >
+          <option value="">all profiles</option>
+          {profileOptions.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+        <select
+          value={filters.status ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined }))}
+          className={SELECT_CLS}
+        >
+          <option value="">all statuses</option>
+          {["running", "finished", "failed", "archived", "pending"].map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={filters.date_from ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, date_from: e.target.value || undefined }))}
+          title="From date"
+          className={SELECT_CLS}
+        />
+        <input
+          type="date"
+          value={filters.date_to ?? ""}
+          onChange={(e) => setFilters((f) => ({ ...f, date_to: e.target.value || undefined }))}
+          title="To date"
+          className={SELECT_CLS}
+        />
+        {Object.values(filters).some(Boolean) && (
+          <button
+            type="button"
+            onClick={() => setFilters({})}
+            className="text-[11px] font-medium text-ink-faint underline-offset-2 hover:text-accent hover:underline"
+          >
+            clear filters
+          </button>
+        )}
+      </div>
 
       {/* Run list */}
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -191,11 +297,28 @@ export function RunsPage() {
                   key={run.run_id}
                   className="flex items-center gap-4 px-5 py-3 hover:bg-raised/40"
                 >
+                  {/* Compare select (scored runs only) */}
+                  <input
+                    type="checkbox"
+                    className="sb-check shrink-0"
+                    checked={selected.includes(run.run_id)}
+                    disabled={!run.has_scorecard}
+                    onChange={() => toggleSelected(run.run_id)}
+                    title={
+                      run.has_scorecard
+                        ? "Select for comparison (max 2)"
+                        : "No scorecard — cannot compare"
+                    }
+                  />
+
                   {/* Profile + run id */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-display text-base font-semibold tracking-wide text-ink">
                         {run.profile}
+                      </span>
+                      <span className="rounded-sm border border-line px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-dim">
+                        {run.target}
                       </span>
                       <StatusBadge status={run.status} />
                       {isActive && (
@@ -223,9 +346,14 @@ export function RunsPage() {
                   {/* Actions */}
                   <div className="flex items-center gap-1">
                     <ActionBtn
-                      title="Open"
+                      title="Open live grid"
                       onClick={() => openRun(run)}
                       icon={<EyeIcon size={14} />}
+                    />
+                    <ActionBtn
+                      title="Replay"
+                      onClick={() => void replayRun(run)}
+                      icon={<PlayIcon size={12} />}
                     />
                     <a
                       href={downloadJsonlUrl(run.run_id)}

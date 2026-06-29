@@ -181,3 +181,79 @@ def test_replay_server_down_exits_2(runner, monkeypatch):
     res = runner.invoke(cli.main, ["replay", "runs/whatever.jsonl"])
     assert res.exit_code == 2
     assert "no Saboteur server" in res.output
+
+
+# ---------------------------------------------------------------------------
+# compare
+# ---------------------------------------------------------------------------
+
+
+_COMPARE = {
+    "a": "base-run",
+    "b": "pr-run",
+    "metrics": {
+        "survival_rate": {"a": 0.95, "b": 0.60, "delta": -0.35, "regressed": True,
+                          "higher_is_better": True, "threshold": 0.05},
+        "crash_rate": {"a": 0.0, "b": 0.0, "delta": 0.0, "regressed": False,
+                       "higher_is_better": False, "threshold": 0.05},
+        "mttr_steps": {"a": None, "b": None, "delta": None, "regressed": False,
+                       "higher_is_better": False, "threshold": 0.5},
+    },
+    "regressions": ["survival_rate"],
+}
+
+
+def test_render_compare_markdown_pure():
+    out = cli._render_compare(_COMPARE, markdown=True)
+    assert "| metric | base | PR | Δ |" in out
+    assert "`survival_rate`" in out and "🔴 regressed" in out
+    assert "**Regressions:** `survival_rate`" in out
+
+
+def test_render_compare_plain_no_regression():
+    data = {**_COMPARE, "regressions": []}
+    out = cli._render_compare(data, markdown=False)
+    assert "regressions: none" in out
+
+
+def test_compare_cmd_markdown(runner, monkeypatch):
+    monkeypatch.setattr(cli, "_ensure_server", lambda base: (base, None))
+    monkeypatch.setattr(cli, "_fetch_compare", lambda base, a, b: _COMPARE)
+    res = runner.invoke(cli.main, ["compare", "base-run", "pr-run", "--markdown"])
+    assert res.exit_code == 0
+    assert "Saboteur resilience delta" in res.output
+    assert "survival_rate" in res.output
+
+
+# ---------------------------------------------------------------------------
+# run --mock
+# ---------------------------------------------------------------------------
+
+
+class _FakeProc:
+    def terminate(self):
+        pass
+
+    def wait(self, timeout=None):
+        return 0
+
+
+def test_mock_flag_uses_mock_and_reference(runner, monkeypatch):
+    started = []
+    monkeypatch.setattr(cli, "_start_mock", lambda: started.append(1) or _FakeProc())
+    monkeypatch.setattr(cli, "_run_reference", lambda *a, **k: _sc(profile="calm_seas", survival_rate=1.0))
+    res = runner.invoke(
+        cli.main,
+        ["run", "--target", "reference", "--mock", "--profile", "calm_seas", "--ci", "--threshold", "0.5"],
+    )
+    assert res.exit_code == 0
+    assert started == [1]  # the mock was launched
+
+
+def test_mock_flag_rejected_for_byo(runner, monkeypatch, tmp_path):
+    monkeypatch.setattr("saboteur.harness.targets.target_store", _byo_store(tmp_path))
+    res = runner.invoke(
+        cli.main, ["run", "--target", "byo", "--mock", "--profile", "calm_seas"]
+    )
+    assert res.exit_code == 2
+    assert "--mock is only supported for the reference target" in res.output

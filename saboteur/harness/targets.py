@@ -143,8 +143,8 @@ class TargetStore:
 
     # -- writes ---------------------------------------------------------
 
-    def add(self, target: Target) -> Target:
-        """Register a command target. Raises on a reserved name or duplicate."""
+    def _validate(self, target: Target) -> None:
+        """Shared create/update validation (raises ValueError on a bad spec)."""
         if target.name == REFERENCE_TARGET.name:
             raise TargetExistsError("'reference' is a reserved built-in target")
         if not _NAME_RE.match(target.name):
@@ -155,8 +155,21 @@ class TargetStore:
             raise ValueError("only 'command' targets can be registered")
         if not target.cmd:
             raise ValueError("a command target requires a non-empty 'cmd'")
+        build_oracle(target.oracle)  # raises ValueError on a bad oracle config
+
+    def add(self, target: Target) -> Target:
+        """Register a command target. Raises on a reserved name or duplicate."""
+        self._validate(target)
         if self._db.target_get(target.name) is not None:
             raise TargetExistsError(f"target {target.name!r} already exists")
+        self._db.target_upsert(target.name, target.model_dump())
+        return target
+
+    def update(self, target: Target) -> Target:
+        """Update an existing command target (raises if it does not exist)."""
+        self._validate(target)
+        if self._db.target_get(target.name) is None:
+            raise TargetNotFoundError(target.name)
         self._db.target_upsert(target.name, target.model_dump())
         return target
 

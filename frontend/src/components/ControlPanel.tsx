@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { fetchProfiles, startRun, type ProfileInfo } from "../lib/api";
+import {
+  fetchProfiles,
+  fetchTargets,
+  startRun,
+  type ProfileInfo,
+  type Target,
+} from "../lib/api";
 import { faultStyle } from "../lib/faults";
 import { pct } from "../lib/format";
 import { useRun } from "../state/RunContext";
@@ -15,9 +21,11 @@ const INPUT_CLS =
   "placeholder:text-ink-faint";
 
 export function ControlPanel() {
-  const { watchRun, state } = useRun();
+  const { watchRun, state, navigate } = useRun();
   const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
   const [profileName, setProfileName] = useState<string>("");
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [targetName, setTargetName] = useState<string>("reference");
   const [nAgents, setNAgents] = useState(8);
   const [seed, setSeed] = useState<string>("");
   const [withControl, setWithControl] = useState(true);
@@ -35,10 +43,16 @@ export function ControlPanel() {
       .catch((err: unknown) =>
         setError(err instanceof Error ? err.message : String(err)),
       );
+    fetchTargets()
+      .then(setTargets)
+      .catch(() => setTargets([{ name: "reference", kind: "reference" }]));
   }, []);
 
   const profile = profiles.find((p) => p.name === profileName) ?? null;
   const busy = launching || state.conn === "connecting";
+  // BYO command targets run chaos-only — no control cohort in v1.
+  const isByo = targetName !== "reference";
+  const effectiveControl = isByo ? false : withControl;
 
   async function launch() {
     if (profile === null || busy) return;
@@ -47,8 +61,9 @@ export function ControlPanel() {
     try {
       const body: Parameters<typeof startRun>[0] = {
         profile: profile.name,
+        target: targetName,
         n_agents: nAgents,
-        with_control: withControl,
+        with_control: effectiveControl,
       };
       const parsedSeed = seed.trim() === "" ? null : Number(seed);
       if (parsedSeed !== null && Number.isFinite(parsedSeed))
@@ -67,6 +82,34 @@ export function ControlPanel() {
       <PanelHeader title="CHAOS CONTROL" />
 
       <div className="space-y-3 p-3">
+        {/* Target selector */}
+        <Field
+          label="target"
+          tooltip={
+            "Which agent to run.\nreference = Saboteur's built-in agent (faults at the tool boundary).\nA BYO command target is launched as a cohort through the wire proxy."
+          }
+        >
+          <select
+            value={targetName}
+            onChange={(e) => setTargetName(e.target.value)}
+            className={`${INPUT_CLS} sb-select`}
+          >
+            {targets.map((t) => (
+              <option key={t.name} value={t.name}>
+                {t.name}
+                {t.kind === "reference" ? " (built-in)" : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => navigate({ kind: "targets" })}
+            className="mt-1 text-[11px] font-medium text-ink-faint underline-offset-2 transition-colors duration-150 hover:text-accent hover:underline"
+          >
+            + manage targets
+          </button>
+        </Field>
+
         {/* Profile selector */}
         <Field
           label="profile"
@@ -83,6 +126,13 @@ export function ControlPanel() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => navigate({ kind: "profiles" })}
+            className="mt-1 text-[11px] font-medium text-ink-faint underline-offset-2 transition-colors duration-150 hover:text-accent hover:underline"
+          >
+            + build profile
+          </button>
         </Field>
 
         {/* Profile description + fault chips */}
@@ -183,18 +233,29 @@ export function ControlPanel() {
 
         {/* Control cohort checkbox */}
         <Tooltip
-          label="Run a parallel calm-seas cohort (no faults) as a baseline for waste factor and survival comparison"
+          label={
+            isByo
+              ? "BYO command targets run chaos-only in v1 (no control cohort)."
+              : "Run a parallel calm-seas cohort (no faults) as a baseline for waste factor and survival comparison"
+          }
           side="bottom"
           className="w-full"
         >
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-dim transition-colors duration-150 hover:text-ink">
+          <label
+            className={`flex items-center gap-2 text-sm font-medium transition-colors duration-150 ${
+              isByo
+                ? "cursor-not-allowed text-ink-faint"
+                : "cursor-pointer text-ink-dim hover:text-ink"
+            }`}
+          >
             <input
               type="checkbox"
-              checked={withControl}
+              checked={effectiveControl}
+              disabled={isByo}
               onChange={(e) => setWithControl(e.target.checked)}
               className="sb-check"
             />
-            pair with calm-seas control cohort
+            {isByo ? "chaos-only (BYO target)" : "pair with calm-seas control cohort"}
           </label>
         </Tooltip>
 

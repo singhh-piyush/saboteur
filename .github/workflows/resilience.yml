@@ -1,0 +1,44 @@
+# Saboteur resilience gate — block the merge if your agent's resilience drops.
+#
+# On every PR this chaos-tests the agent and FAILS the check when the chosen
+# metric falls below the threshold, then comments the per-metric delta vs the
+# base branch's last run. On push to the default branch it records the baseline
+# (the scorecard artifact) that PRs compare against.
+#
+# Out of the box it uses the bundled deterministic mock model, so it runs green
+# offline with no GPU and no secrets. To gate YOUR agent, set mock: "false" and
+# pass your endpoint (see the commented inputs below).
+name: Resilience
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write   # post the resilience-delta comment
+  actions: read          # read the base branch's last run + its artifact
+
+jobs:
+  resilience:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Saboteur resilience gate
+        uses: ./.github/actions/saboteur-resilience
+        with:
+          target: reference
+          profile: hell_mode
+          metric: survival_rate
+          # Mock survival under hell_mode is ~0.875 → green here. Raise to "0.95"
+          # to watch the gate go RED and block the merge.
+          threshold: "0.85"
+          n: "8"
+          mock: "true"
+          # --- gate YOUR agent instead of the mock ---
+          # mock: "false"
+          # openai-base-url: ${{ secrets.OPENAI_BASE_URL }}
+          # openai-api-key:  ${{ secrets.OPENAI_API_KEY }}
+          # model-id:        ${{ vars.MODEL_ID }}

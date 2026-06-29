@@ -4,9 +4,12 @@
  * exposed here — they never touch sockets or timers directly.
  *
  * Navigation: a simple hash-based router (no library). Pages:
- *   #/runs       → RunsPage (run management)
- *   #/live/{id}  → Live view (grid + scorecard)
- *   default      → #/runs
+ *   #/runs        → RunsPage (run management)
+ *   #/live/{id}   → Live view (grid + scorecard)
+ *   #/targets     → TargetsPage (register / edit BYO agents)
+ *   #/profiles    → ProfileBuilder (compose chaos profiles)
+ *   #/compare     → ComparePage (per-metric run delta; ?a=&b= deep-link)
+ *   default       → #/runs
  */
 
 import {
@@ -38,7 +41,12 @@ export interface ReplayControls {
   setSpeed: (speed: number) => void;
 }
 
-export type Page = { kind: "runs" } | { kind: "live"; runId: string };
+export type Page =
+  | { kind: "runs" }
+  | { kind: "live"; runId: string }
+  | { kind: "targets" }
+  | { kind: "profiles" }
+  | { kind: "compare"; a?: string; b?: string };
 
 interface RunContextValue {
   state: RunViewState;
@@ -64,19 +72,47 @@ interface RunContextValue {
 const RunContext = createContext<RunContextValue | null>(null);
 
 function parseHash(): Page {
-  const h = window.location.hash.replace(/^#\/?/, "");
-  if (h.startsWith("live/")) {
-    const runId = decodeURIComponent(h.slice(5));
+  const raw = window.location.hash.replace(/^#\/?/, "");
+  const [path, query] = raw.split("?");
+  if (path.startsWith("live/")) {
+    const runId = decodeURIComponent(path.slice(5));
     if (runId) return { kind: "live", runId };
+  }
+  if (path === "targets") return { kind: "targets" };
+  if (path === "profiles") return { kind: "profiles" };
+  if (path === "compare") {
+    const params = new URLSearchParams(query ?? "");
+    return {
+      kind: "compare",
+      a: params.get("a") ?? undefined,
+      b: params.get("b") ?? undefined,
+    };
   }
   return { kind: "runs" };
 }
 
 function setHash(page: Page): void {
-  if (page.kind === "runs") {
-    window.location.hash = "#/runs";
-  } else {
-    window.location.hash = `#/live/${encodeURIComponent(page.runId)}`;
+  switch (page.kind) {
+    case "runs":
+      window.location.hash = "#/runs";
+      break;
+    case "live":
+      window.location.hash = `#/live/${encodeURIComponent(page.runId)}`;
+      break;
+    case "targets":
+      window.location.hash = "#/targets";
+      break;
+    case "profiles":
+      window.location.hash = "#/profiles";
+      break;
+    case "compare": {
+      const params = new URLSearchParams();
+      if (page.a) params.set("a", page.a);
+      if (page.b) params.set("b", page.b);
+      const qs = params.toString();
+      window.location.hash = qs ? `#/compare?${qs}` : "#/compare";
+      break;
+    }
   }
 }
 

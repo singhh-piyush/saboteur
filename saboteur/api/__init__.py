@@ -13,6 +13,7 @@ from saboteur.proxy import proxy_router
 from saboteur.proxy.forward import aclose_client
 from saboteur.telemetry.ws import router as ws_router
 
+from .faults import router as faults_router
 from .profiles import router as profiles_router
 from .replay import router as replay_router
 from .runs import router as runs_router
@@ -47,6 +48,7 @@ app.add_middleware(
 
 app.include_router(ws_router)
 app.include_router(profiles_router)
+app.include_router(faults_router)
 app.include_router(runs_router)
 app.include_router(replay_router)
 app.include_router(targets_router)

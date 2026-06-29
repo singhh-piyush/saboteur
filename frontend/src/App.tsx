@@ -2,12 +2,15 @@ import { useState } from "react";
 
 import { CohortGrid } from "./components/CohortGrid";
 import { ChaosLog } from "./components/ChaosLog";
+import { ComparePage } from "./components/ComparePage";
 import { ConnectionBadge } from "./components/ConnectionBadge";
 import { ControlPanel } from "./components/ControlPanel";
+import { ProfileBuilder } from "./components/ProfileBuilder";
 import { ReplayBar } from "./components/ReplayBar";
 import { RunBar } from "./components/RunBar";
 import { RunsPage } from "./components/RunsPage";
 import { ScorecardView } from "./components/ScorecardView";
+import { TargetsPage } from "./components/TargetsPage";
 import { TimelineDrawer } from "./components/TimelineDrawer";
 import { RunProvider, useRun } from "./state/RunContext";
 
@@ -45,6 +48,10 @@ function Shell() {
     state.agents[selectedAgent] !== undefined &&
     page.kind === "live";
 
+  // The launcher sidebar (ControlPanel + chaos feed) belongs to the run views.
+  // The management pages (targets / profiles / compare) render full-width.
+  const showSidebar = page.kind === "runs" || page.kind === "live";
+
   return (
     <div className="flex h-screen flex-col gap-2 bg-void p-2">
       {/* ---------------------------------------------------------------- */}
@@ -53,17 +60,19 @@ function Shell() {
         className={`${CARD} flex items-center gap-4 px-4 py-2.5`}
         style={{ animation: "card-in 0.3s ease-out backwards" }}
       >
-        {/* Sidebar toggle for tablet/mobile */}
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="rounded-sm border border-line p-1.5 text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink xl:hidden"
-          title={sidebarOpen ? "Hide panel" : "Show panel"}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-            <path d="M2 4h12M2 8h12M2 12h12" />
-          </svg>
-        </button>
+        {/* Sidebar toggle for tablet/mobile (run views only) */}
+        {showSidebar && (
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="rounded-sm border border-line p-1.5 text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink xl:hidden"
+            title={sidebarOpen ? "Hide panel" : "Show panel"}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+              <path d="M2 4h12M2 8h12M2 12h12" />
+            </svg>
+          </button>
+        )}
 
         <button
           type="button"
@@ -78,6 +87,22 @@ function Shell() {
           </span>
         </button>
 
+        {/* Console section nav */}
+        <nav className="ml-4 hidden items-center gap-1 sm:flex">
+          <NavLink active={page.kind === "runs" || page.kind === "live"} onClick={() => navigate({ kind: "runs" })}>
+            RUNS
+          </NavLink>
+          <NavLink active={page.kind === "targets"} onClick={() => navigate({ kind: "targets" })}>
+            TARGETS
+          </NavLink>
+          <NavLink active={page.kind === "profiles"} onClick={() => navigate({ kind: "profiles" })}>
+            PROFILES
+          </NavLink>
+          <NavLink active={page.kind === "compare"} onClick={() => navigate({ kind: "compare" })}>
+            COMPARE
+          </NavLink>
+        </nav>
+
         <div className="ml-auto">
           <ConnectionBadge conn={state.conn} />
         </div>
@@ -85,32 +110,35 @@ function Shell() {
 
       {/* ---------------------------------------------------------------- */}
       <div className="relative flex min-h-0 flex-1 gap-2 overflow-hidden">
-        {/* Sidebar — two stacked cards; off-canvas on mobile, visible on xl */}
-        <aside
-          className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col gap-2 transition-transform xl:relative xl:flex xl:translate-x-0 ${
-            sidebarOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
-          }`}
-          style={{ animation: "card-in 0.3s ease-out 60ms backwards" }}
-        >
-          <div className={`${CARD} overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md`}>
-            <ControlPanel />
-          </div>
-          {page.kind === "live" && (
-            <div
-              className={`${CARD} flex min-h-0 flex-col overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md ${
-                feedCollapsed ? "" : "flex-1"
-              }`}
-            >
-              <ChaosLog
-                collapsed={feedCollapsed}
-                onToggle={() => setFeedCollapsed((c) => !c)}
-              />
+        {/* Sidebar — two stacked cards; off-canvas on mobile, visible on xl.
+            Run views only; management pages render full-width. */}
+        {showSidebar && (
+          <aside
+            className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col gap-2 transition-transform xl:relative xl:flex xl:translate-x-0 ${
+              sidebarOpen ? "translate-x-0 flex" : "-translate-x-full hidden"
+            }`}
+            style={{ animation: "card-in 0.3s ease-out 60ms backwards" }}
+          >
+            <div className={`${CARD} overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md`}>
+              <ControlPanel />
             </div>
-          )}
-        </aside>
+            {page.kind === "live" && (
+              <div
+                className={`${CARD} flex min-h-0 flex-col overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md ${
+                  feedCollapsed ? "" : "flex-1"
+                }`}
+              >
+                <ChaosLog
+                  collapsed={feedCollapsed}
+                  onToggle={() => setFeedCollapsed((c) => !c)}
+                />
+              </div>
+            )}
+          </aside>
+        )}
 
         {/* Backdrop for mobile sidebar */}
-        {sidebarOpen && (
+        {showSidebar && sidebarOpen && (
           <div
             className="fixed inset-0 z-30 bg-void/50 xl:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -125,6 +153,12 @@ function Shell() {
         >
           {page.kind === "runs" ? (
             <RunsPage />
+          ) : page.kind === "targets" ? (
+            <TargetsPage />
+          ) : page.kind === "profiles" ? (
+            <ProfileBuilder />
+          ) : page.kind === "compare" ? (
+            <ComparePage initialA={page.a} initialB={page.b} />
           ) : (
             <>
               <RunBar />
@@ -188,6 +222,30 @@ function Shell() {
         </div>
       </div>
     </div>
+  );
+}
+
+function NavLink({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-sm px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.16em] transition-colors duration-150 ${
+        active
+          ? "bg-accent/10 text-accent"
+          : "text-ink-faint hover:bg-raised hover:text-ink"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
