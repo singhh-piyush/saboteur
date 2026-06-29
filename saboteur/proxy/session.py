@@ -36,6 +36,7 @@ from saboteur.chaos.profile import ChaosProfile
 from saboteur.chaos.rng import seeded_rng
 from saboteur.config import get_settings
 from saboteur.harness.scoring import score
+from saboteur.telemetry import build
 from saboteur.telemetry.bus import TelemetryBus
 from saboteur.telemetry.jsonl import JsonlWriter
 from saboteur.telemetry.schema import EventKind, TelemetryEvent
@@ -181,19 +182,14 @@ class ProxyRun:
         )
 
     def emit_run_started(self) -> None:
-        self._event(
-            -1,
-            None,
-            "run_started",
-            payload={
-                "profile": self.profile.name,
-                "seed": self.profile.seed,
-                "n_agents": self.n_agents,
-            },
+        self.emit(
+            build.run_started_event(
+                self.run_id, self.profile.name, self.profile.seed, self.n_agents
+            )
         )
 
     def emit_step_start(self, agent_id: int, step: int) -> None:
-        self._event(agent_id, step, "step_start")
+        self.emit(build.step_start_event(self.run_id, agent_id, step))
 
     def emit_tool_call(
         self,
@@ -206,17 +202,17 @@ class ProxyRun:
         fault_types: list[str],
         errored: bool,
     ) -> None:
-        self._event(
-            agent_id,
-            step,
-            "tool_call",
-            payload={
-                "tool": tool,
-                "arguments": arguments,
-                "sabotaged": sabotaged,
-                "fault_types": fault_types,
-                "errored": errored,
-            },
+        self.emit(
+            build.tool_call_event(
+                self.run_id,
+                agent_id,
+                step,
+                tool,
+                arguments,
+                sabotaged=sabotaged,
+                fault_types=fault_types,
+                errored=errored,
+            )
         )
 
     def emit_fault(
@@ -228,23 +224,17 @@ class ProxyRun:
         tool: str | None,
         detail: dict[str, Any],
     ) -> None:
-        self._event(
-            agent_id,
-            step,
-            "fault_injected",
-            fault=fault,
-            payload={"tool": tool, "call_index": step, "detail": detail},
+        self.emit(
+            build.fault_event(
+                self.run_id, agent_id, step, fault, tool=tool, detail=detail
+            )
         )
 
     def emit_recovery(
         self, agent_id: int, step: int, kind: str, after_fault: str
     ) -> None:
-        self._event(
-            agent_id,
-            step,
-            "recovery_action",
-            recovery=kind,
-            payload={"kind": kind, "after_fault": after_fault},
+        self.emit(
+            build.recovery_event(self.run_id, agent_id, step, kind, after_fault)
         )
 
     # -- lifecycle ------------------------------------------------------
@@ -337,12 +327,7 @@ class ProxyRun:
                 agent_id, None, "agent_done", tokens_used=tokens, payload=payload
             )
 
-        self._event(
-            -1,
-            None,
-            "run_finished",
-            payload={"n_agents": self.n_agents, "outcomes": outcome_counts},
-        )
+        self.emit(build.run_finished_event(self.run_id, self.n_agents, outcome_counts))
 
         # Behavioral-tier scorecard (no control cohort → waste/latency null;
         # no oracle → survival/deception null + no_oracle). Pure over events.

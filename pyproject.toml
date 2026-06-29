@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 saboteur = "saboteur.cli:main"
+saboteur-mcp = "saboteur.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [

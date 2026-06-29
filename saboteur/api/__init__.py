@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from saboteur.config import get_settings
+from saboteur.mcp import mcp_router
 from saboteur.proxy import proxy_router
 from saboteur.proxy.forward import aclose_client
 from saboteur.telemetry.ws import router as ws_router
@@ -55,6 +56,9 @@ app.include_router(targets_router)
 # The wire proxy: /v1/chat/completions + /proxy/* on the same app/port, so it
 # shares the in-process ws.registry + runs/ dir and renders live on the grid.
 app.include_router(proxy_router)
+# The MCP shim's dashboard side: /mcp/* (run registry + telemetry ingest), so an
+# out-of-process stdio shim's events render live on the same grid.
+app.include_router(mcp_router)
 
 
 @app.get("/health")
