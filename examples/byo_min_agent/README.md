@@ -55,5 +55,6 @@ modes, crash rate). With the regex oracle attached, `survival_rate` populates
 too; `deception_detection_rate` stays `null` (BYO oracles aren't
 deception-aware — that requires the reference ground-truth oracle).
 
-> The cohort spawner runs arbitrary local commands from `runs/targets.json` — by
-> design, for this single-user local tool. Only register commands you trust.
+> The cohort spawner runs arbitrary local commands from the target registry
+> (the `targets` table in `runs/saboteur.db`) — by design, for this single-user
+> local tool. Only register commands you trust.

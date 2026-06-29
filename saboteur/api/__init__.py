@@ -21,7 +21,15 @@ from .targets import router as targets_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """App lifespan — close the proxy's shared upstream client on shutdown."""
+    """App lifespan.
+
+    On startup, rebuild the SQLite run index from disk (invariant #3: the index
+    is reconstructable from ``runs/*.jsonl`` alone — drop the DB, restart, and
+    everything comes back). On shutdown, close the proxy's upstream client.
+    """
+    from .runs import startup_index
+
+    startup_index()
     yield
     await aclose_client()
 

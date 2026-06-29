@@ -1,0 +1,10 @@
+# SQLite run index/cache — rebuildable from runs/*.jsonl, never authoritative.
+runs/saboteur.db
+runs/saboteur.db-wal
+runs/saboteur.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/

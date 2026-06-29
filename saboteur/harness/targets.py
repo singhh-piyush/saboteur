@@ -7,9 +7,11 @@ A **Target** is one runnable agent under test:
 - ``command`` — a BYO agent we don't own, launched as a subprocess whose
   ``OPENAI_BASE_URL`` points at the wire proxy (faults injected on the wire).
 
-Targets are persisted in a JSON-file store (``runs/targets.json``). The
-reference target is built-in: always present, never stored, never deletable.
-SQLite is a later WP; the JSON store keeps the v1 surface tiny.
+Targets are persisted in the ``targets`` table of the SQLite index
+(:mod:`saboteur.storage.db`). The reference target is built-in: always present,
+never stored, never deletable. (The registry was a JSON file in PWP3; it now
+lives in the DB — the one piece of DB state that is authoritative rather than a
+rebuildable cache.)
 
 A command target may carry an optional :class:`OracleConfig` describing how to
 judge success (reusing the pluggable :mod:`saboteur.agents.oracle` classes —
@@ -19,9 +21,7 @@ never an LLM judge, invariant #4). ``build_oracle`` maps the config to an
 
 from __future__ import annotations
 
-import json
 import re
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -32,9 +32,10 @@ from saboteur.agents.oracle import (
     Oracle,
     RegexOracle,
 )
+from saboteur.storage.db import Database
+from saboteur.storage.db import db as _default_db
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-_DEFAULT_STORE_PATH = Path("runs/targets.json")
 
 
 class OracleConfig(BaseModel):
@@ -101,49 +102,46 @@ class TargetNotFoundError(KeyError):
 
 
 class TargetStore:
-    """A JSON-file registry of command targets (reference is implicit).
+    """The ``targets`` table of the SQLite index (reference is implicit).
 
-    Every op does load → mutate → atomic write, so concurrent single-user
-    access stays consistent without a long-lived handle. A missing or corrupt
-    file reads as empty (the reference target is still available).
+    A thin facade over :class:`~saboteur.storage.db.Database`: pydantic
+    ``Target`` ⇆ JSON blob. A corrupt stored row is skipped rather than failing
+    the whole list (the reference target is always available).
+
+    ``db`` defaults to the module singleton, so all callers share one table;
+    tests pass a :class:`Database` on a temp path for isolation.
     """
 
-    def __init__(self, path: Path = _DEFAULT_STORE_PATH) -> None:
-        self.path = path
+    def __init__(self, db: Database | None = None) -> None:
+        self._db = db if db is not None else _default_db
 
     # -- reads ----------------------------------------------------------
 
-    def _load(self) -> list[Target]:
-        try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return []
-        items = raw.get("targets", []) if isinstance(raw, dict) else []
+    def _stored(self) -> list[Target]:
         targets: list[Target] = []
-        for item in items:
+        for data in self._db.targets_all():
             try:
-                targets.append(Target.model_validate(item))
+                targets.append(Target.model_validate(data))
             except ValueError:
                 continue  # skip a corrupt entry rather than failing the whole list
         return targets
 
     def all(self) -> list[Target]:
         """All targets, reference first, then stored command targets."""
-        return [REFERENCE_TARGET, *self._load()]
+        return [REFERENCE_TARGET, *self._stored()]
 
     def get(self, name: str) -> Target | None:
         if name == REFERENCE_TARGET.name:
             return REFERENCE_TARGET
-        return next((t for t in self._load() if t.name == name), None)
+        data = self._db.target_get(name)
+        if data is None:
+            return None
+        try:
+            return Target.model_validate(data)
+        except ValueError:
+            return None
 
     # -- writes ---------------------------------------------------------
-
-    def _save(self, targets: list[Target]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"targets": [t.model_dump() for t in targets]}
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        tmp.replace(self.path)  # atomic on POSIX
 
     def add(self, target: Target) -> Target:
         """Register a command target. Raises on a reserved name or duplicate."""
@@ -157,23 +155,18 @@ class TargetStore:
             raise ValueError("only 'command' targets can be registered")
         if not target.cmd:
             raise ValueError("a command target requires a non-empty 'cmd'")
-        existing = self._load()
-        if any(t.name == target.name for t in existing):
+        if self._db.target_get(target.name) is not None:
             raise TargetExistsError(f"target {target.name!r} already exists")
-        existing.append(target)
-        self._save(existing)
+        self._db.target_upsert(target.name, target.model_dump())
         return target
 
     def delete(self, name: str) -> None:
         """Remove a stored command target. Reference is not deletable."""
         if name == REFERENCE_TARGET.name:
             raise TargetNotFoundError("'reference' is built-in and cannot be deleted")
-        existing = self._load()
-        kept = [t for t in existing if t.name != name]
-        if len(kept) == len(existing):
+        if not self._db.target_delete(name):
             raise TargetNotFoundError(name)
-        self._save(kept)
 
 
-# Module singleton; tests construct their own TargetStore on a tmp path.
+# Module singleton over the shared DB index; tests pass a temp-path Database.
 target_store = TargetStore()

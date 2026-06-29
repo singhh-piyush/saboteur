@@ -4,9 +4,10 @@
 - ``POST   /targets``        — register a ``command`` target → 201.
 - ``DELETE /targets/{name}`` — remove a stored target → 204.
 
-The store is a JSON file (``runs/targets.json``); the built-in ``reference``
-target is implicit (never stored, never deletable). ``_store`` is the test seam:
-``monkeypatch.setattr(targets_mod, "_store", TargetStore(tmp_path))``.
+The store is the ``targets`` table of the SQLite index
+(:mod:`saboteur.storage.db`); the built-in ``reference`` target is implicit
+(never stored, never deletable). ``_store`` is the test seam:
+``monkeypatch.setattr(targets_mod, "_store", TargetStore(Database(tmp_path)))``.
 """
 
 from __future__ import annotations

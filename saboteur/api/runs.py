@@ -37,6 +37,7 @@ from saboteur.harness.runner import make_run_id, orchestrate
 from saboteur.harness.scoring import Scorecard
 from saboteur.harness.spawn import run_byo_cohort
 from saboteur.harness.targets import target_store
+from saboteur.storage.db import RunRow, db, derive_target, reconcile_runs
 from saboteur.telemetry.jsonl import read_jsonl
 from saboteur.telemetry.schema import TelemetryEvent
 
@@ -46,6 +47,24 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 
 _RUNS_DIR = Path("runs")
 _PROFILES_DIR = Path("profiles")
+
+# The SQLite index. A module ref so tests can point it at a temp-path Database.
+_db = db
+
+
+def startup_index() -> None:
+    """Rebuild the index from disk on app startup (invariant #3 rebuild path).
+
+    Called from the FastAPI lifespan. Never raises — a corrupt log or a missing
+    runs dir must not block the app; the index simply self-heals on the next
+    read via :func:`saboteur.storage.db.reconcile_runs`.
+    """
+    from saboteur.storage.db import backfill
+
+    try:
+        backfill(_db, _RUNS_DIR, _PROFILES_DIR)
+    except Exception:
+        pass
 
 # Override in tests: monkeypatch.setattr(runs_mod, "_agent_factory", fake)
 _agent_factory: AgentFactory = build_agent
@@ -80,6 +99,7 @@ class AgentSummary(BaseModel):
 
 class RunStatusResponse(BaseModel):
     run_id: str
+    target: str
     profile: str
     n_agents: int
     with_control: bool
@@ -87,6 +107,8 @@ class RunStatusResponse(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     error: str | None
+    has_scorecard: bool
+    survival_rate: float | None
     agents: dict[str, AgentSummary]
 
 
@@ -97,6 +119,7 @@ class RunStatusResponse(BaseModel):
 
 class RunListEntry(BaseModel):
     run_id: str
+    target: str  # "reference" or a BYO command-target name
     profile: str
     n_agents: int
     status: str  # pending | running | finished | failed | archived
@@ -106,73 +129,191 @@ class RunListEntry(BaseModel):
     survival_pct: float | None  # None until scored
 
 
-def _survival_pct_from_scorecard(scorecard_path: Path) -> float | None:
-    """Read survival_rate from a scorecard JSON file, return as percentage."""
+def _to_dt(iso: str | None) -> datetime | None:
+    if not iso:
+        return None
     try:
-        data = json.loads(scorecard_path.read_text(encoding="utf-8"))
-        rate = data.get("survival_rate")
-        if rate is not None:
-            return float(rate) * 100.0
-    except Exception:
-        pass
-    return None
+        return datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _entry_from_row(row: RunRow) -> RunListEntry:
+    """A list entry for a run known only on disk (no live registry state)."""
+    return RunListEntry(
+        run_id=row.run_id,
+        target=row.target or "reference",
+        profile=row.profile or "",
+        n_agents=row.n_agents,
+        status="archived",  # historical: not live in this process's registry
+        started_at=_to_dt(row.started_at),
+        finished_at=_to_dt(row.finished_at),
+        has_scorecard=row.has_scorecard,
+        survival_pct=row.survival_rate * 100.0 if row.survival_rate is not None else None,
+    )
+
+
+def _matches(
+    entry: RunListEntry,
+    *,
+    target: str | None,
+    profile: str | None,
+    status: str | None,
+    date_from: str | None,
+    date_to: str | None,
+) -> bool:
+    """Apply the GET /runs filters to a (possibly registry-overlaid) entry."""
+    if target is not None and entry.target != target:
+        return False
+    if profile is not None and entry.profile != profile:
+        return False
+    if status is not None and entry.status != status:
+        return False
+    if (date_from or date_to) and entry.started_at is not None:
+        started = entry.started_at.date().isoformat()
+        if date_from is not None and started < date_from:
+            return False
+        if date_to is not None and started > date_to:
+            return False
+    elif (date_from or date_to) and entry.started_at is None:
+        return False  # a date filter excludes runs with no known start
+    return True
 
 
 @router.get("", response_model=list[RunListEntry])
-def list_runs() -> list[RunListEntry]:
-    """All known runs: this process's registry plus on-disk artifacts.
+def list_runs(
+    target: str | None = None,
+    profile: str | None = None,
+    status: str | None = None,
+    date_from: str | None = Query(None, description="ISO date (YYYY-MM-DD), inclusive"),
+    date_to: str | None = Query(None, description="ISO date (YYYY-MM-DD), inclusive"),
+) -> list[RunListEntry]:
+    """All known runs, served from the index and overlaid with live state.
 
-    Runs from earlier server lives have no registry entry; they surface as
-    ``archived`` (their JSONL — and usually a scorecard — is still on disk,
-    so they remain replayable). Control cohorts are folded into their run.
+    The SQLite index (rebuilt from ``runs/*.jsonl``) supplies every historical
+    run as ``archived``; the in-process registry overlays the live status of
+    runs started this server life. Filterable by ``target`` / ``profile`` /
+    ``status`` / date range (``date_from`` / ``date_to`` against started_at).
+    Control cohorts are folded into their parent run, never listed.
     """
-    entries: dict[str, RunListEntry] = {}
+    reconcile_runs(_db, _RUNS_DIR)  # self-heal the index from disk
 
+    entries: dict[str, RunListEntry] = {
+        row.run_id: _entry_from_row(row) for row in _db.runs_all()
+    }
+
+    # Overlay live registry state (authoritative for liveness this process).
     for state in run_registry.all():
+        if state.run_id.endswith("-control"):
+            continue
         scorecard_path = _RUNS_DIR / f"{state.run_id}.scorecard.json"
+        existing = entries.get(state.run_id)
         entries[state.run_id] = RunListEntry(
             run_id=state.run_id,
+            target=existing.target if existing else derive_target(state.run_id, state.profile),
             profile=state.profile,
             n_agents=state.n_agents,
             status=state.status.value,
             started_at=state.started_at,
             finished_at=state.finished_at,
             has_scorecard=scorecard_path.exists(),
-            survival_pct=_survival_pct_from_scorecard(scorecard_path)
-            if scorecard_path.exists()
-            else None,
+            survival_pct=existing.survival_pct if existing else None,
         )
 
-    if _RUNS_DIR.is_dir():
-        for log in _RUNS_DIR.glob("*.jsonl"):
-            run_id = log.stem
-            if run_id.endswith("-control") or run_id in entries:
-                continue
-            scorecard = _RUNS_DIR / f"{run_id}.scorecard.json"
-            profile = run_id.rsplit("-", 2)[0] if run_id.count("-") >= 2 else run_id
-            n_agents = 0
-            if scorecard.exists():
-                try:
-                    data = json.loads(scorecard.read_text(encoding="utf-8"))
-                    profile = data.get("profile", profile)
-                    n_agents = data.get("n_agents", 0)
-                except Exception:
-                    pass
-            entries[run_id] = RunListEntry(
-                run_id=run_id,
-                profile=profile,
-                n_agents=n_agents,
-                status="archived",
-                started_at=None,
-                finished_at=None,
-                has_scorecard=scorecard.exists(),
-                survival_pct=_survival_pct_from_scorecard(scorecard)
-                if scorecard.exists()
-                else None,
-            )
-
+    selected = [
+        e
+        for e in entries.values()
+        if _matches(
+            e,
+            target=target,
+            profile=profile,
+            status=status,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    ]
     # run_ids embed a UTC stamp; reverse-lexicographic ≈ newest first.
-    return sorted(entries.values(), key=lambda e: e.run_id, reverse=True)
+    return sorted(selected, key=lambda e: e.run_id, reverse=True)
+
+
+class MetricDelta(BaseModel):
+    a: float | None
+    b: float | None
+    delta: float | None
+    regressed: bool
+    higher_is_better: bool
+    threshold: float
+
+
+class RunComparison(BaseModel):
+    a: str
+    b: str
+    metrics: dict[str, MetricDelta]
+    regressions: list[str]
+
+
+# (metric name, higher_is_better, regression threshold). A metric "regresses"
+# when b moves in the worse direction past the threshold vs. a.
+_COMPARE_METRICS: list[tuple[str, bool, float]] = [
+    ("survival_rate", True, 0.05),
+    ("deception_detection_rate", True, 0.05),
+    ("mttr_steps", False, 0.5),
+    ("waste_factor", False, 0.10),
+    ("crash_rate", False, 0.05),
+    ("latency_degradation", False, 0.10),
+]
+
+
+def _summary_or_404(run_id: str) -> dict:
+    """Load a run's scorecard summary from the index (404/409 otherwise)."""
+    row = _db.run_get(run_id)
+    if row is None:
+        raise HTTPException(404, f"run '{run_id}' not found")
+    if not row.summary:
+        raise HTTPException(409, f"run '{run_id}' has no scorecard to compare")
+    try:
+        return json.loads(row.summary)
+    except ValueError:
+        raise HTTPException(409, f"run '{run_id}' scorecard is unreadable")
+
+
+@router.get("/compare", response_model=RunComparison)
+def compare_runs(a: str, b: str) -> RunComparison:
+    """Per-metric delta (b − a) between two runs, flagging regressions.
+
+    Reads both scorecards from the index (refreshed from disk first). For each
+    metric a regression is when ``b`` is worse than ``a`` by more than the
+    metric's threshold (direction depends on the metric). Metrics that are
+    ``null`` in either run yield a ``null`` delta and never regress.
+    """
+    reconcile_runs(_db, _RUNS_DIR)
+    sca = _summary_or_404(a)
+    scb = _summary_or_404(b)
+
+    metrics: dict[str, MetricDelta] = {}
+    regressions: list[str] = []
+    for name, higher_is_better, threshold in _COMPARE_METRICS:
+        va = sca.get(name)
+        vb = scb.get(name)
+        if isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+            delta = vb - va
+            worse_by = (va - vb) if higher_is_better else (vb - va)
+            regressed = worse_by > threshold
+        else:
+            delta = None
+            regressed = False
+        metrics[name] = MetricDelta(
+            a=va if isinstance(va, (int, float)) else None,
+            b=vb if isinstance(vb, (int, float)) else None,
+            delta=delta,
+            regressed=regressed,
+            higher_is_better=higher_is_better,
+            threshold=threshold,
+        )
+        if regressed:
+            regressions.append(name)
+
+    return RunComparison(a=a, b=b, metrics=metrics, regressions=regressions)
 
 
 @router.post("", response_model=RunResponse, status_code=202)
@@ -317,7 +458,7 @@ def download_scorecard(run_id: str) -> FileResponse:
 
 @router.get("/{run_id}", response_model=RunStatusResponse)
 def get_run(run_id: str) -> RunStatusResponse:
-    """Run status plus a per-agent summary (read from JSONL)."""
+    """Run status + per-agent summary (from JSONL), enriched from the index."""
     state = run_registry.get(run_id) or _archived_state(run_id)
     if state is None:
         raise HTTPException(404, f"run '{run_id}' not found")
@@ -330,8 +471,14 @@ def get_run(run_id: str) -> RunStatusResponse:
         except Exception:
             pass
 
+    # Enrichment from the index: target attribution + frozen survival_rate.
+    row = _db.run_get(run_id)
+    target = row.target if row and row.target else derive_target(run_id, state.profile)
+    survival_rate = row.survival_rate if row else None
+
     return RunStatusResponse(
         run_id=state.run_id,
+        target=target or "reference",
         profile=state.profile,
         n_agents=state.n_agents,
         with_control=state.with_control,
@@ -339,6 +486,8 @@ def get_run(run_id: str) -> RunStatusResponse:
         started_at=state.started_at,
         finished_at=state.finished_at,
         error=state.error,
+        has_scorecard=(_RUNS_DIR / f"{run_id}.scorecard.json").exists(),
+        survival_rate=survival_rate,
         agents=_agent_summaries(events),
     )
 
@@ -413,7 +562,8 @@ def delete_run(run_id: str) -> None:
     control_scorecard = _RUNS_DIR / f"{run_id}-control.scorecard.json"
 
     files_existed = any(p.exists() for p in (jsonl, scorecard))
-    if not files_existed and state is None:
+    row_existed = _db.run_get(run_id) is not None
+    if not files_existed and not row_existed and state is None:
         raise HTTPException(404, f"run '{run_id}' not found")
 
     for path in (jsonl, scorecard, control_jsonl, control_scorecard):
@@ -421,6 +571,7 @@ def delete_run(run_id: str) -> None:
             path.unlink(missing_ok=True)
         except Exception:
             pass
+    _db.run_delete(run_id)  # drop the index row too (disk is the source of truth)
 
 
 @router.delete("", status_code=200)
@@ -470,6 +621,7 @@ def bulk_delete_runs(
                 path.unlink(missing_ok=True)
             except Exception:
                 pass
+        _db.run_delete(run_id)  # drop the index row too
 
         deleted += 1
 

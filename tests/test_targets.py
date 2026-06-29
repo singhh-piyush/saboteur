@@ -1,12 +1,12 @@
-"""Target registry tests — LLM-free, JSON store on a temp path.
+"""Target registry tests — LLM-free, SQLite store on a temp path.
 
 Covers the :class:`TargetStore` CRUD contract (reference is built-in + never
 deletable), the ``build_oracle`` mapping, and the ``/targets`` HTTP routes.
+The registry now lives in the SQLite index (``targets`` table) — tests point a
+:class:`Database` at a temp file for isolation.
 """
 
 from __future__ import annotations
-
-import json
 
 import pytest
 
@@ -23,10 +23,15 @@ from saboteur.harness.targets import (
     TargetStore,
     build_oracle,
 )
+from saboteur.storage.db import Database
 
 
 def _cmd(name: str = "byo") -> Target:
     return Target(name=name, kind="command", cmd=["python", "-c", "print('hi')"])
+
+
+def _store(tmp_path) -> TargetStore:
+    return TargetStore(Database(tmp_path / "saboteur.db"))
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +40,7 @@ def _cmd(name: str = "byo") -> Target:
 
 
 def test_reference_always_present_and_first(tmp_path):
-    store = TargetStore(tmp_path / "targets.json")
+    store = _store(tmp_path)
     listed = store.all()
     assert listed[0].name == "reference"
     assert listed[0].kind == "reference"
@@ -43,23 +48,23 @@ def test_reference_always_present_and_first(tmp_path):
 
 
 def test_add_get_delete_roundtrip_persists(tmp_path):
-    path = tmp_path / "targets.json"
-    store = TargetStore(path)
+    dbpath = tmp_path / "saboteur.db"
+    store = TargetStore(Database(dbpath))
     store.add(_cmd("byo"))
 
-    # Persisted to disk and visible through a fresh store instance.
-    again = TargetStore(path)
+    # Persisted to the DB and visible through a fresh store on the same file.
+    again = TargetStore(Database(dbpath))
     got = again.get("byo")
     assert got is not None and got.cmd == ["python", "-c", "print('hi')"]
     assert [t.name for t in again.all()] == ["reference", "byo"]
 
     again.delete("byo")
     assert again.get("byo") is None
-    assert [t.name for t in TargetStore(path).all()] == ["reference"]
+    assert [t.name for t in TargetStore(Database(dbpath)).all()] == ["reference"]
 
 
 def test_add_rejects_reserved_and_duplicate_and_invalid(tmp_path):
-    store = TargetStore(tmp_path / "targets.json")
+    store = _store(tmp_path)
     store.add(_cmd("byo"))
 
     with pytest.raises(TargetExistsError):
@@ -73,17 +78,17 @@ def test_add_rejects_reserved_and_duplicate_and_invalid(tmp_path):
 
 
 def test_delete_unknown_and_reference_raise(tmp_path):
-    store = TargetStore(tmp_path / "targets.json")
+    store = _store(tmp_path)
     with pytest.raises(TargetNotFoundError):
         store.delete("nope")
     with pytest.raises(TargetNotFoundError):
         store.delete("reference")
 
 
-def test_corrupt_store_reads_as_empty(tmp_path):
-    path = tmp_path / "targets.json"
-    path.write_text("{ this is not json", encoding="utf-8")
-    store = TargetStore(path)
+def test_corrupt_store_skips_bad_row(tmp_path):
+    database = Database(tmp_path / "saboteur.db")
+    database.target_upsert("bad", {"name": "bad"})  # not a valid Target (no kind)
+    store = TargetStore(database)
     assert [t.name for t in store.all()] == ["reference"]  # only the built-in
 
 
@@ -123,7 +128,9 @@ def test_build_oracle_requires_fields():
 def http_targets(monkeypatch, tmp_path):
     import saboteur.api.targets as targets_mod
 
-    monkeypatch.setattr(targets_mod, "_store", TargetStore(tmp_path / "targets.json"))
+    monkeypatch.setattr(
+        targets_mod, "_store", TargetStore(Database(tmp_path / "saboteur.db"))
+    )
 
 
 def test_targets_routes_crud(http_targets):
@@ -172,8 +179,9 @@ def test_post_target_invalid_kind_is_400(http_targets):
         assert resp.status_code == 400
 
 
-def test_store_file_shape(tmp_path):
-    path = tmp_path / "targets.json"
-    TargetStore(path).add(_cmd("byo"))
-    data = json.loads(path.read_text())
-    assert "targets" in data and data["targets"][0]["name"] == "byo"
+def test_store_persists_to_db_row(tmp_path):
+    database = Database(tmp_path / "saboteur.db")
+    TargetStore(database).add(_cmd("byo"))
+    stored = database.target_get("byo")
+    assert stored is not None and stored["name"] == "byo"
+    assert "byo" in {t["name"] for t in database.targets_all()}

@@ -11,6 +11,7 @@ Coverage:
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -57,14 +58,19 @@ def _fake_factory(agent_id, profile, store, on_event, oracle=None):
 
 @pytest.fixture()
 def tmp_runs(tmp_path: Path, monkeypatch):
-    """Redirect all JSONL/scorecard writes to a temp directory."""
+    """Redirect all JSONL/scorecard writes — and the SQLite index — to tmp."""
     import saboteur.api.runs as runs_mod
     import saboteur.api.replay as replay_mod
     import saboteur.telemetry.ws as ws_mod
+    from saboteur.storage.db import db as index_db
 
     monkeypatch.setattr(runs_mod, "_RUNS_DIR", tmp_path)
     monkeypatch.setattr(replay_mod, "_RUNS_DIR", tmp_path)
     monkeypatch.setattr(ws_mod, "_RUNS_DIR", tmp_path)
+    # Point the shared index singleton at a temp DB (mutated in place so every
+    # holder of the singleton — runs_mod._db, target_store — follows along).
+    monkeypatch.setattr(index_db, "path", tmp_path / "saboteur.db")
+    index_db.init()
     return tmp_path
 
 
@@ -551,8 +557,9 @@ def byo_seam(monkeypatch, tmp_path):
     """A registered command target + a recording stub for the spawner."""
     import saboteur.api.runs as runs_mod
     from saboteur.harness.targets import Target, TargetStore
+    from saboteur.storage.db import Database
 
-    store = TargetStore(tmp_path / "targets.json")
+    store = TargetStore(Database(tmp_path / "saboteur.db"))
     store.add(Target(name="byo", kind="command", cmd=["python", "-c", "pass"]))
     monkeypatch.setattr(runs_mod, "_target_store", store)
 
@@ -629,4 +636,177 @@ def test_run_non_command_target_returns_400(tmp_runs, clean_registry, monkeypatc
     with TestClient(app) as client:
         resp = client.post("/runs", json={"target": "weird", "profile": "calm_seas"})
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# 7. The SQLite index: filtering, compare, restart-rebuild, DB-row deletion
+# ---------------------------------------------------------------------------
+
+
+def _scorecard_dict(run_id: str, profile: str, n_agents: int, **metrics) -> dict:
+    base = {
+        "run_id": run_id,
+        "profile": profile,
+        "n_agents": n_agents,
+        "mttr_steps": None,
+        "recovery_breakdown": {},
+        "waste_factor": None,
+        "failure_modes": {},
+        "crash_rate": 0.0,
+        "latency_degradation": None,
+        "survival_rate": None,
+        "deception_detection_rate": None,
+        "per_agent": {},
+    }
+    base.update(metrics)
+    return base
+
+
+def _write_run_files(
+    runs_dir: Path, run_id: str, profile: str, n_agents: int, scorecard: dict | None
+) -> None:
+    """A minimal JSONL (one run_started) + optional scorecard, on disk."""
+    started = run_id.rsplit("-", 2)[1]  # YYYYmmddTHHMMSS
+    iso = datetime.strptime(started, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+    line = {
+        "ts": iso.isoformat(),
+        "run_id": run_id,
+        "agent_id": -1,
+        "step": None,
+        "event": "run_started",
+        "payload": {"profile": profile, "seed": 1337, "n_agents": n_agents},
+    }
+    (runs_dir / f"{run_id}.jsonl").write_text(json.dumps(line) + "\n", encoding="utf-8")
+    if scorecard is not None:
+        (runs_dir / f"{run_id}.scorecard.json").write_text(
+            json.dumps(scorecard), encoding="utf-8"
+        )
+
+
+def test_runs_filterable(tmp_runs, clean_registry):
+    from saboteur.api import app
+
+    a = "calm_seas-20260101T000000-aaaaaa"
+    b = "hell_mode-20260103T000000-bbbbbb"
+    _write_run_files(tmp_runs, a, "calm_seas", 2, _scorecard_dict(a, "calm_seas", 2, survival_rate=1.0))
+    _write_run_files(tmp_runs, b, "hell_mode", 2, _scorecard_dict(b, "hell_mode", 2, survival_rate=0.1))
+
+    with TestClient(app) as client:
+        all_ids = {r["run_id"] for r in client.get("/runs").json()}
+        assert {a, b} <= all_ids
+
+        only_calm = client.get("/runs", params={"profile": "calm_seas"}).json()
+        assert {r["run_id"] for r in only_calm} == {a}
+
+        # Both are historical (archived) and reference-target.
+        both_ref = client.get("/runs", params={"target": "reference"}).json()
+        assert {a, b} <= {r["run_id"] for r in both_ref}
+        archived = client.get("/runs", params={"status": "archived"}).json()
+        assert {a, b} <= {r["run_id"] for r in archived}
+        assert client.get("/runs", params={"status": "running"}).json() == []
+
+        # Date filter on started_at (run_id stamp).
+        late = client.get("/runs", params={"date_from": "2026-01-02"}).json()
+        assert {r["run_id"] for r in late} == {b}
+
+
+def test_compare_flags_regression(tmp_runs, clean_registry):
+    from saboteur.api import app
+
+    good = "calm_seas-20260101T000000-aaaaaa"
+    bad = "calm_seas-20260102T000000-bbbbbb"
+    _write_run_files(
+        tmp_runs, good, "calm_seas", 4,
+        _scorecard_dict(good, "calm_seas", 4, survival_rate=1.0, crash_rate=0.0, mttr_steps=2.0, waste_factor=1.0),
+    )
+    _write_run_files(
+        tmp_runs, bad, "calm_seas", 4,
+        _scorecard_dict(bad, "calm_seas", 4, survival_rate=0.5, crash_rate=0.3, mttr_steps=5.0, waste_factor=1.05),
+    )
+
+    with TestClient(app) as client:
+        resp = client.get("/runs/compare", params={"a": good, "b": bad})
+        assert resp.status_code == 200
+        data = resp.json()
+
+    m = data["metrics"]
+    assert m["survival_rate"]["delta"] == -0.5 and m["survival_rate"]["regressed"] is True
+    assert m["crash_rate"]["delta"] == 0.3 and m["crash_rate"]["regressed"] is True
+    assert m["mttr_steps"]["delta"] == 3.0 and m["mttr_steps"]["regressed"] is True
+    # waste_factor moved +0.05, under the 0.10 threshold → not a regression.
+    assert m["waste_factor"]["regressed"] is False
+    # null metrics never regress.
+    assert m["latency_degradation"]["delta"] is None
+    assert m["latency_degradation"]["regressed"] is False
+
+    assert set(data["regressions"]) == {"survival_rate", "crash_rate", "mttr_steps"}
+
+
+def test_compare_unknown_run_404(tmp_runs, clean_registry):
+    from saboteur.api import app
+
+    a = "calm_seas-20260101T000000-aaaaaa"
+    _write_run_files(tmp_runs, a, "calm_seas", 2, _scorecard_dict(a, "calm_seas", 2, survival_rate=1.0))
+    with TestClient(app) as client:
+        resp = client.get("/runs/compare", params={"a": a, "b": "nope-20260101T000000-zzzzzz"})
+    assert resp.status_code == 404
+
+
+def test_compare_run_without_scorecard_409(tmp_runs, clean_registry):
+    from saboteur.api import app
+
+    a = "calm_seas-20260101T000000-aaaaaa"
+    b = "calm_seas-20260102T000000-bbbbbb"
+    _write_run_files(tmp_runs, a, "calm_seas", 2, _scorecard_dict(a, "calm_seas", 2, survival_rate=1.0))
+    _write_run_files(tmp_runs, b, "calm_seas", 2, None)  # JSONL only, no scorecard
+    with TestClient(app) as client:
+        resp = client.get("/runs/compare", params={"a": a, "b": b})
+    assert resp.status_code == 409
+
+
+def test_runs_survive_restart_and_db_drop(tmp_runs, clean_registry):
+    """Runs survive a restart; deleting the DB and restarting rebuilds it."""
+    import saboteur.api.runs as runs_mod
+    from saboteur.api import app
+
+    rid = "flaky_friday-20260101T000000-aaaaaa"
+    _write_run_files(tmp_runs, rid, "flaky_friday", 3, _scorecard_dict(rid, "flaky_friday", 3, survival_rate=0.66))
+
+    # First server life: startup indexes it; it's listed.
+    with TestClient(app) as client:
+        assert rid in {r["run_id"] for r in client.get("/runs").json()}
+
+    # Simulate a crash + DB loss: delete the SQLite file outright.
+    db_path = tmp_runs / "saboteur.db"
+    assert db_path.exists()
+    db_path.unlink()
+    for sidecar in ("saboteur.db-wal", "saboteur.db-shm"):
+        (tmp_runs / sidecar).unlink(missing_ok=True)
+
+    # Next server life (fresh registry): startup_index rebuilds from JSONL alone.
+    clean_registry  # registry is empty (no live runs survive a restart)
+    with TestClient(app) as client:
+        listed = {r["run_id"]: r for r in client.get("/runs").json()}
+        assert rid in listed
+        assert listed[rid]["profile"] == "flaky_friday"
+        assert listed[rid]["survival_pct"] == 66.0
+
+
+def test_delete_removes_index_row(tmp_runs, clean_registry):
+    from saboteur.api import app
+    from saboteur.storage.db import db as index_db
+
+    rid = "calm_seas-20260101T000000-aaaaaa"
+    _write_run_files(tmp_runs, rid, "calm_seas", 2, _scorecard_dict(rid, "calm_seas", 2, survival_rate=1.0))
+
+    with TestClient(app) as client:
+        assert rid in {r["run_id"] for r in client.get("/runs").json()}
+        assert index_db.run_get(rid) is not None
+
+        resp = client.delete(f"/runs/{rid}")
+        assert resp.status_code == 204
+
+        assert index_db.run_get(rid) is None
+        assert rid not in {r["run_id"] for r in client.get("/runs").json()}
+        assert not (tmp_runs / f"{rid}.jsonl").exists()
 
