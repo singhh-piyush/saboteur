@@ -460,8 +460,10 @@ def sync_profiles(db: Database, profiles_dir: Path) -> None:
         except Exception:
             continue
         faults = data.get("faults") or []
-        fault_types = [
-            f.get("type") for f in faults if isinstance(f, dict) and f.get("type")
+        fault_types: list[str] = [
+            f["type"]
+            for f in faults
+            if isinstance(f, dict) and isinstance(f.get("type"), str)
         ]
         try:
             db.profile_upsert(

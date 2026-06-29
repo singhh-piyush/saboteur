@@ -7,7 +7,8 @@ const COUNT_TIP: Record<string, string> = {
   nominal: "Agents running normally - no active fault",
   recovering: "Agents that hit a fault and are retrying/replanning to self-heal",
   down: "Agents that crashed with an unrecoverable error",
-  complete: "Agents that finished the task successfully",
+  complete: "Agents an oracle judged a success",
+  done: "Agents that ran to completion but had no success oracle to judge them",
 };
 
 /**
@@ -19,9 +20,11 @@ export function RunBar() {
   const { state, activeRunId } = useRun();
   const counts = runCounts(state);
 
-  const finished = counts.crashed + counts.succeeded;
-  const survival =
-    finished === 0 ? null : (counts.succeeded / counts.total) * 100;
+  // Only show a survival % when at least one agent carries a real oracle verdict.
+  // A no-oracle run (success===null) has no survival rate — show "-", never a
+  // fabricated 0% or 100% (honesty, invariant #4; matches the scorecard's null).
+  const hasVerdict = Object.values(state.agents).some((a) => a.success !== null);
+  const survival = hasVerdict ? (counts.succeeded / counts.total) * 100 : null;
 
   return (
     <div className="animate-feed-in flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-line px-3 py-2">
@@ -68,6 +71,9 @@ export function RunBar() {
           <Count label="recovering" value={counts.recovering} className="text-warn" />
           <Count label="down" value={counts.crashed} className="text-crit" />
           <Count label="complete" value={counts.succeeded} className="text-win" />
+          {counts.done > 0 && (
+            <Count label="done" value={counts.done} className="text-ink-dim" />
+          )}
         </div>
       )}
 

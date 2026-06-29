@@ -131,6 +131,48 @@ async def test_multiple_subscribers_each_receive_all_events() -> None:
         assert len(got) == n
 
 
+async def test_raising_subscriber_is_isolated_from_others_and_the_bus() -> None:
+    """Crash isolation at the telemetry layer (invariant #2): a subscriber whose
+    consumer raises mid-stream must not affect a healthy subscriber or the bus —
+    events emitted *after* the crash still reach the survivor."""
+    bus = _bound_bus()
+
+    healthy: list[TelemetryEvent] = []
+    crashed_at: list[int | None] = []
+
+    async def healthy_sub() -> None:
+        async with bus.subscribe() as events:
+            async for ev in events:
+                healthy.append(ev)
+
+    async def raising_sub() -> None:
+        async with bus.subscribe() as events:
+            async for ev in events:
+                crashed_at.append(ev.step)
+                raise RuntimeError("subscriber consumer boom")
+
+    h = asyncio.create_task(healthy_sub())
+    r = asyncio.create_task(raising_sub())
+    await asyncio.sleep(0)  # both register
+
+    bus.emit(_event(step=0))  # both see it; the raising subscriber dies here
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    with pytest.raises(RuntimeError):
+        await r  # the exception stayed inside its own task
+
+    # Emit more AFTER the crash — the healthy subscriber must still receive them.
+    bus.emit(_event(step=1))
+    bus.emit(_event(step=2))
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    bus.close()
+    await asyncio.wait_for(h, timeout=1.0)
+
+    assert crashed_at == [0]  # raising sub saw exactly one event, then died
+    assert [e.step for e in healthy] == [0, 1, 2]  # survivor unaffected
+
+
 async def test_disconnect_subscriber_does_not_affect_others() -> None:
     """Exiting one subscriber context must not starve other subscribers."""
     bus = _bound_bus()

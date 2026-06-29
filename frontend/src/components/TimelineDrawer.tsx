@@ -4,7 +4,7 @@ import { agentLabel, clockTime, compactArgs, num } from "../lib/format";
 import { faultStyle } from "../lib/faults";
 import { useRun } from "../state/RunContext";
 import type { TelemetryEvent } from "../types/telemetry";
-import { BoltIcon, CrossIcon, FlagIcon, LoopIcon } from "./Icons";
+import { BoltIcon, CircleIcon, CrossIcon, FlagIcon, LoopIcon } from "./Icons";
 import { PanelHeader } from "./PanelHeader";
 import { Tooltip } from "./Tooltip";
 
@@ -237,36 +237,56 @@ function TimelineEntry({ ev }: { ev: TelemetryEvent }) {
 
     case "agent_done":
     case "agent_crashed": {
-      const success =
-        ev.event === "agent_done" && ev.payload["success"] === true;
+      const raw = ev.event === "agent_done" ? ev.payload["success"] : false;
+      const verdict = raw === true ? true : raw === false ? false : null;
       const outcome =
         ev.event === "agent_crashed"
           ? "hard_exception"
           : String(ev.payload["outcome"] ?? "?");
+      // Honesty (invariant #4): no oracle verdict (null) + ran to completion →
+      // a neutral "done", neither a green pass nor a red fail. A real behavioral
+      // failure (timeout / hard_exception) still goes red.
+      const kind: "ok" | "done" | "fail" =
+        verdict === true
+          ? "ok"
+          : verdict === null && outcome === "completed"
+            ? "done"
+            : "fail";
+      const box =
+        kind === "ok"
+          ? "border-win/40 bg-win/5"
+          : kind === "done"
+            ? "border-line bg-raised/40"
+            : "border-crit/40 bg-crit/5";
+      const text =
+        kind === "ok" ? "text-win" : kind === "done" ? "text-ink-dim" : "text-crit";
+      const tip =
+        kind === "ok"
+          ? "Agent finished AND the verifier confirmed the filed report is correct"
+          : kind === "done"
+            ? "Agent ran to completion - no success oracle judged it (no pass/fail verdict)"
+            : OUTCOME_TIP[outcome] ?? "Agent ended without completing the task";
+      const heading =
+        kind === "ok"
+          ? "TASK COMPLETE"
+          : kind === "done"
+            ? `DONE - ${outcome}`
+            : `TERMINAL - ${outcome}`;
       return (
-        <li
-          className={`rounded-sm border px-2 py-1.5 ${
-            success ? "border-win/40 bg-win/5" : "border-crit/40 bg-crit/5"
-          }`}
-        >
+        <li className={`rounded-sm border px-2 py-1.5 ${box}`}>
           <div className="flex items-baseline justify-between gap-2">
-            <Tooltip
-              portal
-              side="top"
-              label={
-                success
-                  ? "Agent finished AND the verifier confirmed the filed report is correct"
-                  : OUTCOME_TIP[outcome] ?? "Agent ended without completing the task"
-              }
-              className="inline-flex"
-            >
+            <Tooltip portal side="top" label={tip} className="inline-flex">
               <span
-                className={`inline-flex cursor-default items-center gap-1.5 text-sm font-bold ${
-                  success ? "text-win" : "text-crit"
-                }`}
+                className={`inline-flex cursor-default items-center gap-1.5 text-sm font-bold ${text}`}
               >
-                {success ? <FlagIcon size={12} /> : <CrossIcon size={12} />}
-                {success ? "TASK COMPLETE" : `TERMINAL - ${outcome}`}
+                {kind === "ok" ? (
+                  <FlagIcon size={12} />
+                ) : kind === "done" ? (
+                  <CircleIcon size={12} />
+                ) : (
+                  <CrossIcon size={12} />
+                )}
+                {heading}
               </span>
             </Tooltip>
             {meta}

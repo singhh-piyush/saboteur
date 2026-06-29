@@ -766,7 +766,6 @@ def test_compare_run_without_scorecard_409(tmp_runs, clean_registry):
 
 def test_runs_survive_restart_and_db_drop(tmp_runs, clean_registry):
     """Runs survive a restart; deleting the DB and restarting rebuilds it."""
-    import saboteur.api.runs as runs_mod
     from saboteur.api import app
 
     rid = "flaky_friday-20260101T000000-aaaaaa"

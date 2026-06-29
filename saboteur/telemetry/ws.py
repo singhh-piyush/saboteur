@@ -35,7 +35,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import cast
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -213,13 +215,14 @@ async def _stream_live(
     connections.  The keepalive ping is at the WebSocket framing layer and is
     transparent to the application-level event stream.
     """
-    # We need a raw async iterator; the bus subscriber yields one.
-    aiter = live_events.__aiter__()  # type: ignore[union-attr]
+    # We need a raw async iterator; the bus subscriber yields one. The param is
+    # typed ``object`` to avoid leaking the bus subscriber type into the signature.
+    aiter = cast("AsyncIterator[TelemetryEvent]", live_events).__aiter__()
 
     while True:
         try:
             event = await asyncio.wait_for(
-                aiter.__anext__(),  # type: ignore[union-attr]
+                aiter.__anext__(),
                 timeout=_KEEPALIVE_INTERVAL_S,
             )
         except StopAsyncIteration:

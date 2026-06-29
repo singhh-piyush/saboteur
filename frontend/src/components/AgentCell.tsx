@@ -12,6 +12,7 @@ const STATUS_COLOR: Record<AgentState["status"], string> = {
   recovering: "var(--color-warn)",
   crashed: "var(--color-crit)",
   succeeded: "var(--color-win)",
+  done: "var(--color-ink-dim)",
 };
 
 const STATUS_WORD: Record<AgentState["status"], string> = {
@@ -20,6 +21,7 @@ const STATUS_WORD: Record<AgentState["status"], string> = {
   recovering: "recovering",
   crashed: "down",
   succeeded: "complete",
+  done: "done",
 };
 
 const STATUS_EXPLAIN: Record<AgentState["status"], string> = {
@@ -27,7 +29,8 @@ const STATUS_EXPLAIN: Record<AgentState["status"], string> = {
   healthy: "Running normally - no active fault",
   recovering: "Hit a fault and retrying/reformulating to self-heal",
   crashed: "Terminated with an unrecoverable error",
-  succeeded: "Completed the task successfully",
+  succeeded: "Completed the task successfully (oracle verdict)",
+  done: "Ran to completion - no success oracle to judge it",
 };
 
 interface Props {
@@ -42,7 +45,7 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
   const color = STATUS_COLOR[agent.status];
   const pending = agent.status === "pending";
   const progress =
-    agent.status === "succeeded"
+    agent.status === "succeeded" || agent.status === "done"
       ? 1
       : Math.min(agent.step / maxSteps, 1);
 
@@ -178,6 +181,8 @@ function StatusGlyph({
   switch (status) {
     case "succeeded":
       return <FlagIcon size={14} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+    case "done":
+      return <CircleIcon size={12} className="shrink-0 transition-colors duration-200" style={{ color }} />;
     case "crashed":
       return <CrossIcon size={13} className="shrink-0 transition-colors duration-200" style={{ color }} />;
     case "recovering":

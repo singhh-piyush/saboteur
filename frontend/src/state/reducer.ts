@@ -21,8 +21,9 @@ export type AgentStatus =
   | "pending" // cell exists (run_started said N agents) but no events yet
   | "healthy"
   | "recovering" // fault seen, not yet resolved
-  | "crashed" // agent_crashed, or agent_done with success=false
-  | "succeeded";
+  | "crashed" // agent_crashed, agent_done success=false, or a no-oracle behavioral failure
+  | "succeeded" // agent_done success=true (an oracle judged it a pass)
+  | "done"; // agent_done success=null (no oracle) + ran to completion — neither pass nor fail
 
 export type ConnStatus =
   | "idle"
@@ -210,7 +211,10 @@ function applyEvent(state: RunViewState, ev: TelemetryEvent): RunViewState {
 
 function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
   const agent: AgentState = { ...prev, events: [...prev.events, ev] };
-  const terminal = prev.status === "crashed" || prev.status === "succeeded";
+  const terminal =
+    prev.status === "crashed" ||
+    prev.status === "succeeded" ||
+    prev.status === "done";
   if (ev.step !== null) agent.step = Math.max(agent.step, ev.step);
 
   switch (ev.event) {
@@ -252,15 +256,20 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
 
     case "agent_done": {
       const raw = ev.payload["success"];
-      // null ⇒ the run finished but no oracle judged it (BYO without an
-      // oracle). Keep success null (don't claim a verdict) and color the cell
-      // by the behavioral terminal outcome instead of flagging it a crash.
+      // null ⇒ the run finished but no oracle judged it (BYO without an oracle).
+      // Honesty (invariant #4): never fabricate a verdict. success stays null and
+      // the cell renders a NEUTRAL "done" (not green "succeeded") when it merely
+      // ran to completion — a real behavioral failure (timeout / hard_exception)
+      // still goes red. An oracle verdict colors green/red as before.
       const success = raw === true ? true : raw === false ? false : null;
       agent.outcome = asString(ev.payload["outcome"]);
       agent.success = success;
       agent.tokensUsed = ev.tokens_used;
-      const ok = success === null ? agent.outcome === "completed" : success;
-      setStatus(agent, ok ? "succeeded" : "crashed");
+      let status: AgentStatus;
+      if (success === true) status = "succeeded";
+      else if (success === false) status = "crashed";
+      else status = agent.outcome === "completed" ? "done" : "crashed";
+      setStatus(agent, status);
       break;
     }
 

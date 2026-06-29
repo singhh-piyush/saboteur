@@ -25,9 +25,10 @@ from __future__ import annotations
 import asyncio
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Protocol
 
 from saboteur.agents.factory import OnEvent, build_agent
+from saboteur.agents.oracle import Oracle
 from saboteur.agents.outcomes import AgentRunResult, Outcome
 from saboteur.agents.tools import ReportStore
 from saboteur.chaos.profile import ChaosProfile
@@ -48,10 +49,24 @@ class RunnableAgent(Protocol):
     async def run(self) -> AgentRunResult: ...
 
 
-# Factory seam: production is build_agent; tests inject a FakeAgent factory.
-AgentFactory = Callable[
-    [int, ChaosProfile, ReportStore, OnEvent | None], RunnableAgent
-]
+class AgentFactory(Protocol):
+    """Factory seam: production is :func:`build_agent`; tests inject a FakeAgent.
+
+    Declared as a Protocol (not a bare ``Callable``) so the **keyword-only**
+    ``oracle`` argument is part of the type — ``runner.orchestrate`` binds it via
+    ``functools.partial(agent_factory, oracle=…)`` and that must type-check
+    (otherwise the oracle seam drifts silently — the WP2/PWP1 interface-drift bug).
+    """
+
+    def __call__(
+        self,
+        agent_id: int,
+        profile: ChaosProfile,
+        store: ReportStore,
+        on_event: OnEvent | None = None,
+        *,
+        oracle: Oracle | None = None,
+    ) -> RunnableAgent: ...
 
 
 @dataclass

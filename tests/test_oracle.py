@@ -328,6 +328,34 @@ def test_old_scorecard_still_validates() -> None:
     assert isinstance(card.crash_rate, float)
 
 
+def test_legacy_minimal_scorecard_loads_with_defaults() -> None:
+    """A pre-two-tier scorecard (none of crash_rate / oracle / *_reason / latency)
+    must still validate, with the new fields filled from their defaults."""
+    legacy = json.dumps(
+        {
+            "run_id": "flaky_friday-20260101T000000-legacy",
+            "profile": "flaky_friday",
+            "n_agents": 8,
+            "survival_rate": 0.75,  # pre-WP: survival was a plain required float
+            "mttr_steps": 2.5,
+            "recovery_breakdown": {"retry": 4},
+            "waste_factor": 1.4,
+            "deception_detection_rate": 0.5,
+            "failure_modes": {"timeout": 1},
+            "control_run_id": "flaky_friday-20260101T000000-legacy-control",
+            "per_agent": {},
+        }
+    )
+    card = Scorecard.model_validate_json(legacy)
+    assert card.survival_rate == 0.75
+    # Fields added by later WPs are defaulted, not required.
+    assert card.crash_rate == 0.0
+    assert card.latency_degradation is None
+    assert card.oracle is None
+    assert card.survival_rate_reason is None
+    assert card.deception_detection_rate_reason is None
+
+
 # ---------------------------------------------------------------------------
 # 5. Completion-time freezing (no LLM; stub the agent loop)
 # ---------------------------------------------------------------------------

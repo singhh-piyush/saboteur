@@ -127,6 +127,40 @@ def test_unknown_metric_exits_2(runner):
     assert "bogus" in res.output
 
 
+def test_crash_rate_gate_is_a_ceiling_not_a_floor(runner, monkeypatch):
+    # crash_rate is lower-is-better: a LOW value must PASS a threshold gate
+    # (a ceiling), not fail it. Regression for the floor-only inversion bug.
+    monkeypatch.setattr(cli, "_run_reference", lambda *a, **k: _sc(crash_rate=0.0))
+    ok = runner.invoke(
+        cli.main,
+        ["run", "--target", "reference", "--profile", "hell_mode", "--ci",
+         "--metric", "crash_rate", "--threshold", "0.5"],
+    )
+    assert ok.exit_code == 0, ok.output  # 0.0 crash_rate is under the 0.5 ceiling
+
+    monkeypatch.setattr(cli, "_run_reference", lambda *a, **k: _sc(crash_rate=0.8))
+    bad = runner.invoke(
+        cli.main,
+        ["run", "--target", "reference", "--profile", "hell_mode", "--ci",
+         "--metric", "crash_rate", "--threshold", "0.5"],
+    )
+    assert bad.exit_code == 1, bad.output  # 0.8 crash_rate breaches the ceiling
+
+
+def test_latency_degradation_is_rejected_as_a_gate_metric(runner, monkeypatch):
+    # latency_degradation is contention-contaminated (CLAUDE.md: keep out of CI
+    # thresholds) — gating on it is a loud config error, even with --control.
+    monkeypatch.setattr(cli, "_run_reference", lambda *a, **k: pytest.fail("cohort ran"))
+    res = runner.invoke(
+        cli.main,
+        ["run", "--target", "reference", "--profile", "hell_mode", "--control",
+         "--ci", "--metric", "latency_degradation"],
+    )
+    assert res.exit_code == 2
+    assert "latency_degradation" in res.output
+    assert "contention" in res.output.lower()
+
+
 def test_unknown_target_exits_2(runner, monkeypatch, tmp_path):
     monkeypatch.setattr("saboteur.harness.targets.target_store", _byo_store(tmp_path))
     res = runner.invoke(cli.main, ["run", "--target", "nope", "--profile", "hell_mode"])

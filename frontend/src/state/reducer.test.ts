@@ -17,6 +17,7 @@ import {
   type Action,
   type RunViewState,
 } from "./reducer";
+import { survivalRate } from "./selectors";
 
 /** Strip internal/transport fields that don't affect visual rendering. */
 function view(state: RunViewState): Omit<RunViewState, "conn" | "_seen"> {
@@ -233,7 +234,7 @@ describe("agent status transitions", () => {
     expect(done(true).tokensUsed).toBe(1234);
   });
 
-  it("agent_done with null success (no oracle) colors by outcome, not crashed", () => {
+  it("agent_done with null success (no oracle) is neutral 'done', never green", () => {
     const doneNull = (outcome: string) =>
       foldEvents([
         ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
@@ -245,12 +246,31 @@ describe("agent status transitions", () => {
         }),
       ]).agents[0];
 
-    // Unjudged but ran to completion → not flagged a crash; verdict stays null.
+    // Honesty (invariant #4): unjudged + ran to completion → neutral "done"
+    // (NOT green "succeeded" — we never fabricate an oracle verdict); success
+    // stays null so survivalRate stays null (matches the scorecard).
     const completed = doneNull("completed");
-    expect(completed.status).toBe("succeeded");
+    expect(completed.status).toBe("done");
     expect(completed.success).toBeNull();
-    // Unjudged and ended in a failure outcome → crashed.
+    // Unjudged AND ended in a real behavioral failure outcome → crashed (red).
     expect(doneNull("timeout").status).toBe("crashed");
+    expect(doneNull("hard_exception").status).toBe("crashed");
+  });
+
+  it("survivalRate is null for a no-oracle run (no fabricated %)", () => {
+    const state = foldEvents([
+      ev({ agent_id: -1, event: "run_started", payload: { n_agents: 2 } }),
+      ev({ event: "agent_done", payload: { outcome: "completed", success: null }, ts: "2026-06-10T12:00:01+00:00" }),
+      ev({ agent_id: 1, event: "agent_done", payload: { outcome: "completed", success: null }, ts: "2026-06-10T12:00:02+00:00" }),
+    ]);
+    expect(survivalRate(state)).toBeNull();
+    // But once an oracle verdict is present, it computes.
+    const judged = foldEvents([
+      ev({ agent_id: -1, event: "run_started", payload: { n_agents: 2 } }),
+      ev({ event: "agent_done", payload: { outcome: "completed", success: true }, ts: "2026-06-10T12:00:01+00:00" }),
+      ev({ agent_id: 1, event: "agent_done", payload: { outcome: "completed", success: false }, ts: "2026-06-10T12:00:02+00:00" }),
+    ]);
+    expect(survivalRate(judged)).toBe(0.5);
   });
 
   it("agent_crashed is terminal and sticky against later faults", () => {

@@ -1,0 +1,204 @@
+{
+  "run_id": "hell_mode-20260629T231833-2b225c",
+  "profile": "hell_mode",
+  "n_agents": 8,
+  "mttr_steps": 1.4528301886792452,
+  "recovery_breakdown": {
+    "no_action": 19,
+    "fallback_tool": 22,
+    "retry": 1
+  },
+  "waste_factor": 1.4375,
+  "failure_modes": {},
+  "crash_rate": 0.0,
+  "latency_degradation": 31.33423577905922,
+  "survival_rate": 0.875,
+  "survival_rate_reason": null,
+  "deception_detection_rate": 1.0,
+  "deception_detection_rate_reason": null,
+  "oracle": "builtin_reference",
+  "control_run_id": "hell_mode-20260629T231833-2b225c-control",
+  "per_agent": {
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 240,
+      "steps_taken": 7,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "1": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 720,
+      "steps_taken": 11,
+      "faults": [
+        "api_error",
+        "timeout",
+        "latency",
+        "api_error",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "malformed",
+        "latency",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "retry",
+        "fallback_tool"
+      ]
+    },
+    "2": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 400,
+      "steps_taken": 5,
+      "faults": [
+        "rate_limit",
+        "silent_lie",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "3": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 400,
+      "steps_taken": 5,
+      "faults": [
+        "rate_limit",
+        "silent_lie"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "4": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 320,
+      "steps_taken": 6,
+      "faults": [
+        "latency",
+        "api_error",
+        "timeout",
+        "context_drop"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "5": {
+      "outcome": "completed",
+      "success": false,
+      "tokens_used": 400,
+      "steps_taken": 5,
+      "faults": [
+        "rate_limit",
+        "malformed",
+        "latency"
+      ],
+      "recoveries": [
+        "fallback_tool",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    },
+    "7": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 800,
+      "steps_taken": 16,
+      "faults": [
+        "latency",
+        "api_error",
+        "api_error",
+        "api_error",
+        "rate_limit",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "rate_limit",
+        "latency",
+        "api_error",
+        "context_drop",
+        "rate_limit",
+        "malformed",
+        "api_error",
+        "api_error",
+        "context_drop",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "no_action",
+        "no_action"
+      ]
+    },
+    "6": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 400,
+      "steps_taken": 9,
+      "faults": [
+        "latency",
+        "api_error",
+        "latency",
+        "api_error",
+        "api_error",
+        "silent_lie",
+        "context_drop",
+        "timeout",
+        "latency",
+        "api_error",
+        "context_drop"
+      ],
+      "recoveries": [
+        "no_action",
+        "no_action",
+        "fallback_tool",
+        "no_action",
+        "fallback_tool",
+        "fallback_tool"
+      ]
+    }
+  }
+}

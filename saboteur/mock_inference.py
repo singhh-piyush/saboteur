@@ -113,9 +113,9 @@ def _to_fahrenheit(celsius: float) -> str:
 
 def _tool_names(body: dict) -> set[str]:
     return {
-        (t.get("function") or {}).get("name")
+        name
         for t in (body.get("tools") or [])
-        if (t.get("function") or {}).get("name")
+        if isinstance((name := (t.get("function") or {}).get("name")), str)
     }
 
 

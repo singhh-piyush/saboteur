@@ -15,6 +15,7 @@ export interface RunCounts {
   recovering: number;
   crashed: number;
   succeeded: number;
+  done: number; // ran to completion but no oracle verdict (neutral)
   pending: number;
   faults: number;
 }
@@ -26,6 +27,7 @@ export function runCounts(state: RunViewState): RunCounts {
     recovering: 0,
     crashed: 0,
     succeeded: 0,
+    done: 0,
     pending: 0,
     faults: 0,
   };
@@ -85,10 +87,14 @@ export function totalTokens(state: RunViewState): number {
   return sum;
 }
 
-/** Survival rate over all agents in this state (verifier success). */
+/** Survival rate over all agents (oracle success). Returns null when no agent
+ * carries a real verdict (success !== null) — a no-oracle run has no survival
+ * rate (honesty, invariant #4), never a fabricated 0%. */
 export function survivalRate(state: RunViewState): number | null {
   const agents = Object.values(state.agents);
   if (agents.length === 0) return null;
+  const judged = agents.some((a) => a.success !== null);
+  if (!judged) return null;
   const ok = agents.filter((a) => a.status === "succeeded").length;
   return ok / agents.length;
 }

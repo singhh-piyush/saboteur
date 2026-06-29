@@ -24,7 +24,7 @@ import socket
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import urlsplit
 
 import click
@@ -37,8 +37,19 @@ _RUNS_DIR = Path("runs")
 
 # Metric gating buckets (mirror the two-tier scorecard, CLAUDE.md invariant #4).
 _ORACLE_GATED = {"survival_rate", "deception_detection_rate"}
-_CONTROL_GATED = {"waste_factor", "latency_degradation"}
+_CONTROL_GATED = {"waste_factor"}
 _GATEABLE = _ORACLE_GATED | _CONTROL_GATED | {"mttr_steps", "crash_rate"}
+# Real metrics that are deliberately NOT hard CI gates. latency_degradation mixes
+# injected latency with -np N batching contention (CLAUDE.md scorecard: "soft/rough
+# … keep out of CI thresholds"), so gating on it is rejected loudly (exit 2) rather
+# than letting a noisy metric block a merge.
+_UNGATEABLE_METRICS = {
+    "latency_degradation": (
+        "latency_degradation is not a hard gate metric: it is contaminated by "
+        "-np N batching contention (soft/secondary). Gate on survival_rate, "
+        "crash_rate, mttr_steps, or waste_factor instead."
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +57,7 @@ _GATEABLE = _ORACLE_GATED | _CONTROL_GATED | {"mttr_steps", "crash_rate"}
 # ---------------------------------------------------------------------------
 
 
-def _die(message: str, code: int = 2) -> None:
+def _die(message: str, code: int = 2) -> NoReturn:
     """Print an error to stderr and exit (default 2 = config/usage error)."""
     click.echo(f"error: {message}", err=True)
     sys.exit(code)
@@ -261,15 +272,31 @@ def _run_byo_via_api(base: str, target: str, profile: str, n: int) -> dict[str, 
 # CI gate
 # ---------------------------------------------------------------------------
 
+# Gate direction per metric. higher-is-better metrics treat the threshold as a
+# FLOOR (fail below it); lower-is-better metrics treat it as a CEILING (fail
+# above it). Without this, gating on crash_rate / mttr_steps — which the preflight
+# explicitly recommends for no-oracle targets — would invert and fail good runs.
+_HIGHER_IS_BETTER: dict[str, bool] = {
+    "survival_rate": True,
+    "deception_detection_rate": True,
+    "mttr_steps": False,
+    "waste_factor": False,
+    "crash_rate": False,
+}
+
 
 def _evaluate_ci(
     sc: dict[str, Any], metric: str, threshold: float
 ) -> tuple[int, str]:
     """Return (exit_code, message) for ``--ci``.
 
-    ``< threshold`` ⇒ exit 1 (FAIL); otherwise exit 0 (PASS). A null/ungateable
-    metric is a loud config error (exit 2) — never a silent pass/fail.
+    Direction-aware: a higher-is-better metric (survival_rate) fails *below* the
+    threshold (a floor); a lower-is-better metric (crash_rate, mttr_steps,
+    waste_factor) fails *above* it (a ceiling). A null/ungateable metric is a
+    loud config error (exit 2) — never a silent pass/fail.
     """
+    if metric in _UNGATEABLE_METRICS:
+        return 2, _UNGATEABLE_METRICS[metric]
     if metric not in _GATEABLE:
         return 2, (
             f"unknown --metric {metric!r}; choose one of: "
@@ -285,9 +312,13 @@ def _evaluate_ci(
             f"metric {metric!r} is null{hint}; cannot gate. "
             "Pick a metric this run actually produces."
         )
-    if value < threshold:
-        return 1, f"CI gate: {metric} {value:.2f} < {threshold:.2f} → FAIL"
-    return 0, f"CI gate: {metric} {value:.2f} ≥ {threshold:.2f} → PASS"
+    higher_is_better = _HIGHER_IS_BETTER.get(metric, True)
+    failed = value < threshold if higher_is_better else value > threshold
+    rel = ("<" if failed else "≥") if higher_is_better else (">" if failed else "≤")
+    verdict = "FAIL" if failed else "PASS"
+    return (1 if failed else 0), (
+        f"CI gate: {metric} {value:.2f} {rel} {threshold:.2f} → {verdict}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +330,8 @@ def _preflight_ci(target, metric: str, control: bool) -> None:
     """Loud-fail unsatisfiable CI gates up front (before running anything)."""
     from saboteur.harness.targets import build_oracle
 
+    if metric in _UNGATEABLE_METRICS:
+        _die(_UNGATEABLE_METRICS[metric])
     if metric not in _GATEABLE:
         _die(
             f"unknown --metric {metric!r}; choose one of: "
@@ -356,9 +389,10 @@ def run_cmd(
     """Run a cohort under a chaos profile and print the scorecard.
 
     Reference targets run in-process (no server). BYO command targets go through
-    the API (a server is started if one isn't already up). In --ci mode, exits 1
-    when METRIC is below THRESHOLD (a floor — natural for higher-is-better
-    metrics like survival_rate), 0 otherwise, 2 if the metric can't be gated.
+    the API (a server is started if one isn't already up). In --ci mode the gate
+    is direction-aware: a higher-is-better metric (survival_rate) fails below
+    THRESHOLD; a lower-is-better metric (crash_rate, mttr_steps, waste_factor)
+    fails above it. Exit 0 pass, 1 breach, 2 if the metric can't be gated.
     """
     from saboteur.harness.targets import target_store
 
