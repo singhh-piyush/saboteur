@@ -31,7 +31,7 @@ const INPUT_CLS =
 const LABEL_CLS =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim";
 
-// Mirrors the backend BUILTIN_PROFILES set — UX only; the server enforces it.
+// Mirrors the backend BUILTIN_PROFILES set - UX only; the server enforces it.
 const BUILTIN_PROFILES = new Set([
   "calm_seas",
   "flaky_friday",
@@ -144,7 +144,7 @@ export function ProfileBuilder() {
         setFaults(p.faults.map((d) => faultFromDict(d, byType)));
         setSaveMsg(
           builtin
-            ? { ok: true, text: `Loaded built-in '${p.name}' as a copy — pick a new name to save.` }
+            ? { ok: true, text: `Loaded built-in '${p.name}' as a copy - pick a new name to save.` }
             : null,
         );
       })
@@ -272,7 +272,7 @@ export function ProfileBuilder() {
             <div className="space-y-3 p-3">
               {faults.length === 0 ? (
                 <p className="py-6 text-center text-sm text-ink-faint">
-                  No faults — a control profile. Add faults to inject chaos.
+                  No faults - a control profile. Add faults to inject chaos.
                 </p>
               ) : (
                 faults.map((f, i) => (

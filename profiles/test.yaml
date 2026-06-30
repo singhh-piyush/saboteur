@@ -1,0 +1,11 @@
+name: test
+seed: 1337
+description: ''
+faults:
+- type: malformed
+  probability: 0.5
+  target_tools:
+  - weather
+  - calculator
+  - web_search
+  - file_report

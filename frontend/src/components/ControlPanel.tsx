@@ -50,7 +50,7 @@ export function ControlPanel() {
 
   const profile = profiles.find((p) => p.name === profileName) ?? null;
   const busy = launching || state.conn === "connecting";
-  // BYO command targets run chaos-only — no control cohort in v1.
+  // BYO command targets run chaos-only - no control cohort in v1.
   const isByo = targetName !== "reference";
   const effectiveControl = isByo ? false : withControl;
 

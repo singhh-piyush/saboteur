@@ -36,7 +36,7 @@ export class RunSocket {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private attempt = 0;
   private closed = false;
-  /** Set when we receive __stream_complete__ — prevents reconnect in onclose. */
+  /** Set when we receive __stream_complete__ - prevents reconnect in onclose. */
   private streamComplete = false;
 
   constructor(
@@ -61,7 +61,7 @@ export class RunSocket {
       try {
         const data = JSON.parse(msg.data) as Record<string, unknown>;
         // Detect the __stream_complete__ control frame (transport-only, never
-        // a TelemetryEvent — see saboteur/telemetry/ws.py).
+        // a TelemetryEvent - see saboteur/telemetry/ws.py).
         if (data.event === "__stream_complete__") {
           this.streamComplete = true;
           // The server will close with code 1000 right after this frame.

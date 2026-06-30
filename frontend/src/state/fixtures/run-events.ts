@@ -1,7 +1,7 @@
 /**
  * Real telemetry from the first accepted N=8 cohort run
  * (flaky_friday, 2026-06-10, local llama.cpp). Captured verbatim from
- * runs/flaky_friday-20260610T113526-0b416c.jsonl — 109 events.
+ * runs/flaky_friday-20260610T113526-0b416c.jsonl - 109 events.
  * Used by reducer.test.ts to prove live === replay (invariant #3).
  */
 

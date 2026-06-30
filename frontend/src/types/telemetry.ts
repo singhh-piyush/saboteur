@@ -1,5 +1,5 @@
 /**
- * Mirror of saboteur/telemetry/schema.py — the single event schema
+ * Mirror of saboteur/telemetry/schema.py - the single event schema
  * (invariant #3). Do not add or rename fields here without changing the
  * backend schema first.
  */

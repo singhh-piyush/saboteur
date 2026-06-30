@@ -307,7 +307,7 @@ export function RunsPage() {
                     title={
                       run.has_scorecard
                         ? "Select for comparison (max 2)"
-                        : "No scorecard — cannot compare"
+                        : "No scorecard - cannot compare"
                     }
                   />
 

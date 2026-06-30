@@ -48,7 +48,7 @@ export function ScorecardView() {
       try {
         const scorecard = await fetchScorecard(activeRunId);
         // The scorecard is a pure function of the event streams (invariant
-        // #3) — so is everything extra we derive here, via the same reducer
+        // #3) - so is everything extra we derive here, via the same reducer
         // the live grid uses.
         const chaosEvents = await fetchAllEvents(activeRunId);
         let controlSurvival: number | null = null;

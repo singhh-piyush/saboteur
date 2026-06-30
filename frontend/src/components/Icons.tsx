@@ -1,4 +1,4 @@
-/** Minimal inline SVG glyph set — no emoji, no icon library. */
+/** Minimal inline SVG glyph set - no emoji, no icon library. */
 
 import type { CSSProperties } from "react";
 
@@ -120,7 +120,7 @@ export function SkipIcon({ size = 12, className, style }: IconProps) {
   );
 }
 
-/** Filled circle — healthy / nominal status. */
+/** Filled circle - healthy / nominal status. */
 export function CircleIcon({ size = 12, className, style }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" className={className} style={style} aria-hidden>
@@ -129,7 +129,7 @@ export function CircleIcon({ size = 12, className, style }: IconProps) {
   );
 }
 
-/** Dashed circle — pending / standby status. */
+/** Dashed circle - pending / standby status. */
 export function DashedCircleIcon({ size = 12, className, style }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeDasharray="3 2.5" className={className} style={style} aria-hidden>

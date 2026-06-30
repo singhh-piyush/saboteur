@@ -1,0 +1,85 @@
+{
+  "run_id": "flaky_friday-20260629T235132-627847",
+  "profile": "flaky_friday",
+  "n_agents": 8,
+  "mttr_steps": null,
+  "recovery_breakdown": {},
+  "waste_factor": null,
+  "failure_modes": {
+    "hard_exception": 8
+  },
+  "crash_rate": 1.0,
+  "latency_degradation": 0.8568733428318984,
+  "survival_rate": 0.0,
+  "survival_rate_reason": null,
+  "deception_detection_rate": null,
+  "deception_detection_rate_reason": "no_deception_probe",
+  "oracle": "builtin_reference",
+  "control_run_id": "flaky_friday-20260629T235132-627847-control",
+  "per_agent": {
+    "5": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "3": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "2": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "7": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "4": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "0": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "6": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    },
+    "1": {
+      "outcome": "hard_exception",
+      "success": false,
+      "tokens_used": 0,
+      "steps_taken": 1,
+      "faults": [],
+      "recoveries": []
+    }
+  }
+}

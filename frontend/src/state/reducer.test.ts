@@ -1,7 +1,7 @@
 /**
  * Invariant #3, literally tested: the dashboard is a pure function of the
  * event stream, so replaying a recorded JSONL must produce *identical* view
- * state to live streaming — at every single event index, not just at the
+ * state to live streaming - at every single event index, not just at the
  * end. The fixture is a real, unedited event log from an accepted N=8 run.
  */
 
@@ -114,7 +114,7 @@ describe("idempotent event deduplication", () => {
     }
     const after = state;
 
-    // Replay the same events — should get identical state back.
+    // Replay the same events - should get identical state back.
     for (const event of events) {
       const next = reduce(state, { type: "event", event });
       // Duplicate events should return the SAME state reference.
@@ -148,7 +148,7 @@ describe("idempotent event deduplication", () => {
     const seqAfterFirst = state.agents[0]?.seq ?? 0;
 
     // Simulate reconnect: DON'T reset (to test dedup without reset).
-    // Re-send all events — they should all be skipped.
+    // Re-send all events - they should all be skipped.
     for (const e of events) {
       const next = reduce(state, { type: "event", event: e });
       expect(next).toBe(state); // same reference = no re-render
@@ -247,7 +247,7 @@ describe("agent status transitions", () => {
       ]).agents[0];
 
     // Honesty (invariant #4): unjudged + ran to completion → neutral "done"
-    // (NOT green "succeeded" — we never fabricate an oracle verdict); success
+    // (NOT green "succeeded" - we never fabricate an oracle verdict); success
     // stays null so survivalRate stays null (matches the scorecard).
     const completed = doneNull("completed");
     expect(completed.status).toBe("done");

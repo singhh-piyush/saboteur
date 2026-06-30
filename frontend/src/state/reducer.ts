@@ -1,6 +1,6 @@
 /**
  * The event-sourced core (invariant #3): one pure reducer consumes
- * TelemetryEvents — from the live WebSocket or from a replayed JSONL — and
+ * TelemetryEvents - from the live WebSocket or from a replayed JSONL - and
  * derives ALL view state. Live and replay are indistinguishable by
  * construction: same events in, same state out (literally tested in
  * reducer.test.ts).
@@ -23,14 +23,14 @@ export type AgentStatus =
   | "recovering" // fault seen, not yet resolved
   | "crashed" // agent_crashed, agent_done success=false, or a no-oracle behavioral failure
   | "succeeded" // agent_done success=true (an oracle judged it a pass)
-  | "done"; // agent_done success=null (no oracle) + ran to completion — neither pass nor fail
+  | "done"; // agent_done success=null (no oracle) + ran to completion - neither pass nor fail
 
 export type ConnStatus =
   | "idle"
   | "connecting"
   | "live"
   | "reconnecting"
-  | "complete"  // stream finished cleanly — no reconnect
+  | "complete"  // stream finished cleanly - no reconnect
   | "offline"   // max retries exhausted
   | "replay";
 
@@ -46,7 +46,7 @@ export interface AgentState {
   outcome: string | null;
   success: boolean | null;
   tokensUsed: number | null;
-  /** Bumps on every visible state change — keys the cell pulse animation. */
+  /** Bumps on every visible state change - keys the cell pulse animation. */
   seq: number;
   /** Full per-agent event trace, in arrival order (timeline drawer). */
   events: TelemetryEvent[];
@@ -143,7 +143,7 @@ function applyEvent(state: RunViewState, ev: TelemetryEvent): RunViewState {
   // --- Idempotency: deduplicate by event identity ---
   const id = eventIdentity(ev);
   if (state._seen.has(id)) {
-    // Already processed — return the SAME reference so React skips re-render.
+    // Already processed - return the SAME reference so React skips re-render.
     return state;
   }
   // Mutating the set is safe: we always spread into a new state object below,
@@ -247,7 +247,7 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
     case "recovery_action":
       // `no_action` is a stall (no tool call / parse failure), not a
       // productive recovery: don't count it, don't clear the fault, and leave
-      // the agent in `recovering` — it hasn't actually recovered yet.
+      // the agent in `recovering` - it hasn't actually recovered yet.
       if (ev.recovery === "no_action") break;
       agent.recoveryCount = prev.recoveryCount + 1;
       agent.activeFault = null;
@@ -259,7 +259,7 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
       // null ⇒ the run finished but no oracle judged it (BYO without an oracle).
       // Honesty (invariant #4): never fabricate a verdict. success stays null and
       // the cell renders a NEUTRAL "done" (not green "succeeded") when it merely
-      // ran to completion — a real behavioral failure (timeout / hard_exception)
+      // ran to completion - a real behavioral failure (timeout / hard_exception)
       // still goes red. An oracle verdict colors green/red as before.
       const success = raw === true ? true : raw === false ? false : null;
       agent.outcome = asString(ev.payload["outcome"]);

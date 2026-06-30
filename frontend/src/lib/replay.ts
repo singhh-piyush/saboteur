@@ -1,5 +1,5 @@
 /**
- * ReplayDriver — re-drives the SAME reducer with a recorded event array.
+ * ReplayDriver - re-drives the SAME reducer with a recorded event array.
  *
  * Replay and live are identical by construction: both paths dispatch
  * `{type:"reset"}` followed by `{type:"event"}` actions in event order; the

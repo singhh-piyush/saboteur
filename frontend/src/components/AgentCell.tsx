@@ -170,7 +170,7 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
   prev.selected === next.selected
 );
 
-/** Color + icon glyph — never color alone (accessibility). */
+/** Color + icon glyph - never color alone (accessibility). */
 function StatusGlyph({
   status,
   color,

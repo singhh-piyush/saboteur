@@ -9,10 +9,10 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/* Saboteur design tokens — "flight-ops console"                       */
+/* Saboteur design tokens - "flight-ops console"                       */
 /* ------------------------------------------------------------------ */
 @theme {
-  --color-void: #000000; /* pure black page background — cards float on it */
+  --color-void: #000000; /* pure black page background - cards float on it */
   --color-panel: #0b0d11; /* raised blue-black card surface (visibly above void) */
   --color-raised: #161a21; /* hover / inputs / second-level raised surface */
   --color-line: oklch(100% 0 0 / 12%); /* card + divider borders (visible) */
@@ -26,13 +26,13 @@
   --color-ink-dim: #bcc4d4; /* secondary text - WCAG AA */
   --color-ink-faint: #8c95a8; /* tertiary / labels - WCAG AA decorative */
 
-  --color-ok: #3fd68f; /* healthy — emerald */
-  --color-warn: #f5b73d; /* recovering — amber */
-  --color-crit: #f4504a; /* crashed — signal red */
-  --color-win: #8fd7f7; /* succeeded — ice cyan */
-  --color-accent: #ff5c1f; /* chaos / CTA — signal orange */
+  --color-ok: #3fd68f; /* healthy - emerald */
+  --color-warn: #f5b73d; /* recovering - amber */
+  --color-crit: #f4504a; /* crashed - signal red */
+  --color-win: #8fd7f7; /* succeeded - ice cyan */
+  --color-accent: #ff5c1f; /* chaos / CTA - signal orange */
 
-  /* Big Shoulders is condensed signage type — wordmark ONLY. It is hard
+  /* Big Shoulders is condensed signage type - wordmark ONLY. It is hard
      to read at UI sizes, so headers/tabs/buttons use Instrument Sans. */
   --font-brand: "Big Shoulders Display", sans-serif;
   --font-display: "Instrument Sans", system-ui, sans-serif;
@@ -84,7 +84,7 @@ body::before {
   animation: state-flash 0.6s cubic-bezier(0.2, 0.6, 0.3, 1) 1;
 }
 
-/* Slow breathing dot ONLY for the LIVE badge — never on idle cells. */
+/* Slow breathing dot ONLY for the LIVE badge - never on idle cells. */
 @keyframes breathe {
   0%,
   100% {
@@ -147,7 +147,7 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
-/* Agent cell state transitions — CSS, not React remounting.           */
+/* Agent cell state transitions - CSS, not React remounting.           */
 /* ------------------------------------------------------------------ */
 
 .agent-cell {
@@ -179,7 +179,7 @@ body::before {
   transition: opacity 200ms ease;
 }
 
-/* Portal tooltip entrance (position:fixed — can't use group-hover) */
+/* Portal tooltip entrance (position:fixed - can't use group-hover) */
 @keyframes tooltip-in {
   from {
     opacity: 0;
@@ -194,7 +194,7 @@ body::before {
   animation: tooltip-in 0.15s ease-out 1;
 }
 
-/* Grid card entrance — staggered via inline animation-delay on each cell */
+/* Grid card entrance - staggered via inline animation-delay on each cell */
 @keyframes card-in {
   from {
     opacity: 0;
@@ -211,7 +211,7 @@ body::before {
 /* ------------------------------------------------------------------ */
 
 /* Performance: per-cell layout/style isolation at 50-agent scale.
-   NOT content-visibility — its implied PAINT containment clips the hover
+   NOT content-visibility - its implied PAINT containment clips the hover
    lift (translateY) and glow shadow at the wrapper's own box, which made
    hover effects invisible. `contain: layout style` keeps the isolation
    win without clipping painted overflow. */
@@ -220,7 +220,7 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
-/* Form controls — themed to match the dark ops aesthetic              */
+/* Form controls - themed to match the dark ops aesthetic              */
 /* ------------------------------------------------------------------ */
 
 /* Shared: hide native number spinners */
@@ -263,7 +263,7 @@ input[type="number"] {
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-accent) 30%, transparent);
 }
 
-/* Custom select — hide native arrow, inject themed chevron */
+/* Custom select - hide native arrow, inject themed chevron */
 .sb-select {
   appearance: none;
   -webkit-appearance: none;

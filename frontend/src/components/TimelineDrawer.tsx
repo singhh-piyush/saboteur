@@ -12,7 +12,7 @@ const RECOVERY_TIP: Record<string, string> = {
   retry: "Repeated the same tool call after a fault",
   reformulate: "Retried the same tool with different arguments",
   fallback_tool: "Switched to an alternative tool after the primary failed",
-  no_action: "Emitted no tool call (stall / parse failure) — not a recovery",
+  no_action: "Emitted no tool call (stall / parse failure) - not a recovery",
   gave_up: "Stopped attempting recovery for this fault",
 };
 
@@ -199,7 +199,7 @@ function TimelineEntry({ ev }: { ev: TelemetryEvent }) {
     case "recovery_action": {
       const kind = ev.recovery ?? "unknown";
       const after = ev.payload["after_fault"];
-      // A no_action stall is not a productive recovery — render it neutrally
+      // A no_action stall is not a productive recovery - render it neutrally
       // so it doesn't read as a green "win" in the timeline.
       const stalled = kind === "no_action";
       return (

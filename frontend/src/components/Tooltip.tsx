@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
-  /** Tooltip content — plain text or JSX */
+  /** Tooltip content - plain text or JSX */
   label: React.ReactNode;
   /** Which side of the trigger the tooltip appears on (default: "top") */
   side?: "top" | "bottom";
@@ -24,7 +24,7 @@ const CARD_CLS =
  * Lightweight tooltip with two modes:
  * - default: CSS-only via Tailwind group-hover (no JS state)
  * - portal:  measured on mouseenter, rendered into document.body with
- *   position:fixed — immune to ancestor overflow clipping
+ *   position:fixed - immune to ancestor overflow clipping
  */
 export function Tooltip({ label, side = "top", className = "", portal = false, children }: TooltipProps) {
   if (portal) {

@@ -21,7 +21,7 @@ export function RunBar() {
   const counts = runCounts(state);
 
   // Only show a survival % when at least one agent carries a real oracle verdict.
-  // A no-oracle run (success===null) has no survival rate — show "-", never a
+  // A no-oracle run (success===null) has no survival rate - show "-", never a
   // fabricated 0% or 100% (honesty, invariant #4; matches the scorecard's null).
   const hasVerdict = Object.values(state.agents).some((a) => a.success !== null);
   const survival = hasVerdict ? (counts.succeeded / counts.total) * 100 : null;

@@ -98,7 +98,7 @@ export function ComparePage({
               </div>
             ) : (
               <div className="rounded-sm border border-ok/40 bg-ok/10 px-3 py-2 text-sm font-medium text-ok">
-                No regressions — Run B holds or improves on every comparable metric.
+                No regressions - Run B holds or improves on every comparable metric.
               </div>
             )}
 

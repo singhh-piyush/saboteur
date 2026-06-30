@@ -1,6 +1,6 @@
 /**
  * Pure projections over RunViewState for the views. No component derives
- * data any other way — everything is a function of the event-sourced state.
+ * data any other way - everything is a function of the event-sourced state.
  */
 
 import type { AgentState, RunViewState, TerminalMark } from "./reducer";
@@ -88,7 +88,7 @@ export function totalTokens(state: RunViewState): number {
 }
 
 /** Survival rate over all agents (oracle success). Returns null when no agent
- * carries a real verdict (success !== null) — a no-oracle run has no survival
+ * carries a real verdict (success !== null) - a no-oracle run has no survival
  * rate (honesty, invariant #4), never a fabricated 0%. */
 export function survivalRate(state: RunViewState): number | null {
   const agents = Object.values(state.agents);

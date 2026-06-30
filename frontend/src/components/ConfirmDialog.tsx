@@ -12,7 +12,7 @@ interface ConfirmDialogProps {
 
 /**
  * Native <dialog> confirm component. Uses showModal() for proper focus
- * trapping and backdrop. Baseline since 2022 — no polyfill needed.
+ * trapping and backdrop. Baseline since 2022 - no polyfill needed.
  */
 export function ConfirmDialog({
   open,
