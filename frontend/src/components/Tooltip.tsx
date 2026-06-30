@@ -1,5 +1,27 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+/**
+ * When true, tooltips are suppressed for everything inside this provider's subtree.
+ * Used by the walkthrough so hovering dimmed/greyed-out elements under the tour
+ * spotlight doesn't pop tooltips over the demo. Default false - the live console
+ * renders tooltips normally.
+ */
+const TooltipSuppressionContext = createContext(false);
+
+export function TooltipSuppression({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <TooltipSuppressionContext.Provider value={active}>
+      {children}
+    </TooltipSuppressionContext.Provider>
+  );
+}
 
 interface TooltipProps {
   /** Tooltip content - plain text or JSX */
@@ -27,9 +49,11 @@ const CARD_CLS =
  *   position:fixed - immune to ancestor overflow clipping
  */
 export function Tooltip({ label, side = "top", className = "", portal = false, children }: TooltipProps) {
+  const suppressed = useContext(TooltipSuppressionContext);
+
   if (portal) {
     return (
-      <PortalTooltip label={label} side={side} className={className}>
+      <PortalTooltip label={label} side={side} className={className} suppressed={suppressed}>
         {children}
       </PortalTooltip>
     );
@@ -41,32 +65,34 @@ export function Tooltip({ label, side = "top", className = "", portal = false, c
     <div className={`relative group ${className}`}>
       {children}
 
-      {/* Tooltip card */}
-      <div
-        aria-hidden
-        className={[
-          "pointer-events-none absolute left-1/2 -translate-x-1/2 z-[200]",
-          "w-max max-w-[230px]",
-          /* fade + slide in */
-          "opacity-0 translate-y-1",
-          "group-hover:opacity-100 group-hover:translate-y-0",
-          "transition-all duration-150 ease-out",
-          isTop ? "bottom-full mb-2" : "top-full mt-2",
-        ].join(" ")}
-      >
-        {/* Card */}
-        <div className={`relative ${CARD_CLS}`}>{label}</div>
-
-        {/* Caret */}
+      {/* Tooltip card (omitted entirely while suppressed - e.g. during the tour) */}
+      {!suppressed && (
         <div
+          aria-hidden
           className={[
-            "absolute left-1/2 -translate-x-1/2 h-1.5 w-1.5 rotate-45 bg-raised border border-line-strong",
-            isTop
-              ? "-bottom-[3px] border-t-0 border-l-0"
-              : "-top-[3px] border-b-0 border-r-0",
+            "pointer-events-none absolute left-1/2 -translate-x-1/2 z-[200]",
+            "w-max max-w-[230px]",
+            /* fade + slide in */
+            "opacity-0 translate-y-1",
+            "group-hover:opacity-100 group-hover:translate-y-0",
+            "transition-all duration-150 ease-out",
+            isTop ? "bottom-full mb-2" : "top-full mt-2",
           ].join(" ")}
-        />
-      </div>
+        >
+          {/* Card */}
+          <div className={`relative ${CARD_CLS}`}>{label}</div>
+
+          {/* Caret */}
+          <div
+            className={[
+              "absolute left-1/2 -translate-x-1/2 h-1.5 w-1.5 rotate-45 bg-raised border border-line-strong",
+              isTop
+                ? "-bottom-[3px] border-t-0 border-l-0"
+                : "-top-[3px] border-b-0 border-r-0",
+            ].join(" ")}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -77,14 +103,17 @@ function PortalTooltip({
   label,
   side,
   className,
+  suppressed,
   children,
 }: Required<Pick<TooltipProps, "label" | "side" | "className">> & {
+  suppressed: boolean;
   children: React.ReactNode;
 }) {
   const triggerRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number; top: boolean } | null>(null);
 
   const show = useCallback(() => {
+    if (suppressed) return;
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -97,7 +126,7 @@ function PortalTooltip({
       y: top ? rect.top - GAP : rect.bottom + GAP,
       top,
     });
-  }, [side]);
+  }, [side, suppressed]);
 
   const hide = useCallback(() => setPos(null), []);
 
@@ -110,7 +139,8 @@ function PortalTooltip({
       onMouseDown={hide}
     >
       {children}
-      {pos !== null &&
+      {!suppressed &&
+        pos !== null &&
         createPortal(
           <div
             aria-hidden

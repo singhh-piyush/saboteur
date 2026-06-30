@@ -221,18 +221,19 @@ function Shell() {
           )}
         </main>
 
-        {/* Timeline drawer card - width animates so the grid reflows smoothly.
-            Content stays mounted (lastAgent) during the close transition. */}
+        {/* Timeline drawer - slides in over the grid via transform (GPU-composited),
+            so the cohort grid never reflows on open/close. Full-screen on mobile,
+            right-side panel on desktop. Content stays mounted (lastAgent) during the
+            close slide. */}
         <div
-          className={`shrink-0 overflow-hidden transition-[width] duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] ${
-            drawerOpen ? "w-[20.5rem] xl:w-[23rem]" : "w-0"
+          className={`absolute inset-y-0 right-0 z-30 w-[20.5rem] pl-2 xl:w-[23rem] max-sm:inset-0 max-sm:w-full max-sm:pl-0 transition-transform duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] will-change-transform ${
+            drawerOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
           }`}
         >
-          <div className="h-full pl-2">
+          <div className="h-full">
             {drawerAgent !== null && state.agents[drawerAgent] && page.kind === "live" && (
               <TimelineDrawer
                 agentId={drawerAgent}
-                open={drawerOpen}
                 onClose={() => setSelectedAgent(null)}
               />
             )}

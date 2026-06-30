@@ -233,6 +233,88 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
+/* Cyberpunk glitch - the intro wordmark reveal. The word sits clean    */
+/* most of the time, then bursts: two chromatic-split copies (accent    */
+/* orange / ice cyan) are clipped to thin slices that snap to new bands */
+/* and jump sideways (step-end = discrete digital cuts, not a smooth    */
+/* slide), while the base jolts/skews and flickers. Bursts are spaced   */
+/* with calm gaps so it reads as a real, deliberate glitch. Globally    */
+/* disabled under prefers-reduced-motion by the block below.            */
+/* ------------------------------------------------------------------ */
+.glitch {
+  position: relative;
+  display: inline-block;
+  color: var(--color-ink);
+  text-shadow: 0 0 24px color-mix(in oklch, var(--color-accent) 35%, transparent);
+  animation:
+    glitch-jolt 4.2s step-end infinite,
+    glitch-flicker 5.3s steps(1, end) infinite;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  background: var(--color-void);
+  pointer-events: none;
+  clip-path: inset(0 0 100% 0); /* hidden until a burst reveals a slice */
+}
+.glitch::before {
+  color: var(--color-accent);
+  text-shadow: 0 0 6px color-mix(in oklch, var(--color-accent) 60%, transparent);
+  animation: glitch-burst-a 4.2s step-end infinite;
+}
+.glitch::after {
+  color: var(--color-win);
+  text-shadow: 0 0 6px color-mix(in oklch, var(--color-win) 60%, transparent);
+  animation: glitch-burst-b 3.3s step-end infinite;
+}
+@keyframes glitch-burst-a {
+  0%, 6% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  7% { clip-path: inset(18% 0 62% 0); transform: translateX(-8px); }
+  9% { clip-path: inset(66% 0 10% 0); transform: translateX(6px); }
+  10% { clip-path: inset(40% 0 38% 0); transform: translateX(-4px); }
+  12%, 32% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  33% { clip-path: inset(8% 0 80% 0); transform: translateX(9px); }
+  35% { clip-path: inset(48% 0 30% 0); transform: translateX(-7px); }
+  37%, 65% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  66% { clip-path: inset(74% 0 8% 0); transform: translateX(-9px); }
+  68% { clip-path: inset(28% 0 54% 0); transform: translateX(5px); }
+  70%, 100% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+}
+@keyframes glitch-burst-b {
+  0%, 15% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  16% { clip-path: inset(55% 0 24% 0); transform: translateX(8px); }
+  18% { clip-path: inset(22% 0 64% 0); transform: translateX(-9px); }
+  20%, 49% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  50% { clip-path: inset(80% 0 6% 0); transform: translateX(-7px); }
+  52% { clip-path: inset(34% 0 44% 0); transform: translateX(9px); }
+  54%, 84% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+  85% { clip-path: inset(12% 0 74% 0); transform: translateX(7px); }
+  88% { clip-path: inset(60% 0 18% 0); transform: translateX(-8px); }
+  90%, 100% { clip-path: inset(0 0 100% 0); transform: translateX(0); }
+}
+@keyframes glitch-jolt {
+  0%, 6% { transform: translate(0, 0) skewX(0deg); }
+  7% { transform: translate(3px, -1px) skewX(-3deg); }
+  9% { transform: translate(-3px, 1px) skewX(2deg); }
+  11%, 32% { transform: translate(0, 0) skewX(0deg); }
+  33% { transform: translate(-3px, 0) skewX(3deg); }
+  36%, 65% { transform: translate(0, 0) skewX(0deg); }
+  66% { transform: translate(3px, 0) skewX(-2deg); }
+  69%, 100% { transform: translate(0, 0) skewX(0deg); }
+}
+@keyframes glitch-flicker {
+  0%, 100% { opacity: 1; }
+  7% { opacity: 0.55; }
+  10% { opacity: 1; }
+  34% { opacity: 0.7; }
+  36% { opacity: 1; }
+  67% { opacity: 0.5; }
+  70% { opacity: 1; }
+}
+
+/* ------------------------------------------------------------------ */
 /* Responsive breakpoints                                              */
 /* ------------------------------------------------------------------ */
 

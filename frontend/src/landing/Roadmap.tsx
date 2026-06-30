@@ -1,4 +1,4 @@
-import { Eyebrow, Heading, Reveal, Section, useRevealProps } from "./parts";
+import { CARD_HOVER, Eyebrow, Heading, Reveal, Section, useRevealProps } from "./parts";
 
 type Stage = "now" | "next" | "later";
 
@@ -38,7 +38,7 @@ function RoadmapItem({ item, delay }: { item: (typeof ITEMS)[number]; delay: num
   return (
     <li
       {...rest}
-      className={`${className} flex items-start gap-4 rounded-lg border border-line bg-panel p-5`}
+      className={`${className} ${CARD_HOVER} flex items-start gap-4 rounded-lg border border-line bg-panel p-5`}
     >
       <span
         className="mt-1 inline-flex shrink-0 items-center rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest"

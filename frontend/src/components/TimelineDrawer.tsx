@@ -26,12 +26,10 @@ const OUTCOME_TIP: Record<string, string> = {
 
 interface Props {
   agentId: number;
-  /** Drives the mobile slide-in; desktop width is animated by the parent wrapper. */
-  open: boolean;
   onClose: () => void;
 }
 
-export function TimelineDrawer({ agentId, open, onClose }: Props) {
+export function TimelineDrawer({ agentId, onClose }: Props) {
   const { state } = useRun();
   const agent = state.agents[agentId];
 
@@ -52,9 +50,7 @@ export function TimelineDrawer({ agentId, open, onClose }: Props) {
 
   return (
     <aside
-      className={`flex h-full w-80 shrink-0 flex-col rounded-lg border border-line bg-panel max-sm:fixed max-sm:inset-0 max-sm:z-40 max-sm:w-full max-sm:rounded-none max-sm:transition-transform max-sm:duration-[280ms] max-sm:ease-out xl:w-90 ${
-        open ? "max-sm:translate-x-0" : "max-sm:translate-x-full"
-      }`}
+      className="flex h-full w-full flex-col rounded-lg border border-line bg-panel shadow-[-16px_0_48px_-16px_rgb(0_0_0/60%)] max-sm:rounded-none"
     >
       <PanelHeader
         title={`${agentLabel(agent.id)} TRACE`}

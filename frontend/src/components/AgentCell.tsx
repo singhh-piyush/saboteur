@@ -1,9 +1,10 @@
 import React from "react";
+import { Activity, Circle, CircleDashed, Flag, RefreshCw, X } from "lucide-react";
 
 import type { AgentState } from "../state/reducer";
 import { agentLabel } from "../lib/format";
 import { faultStyle } from "../lib/faults";
-import { BoltIcon, CircleIcon, CrossIcon, DashedCircleIcon, EyeIcon, FlagIcon, LoopIcon } from "./Icons";
+import { BoltIcon, EyeIcon } from "./Icons";
 import { Tooltip } from "./Tooltip";
 
 const STATUS_COLOR: Record<AgentState["status"], string> = {
@@ -170,7 +171,8 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
   prev.selected === next.selected
 );
 
-/** Color + icon glyph - never color alone (accessibility). */
+/** Color + icon glyph - never color alone (accessibility). Same lucide icon set as
+ * the landing cohort preview (HeroGrid). */
 function StatusGlyph({
   status,
   color,
@@ -178,19 +180,25 @@ function StatusGlyph({
   status: AgentState["status"];
   color: string;
 }) {
+  const props = {
+    size: 14,
+    strokeWidth: 2,
+    className: "shrink-0 transition-colors duration-200",
+    style: { color },
+  } as const;
   switch (status) {
     case "succeeded":
-      return <FlagIcon size={14} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+      return <Flag {...props} />;
     case "done":
-      return <CircleIcon size={12} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+      return <Circle {...props} />;
     case "crashed":
-      return <CrossIcon size={13} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+      return <X {...props} />;
     case "recovering":
-      return <LoopIcon size={13} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+      return <RefreshCw {...props} />;
     case "healthy":
-      return <CircleIcon size={12} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+      return <Activity {...props} />;
     case "pending":
     default:
-      return <DashedCircleIcon size={12} className="shrink-0 transition-colors duration-200" style={{ color }} />;
+      return <CircleDashed {...props} />;
   }
 }

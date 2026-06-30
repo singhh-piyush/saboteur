@@ -191,9 +191,17 @@ export function Lede({ children, className = "" }: { children: ReactNode; classN
   );
 }
 
+/**
+ * Shared card hover treatment: the border turns accent orange with a soft orange
+ * glow. Border-color + box-shadow only (no transform) so it is safe even on the
+ * scroll-reveal elements that already drive their own transform.
+ */
+export const CARD_HOVER =
+  "transition-[border-color,box-shadow] duration-200 hover:border-accent hover:shadow-[0_0_28px_-6px_color-mix(in_oklch,var(--color-accent)_40%,transparent)]";
+
 /** A floating panel card - the UI-v3 modular look (border-line + bg-panel). */
 export function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-lg border border-line bg-panel ${className}`}>{children}</div>;
+  return <div className={`rounded-lg border border-line bg-panel ${CARD_HOVER} ${className}`}>{children}</div>;
 }
 
 /** The SABOTEUR wordmark - `font-brand` only, with the console's accent glow. */

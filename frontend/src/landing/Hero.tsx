@@ -1,6 +1,6 @@
 import { ArrowRight, Play } from "lucide-react";
 
-import { Container, CTAButton, Wordmark } from "./parts";
+import { CARD_HOVER, Container, CTAButton, Wordmark } from "./parts";
 import { HeroGrid } from "./HeroGrid";
 
 export function Hero({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () => void }) {
@@ -34,7 +34,7 @@ export function Hero({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () 
 
         {/* Live-feeling product preview */}
         <div
-          className="rounded-lg border border-line bg-panel p-3 sm:p-4"
+          className={`rounded-lg border border-line bg-panel p-3 sm:p-4 ${CARD_HOVER}`}
           style={{ animation: "card-in 0.5s ease-out 120ms backwards" }}
         >
           <div className="mb-3 flex items-center justify-between px-1">

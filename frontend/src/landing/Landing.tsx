@@ -9,10 +9,12 @@
  * owns its own scroll container.
  */
 
+import { useState } from "react";
 import { Play } from "lucide-react";
 
 import { CTAButton, scrollToId, Wordmark } from "./parts";
 import { Hero } from "./Hero";
+import { Intro, introShouldSkip } from "./Intro";
 import { ProblemSection } from "./ProblemSection";
 import { HowItWorks } from "./HowItWorks";
 import { FaultTaxonomy } from "./FaultTaxonomy";
@@ -27,8 +29,10 @@ const NAV: { id: string; label: string }[] = [
 ];
 
 export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () => void }) {
+  const [introDone, setIntroDone] = useState(introShouldSkip);
   return (
     <div className="h-screen overflow-y-auto scroll-smooth bg-void text-ink">
+      {!introDone && <Intro onDone={() => setIntroDone(true)} />}
       {/* Sticky top bar - wordmark + CTAs, mirroring the console header. */}
       <div className="sticky top-0 z-30 border-b border-line bg-void/85 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-5 py-3 sm:px-8">

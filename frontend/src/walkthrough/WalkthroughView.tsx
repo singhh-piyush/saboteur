@@ -18,6 +18,7 @@ import { PanelHeader } from "../components/PanelHeader";
 import { RunBar } from "../components/RunBar";
 import { ScorecardView } from "../components/ScorecardView";
 import { TimelineDrawer } from "../components/TimelineDrawer";
+import { TooltipSuppression } from "../components/Tooltip";
 import { useRun } from "../state/RunContext";
 import { DEMO_RUN } from "../demo";
 import { Playbar } from "./Playbar";
@@ -58,6 +59,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
 
   const drawerAgent = selectedAgent ?? lastAgent;
   const drawerOpen = selectedAgent !== null && state.agents[selectedAgent] !== undefined;
+  const tourActive = tourMode === "tour";
 
   const exitTour = () => {
     setTourMode("free");
@@ -69,6 +71,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
   };
 
   return (
+    <TooltipSuppression active={tourMode === "tour"}>
     <div className="flex h-screen flex-col gap-2 bg-void p-2">
       {/* Header */}
       <header
@@ -212,16 +215,28 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
           </div>
         </main>
 
-        {/* Timeline drawer */}
+        {/* Timeline drawer - over the grid (no grid reflow). In free mode it slides
+            in via transform. During the guided tour it instead snaps to its final
+            position and fades in (transition-opacity only, no transform transition):
+            a slide-in would move the drawer's rect across the screen, and the tour
+            spotlight would try to chase it - so the outline appeared to dart off and
+            come back. A fixed-position fade gives the spotlight a stable target to
+            glide to in one clean motion. */}
         <div
           data-tour="timeline"
-          className={`shrink-0 overflow-hidden transition-[width] duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] ${
-            drawerOpen ? "w-[20.5rem] xl:w-[23rem]" : "w-0"
+          className={`absolute inset-y-0 right-0 z-30 w-[20.5rem] pl-2 xl:w-[23rem] max-sm:inset-0 max-sm:w-full max-sm:pl-0 will-change-transform ${
+            tourActive
+              ? `transition-opacity duration-300 ease-out ${
+                  drawerOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
+                }`
+              : `transition-transform duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] ${
+                  drawerOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
+                }`
           }`}
         >
-          <div className="h-full pl-2">
+          <div className="h-full">
             {drawerAgent !== null && state.agents[drawerAgent] && (
-              <TimelineDrawer agentId={drawerAgent} open={drawerOpen} onClose={() => setSelectedAgent(null)} />
+              <TimelineDrawer agentId={drawerAgent} onClose={() => setSelectedAgent(null)} />
             )}
           </div>
         </div>
@@ -239,6 +254,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
         setTab={setTab}
       />
     </div>
+    </TooltipSuppression>
   );
 }
 
