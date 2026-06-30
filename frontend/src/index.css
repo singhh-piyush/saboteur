@@ -382,6 +382,74 @@ input[type="number"] {
   cursor: pointer;
 }
 
+/* Replay scrubber - a thin track with a slim cyan "playhead" bar (not the
+   default OS circle). The filled portion comes from a gradient driven by the
+   inline --sb-pct var (WebKit) / ::-moz-range-progress (Firefox). The input is
+   taller than the visible track to keep a comfortable grab/hit area. */
+.sb-scrubber {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+.sb-scrubber::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-win) 0%,
+    var(--color-win) var(--sb-pct, 0%),
+    var(--color-line-strong) var(--sb-pct, 0%),
+    var(--color-line-strong) 100%
+  );
+}
+.sb-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 5px;
+  height: 15px;
+  margin-top: -5.5px; /* center the 15px bar on the 4px track */
+  border-radius: 2px;
+  background: var(--color-win);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--color-win) 55%, transparent);
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+.sb-scrubber:hover::-webkit-slider-thumb,
+.sb-scrubber:active::-webkit-slider-thumb {
+  transform: scaleY(1.25);
+  box-shadow: 0 0 13px color-mix(in oklch, var(--color-win) 80%, transparent);
+}
+.sb-scrubber:focus-visible {
+  outline: none;
+}
+.sb-scrubber:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in oklch, var(--color-win) 35%, transparent),
+    0 0 13px color-mix(in oklch, var(--color-win) 70%, transparent);
+}
+/* Firefox */
+.sb-scrubber::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-line-strong);
+}
+.sb-scrubber::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-win);
+}
+.sb-scrubber::-moz-range-thumb {
+  width: 5px;
+  height: 15px;
+  border: none;
+  border-radius: 2px;
+  background: var(--color-win);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--color-win) 55%, transparent);
+}
+
 /* ------------------------------------------------------------------ */
 /* prefers-reduced-motion: respect OS setting                          */
 /* ------------------------------------------------------------------ */

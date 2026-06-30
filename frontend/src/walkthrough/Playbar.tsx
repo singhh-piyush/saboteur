@@ -60,8 +60,8 @@ export function Playbar({ onReplayTour, showReplayTour }: PlaybarProps) {
         max={length}
         value={Math.min(position, length)}
         onChange={(e) => seek(Number(e.target.value))}
-        className="h-1.5 min-w-[120px] flex-1 cursor-pointer"
-        style={{ accentColor: "var(--color-win)" }}
+        className="sb-scrubber min-w-[120px] flex-1"
+        style={{ ["--sb-pct" as string]: `${length > 0 ? (Math.min(position, length) / length) * 100 : 0}%` }}
         aria-label="Seek"
       />
 

@@ -25,8 +25,10 @@ interface TourOverlayProps {
   active: boolean;
   beatIndex: number;
   onSetBeat: (index: number) => void;
-  /** Leave the tour: drop into interactive free mode (and resume playback). */
+  /** Skip the tour: drop into interactive free mode (and resume playback). */
   onExitTour: () => void;
+  /** Complete the tour (Finish / advance past the last beat): restart the replay. */
+  onFinishTour: () => void;
   /** Navigate back to the marketing landing page. */
   onExitToLanding: () => void;
   /** Current agent selection - used to detect the interactive reveal click. */
@@ -52,6 +54,7 @@ export function TourOverlay({
   beatIndex,
   onSetBeat,
   onExitTour,
+  onFinishTour,
   onExitToLanding,
   selectedAgent,
   selectAgent,
@@ -94,9 +97,9 @@ export function TourOverlay({
   }, [active, beat, selectedAgent]);
 
   const next = useCallback(() => {
-    if (beatIndex >= total - 1) onExitTour();
+    if (beatIndex >= total - 1) onFinishTour();
     else onSetBeat(beatIndex + 1);
-  }, [beatIndex, total, onExitTour, onSetBeat]);
+  }, [beatIndex, total, onFinishTour, onSetBeat]);
 
   const back = useCallback(() => {
     if (beatIndex > 0) onSetBeat(beatIndex - 1);

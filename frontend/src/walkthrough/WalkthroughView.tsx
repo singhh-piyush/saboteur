@@ -40,7 +40,7 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
 
 function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const { state } = useRun();
-  const { play } = useWalkthrough();
+  const { play, setSpeed, restart } = useWalkthrough();
 
   const [tab, setTab] = useState<Tab>("grid");
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
@@ -64,6 +64,13 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const exitTour = () => {
     setTourMode("free");
     play();
+  };
+  // Finishing the tour (last beat -> Finish) drops into free mode and auto-plays the
+  // full replay from the very beginning at 2x.
+  const finishTour = () => {
+    setTourMode("free");
+    setSpeed(2);
+    restart(); // seeks to the start and plays
   };
   const replayTour = () => {
     setTourBeat(0);
@@ -248,6 +255,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
         beatIndex={tourBeat}
         onSetBeat={setTourBeat}
         onExitTour={exitTour}
+        onFinishTour={finishTour}
         onExitToLanding={onExit}
         selectedAgent={selectedAgent}
         selectAgent={selectAgent}
