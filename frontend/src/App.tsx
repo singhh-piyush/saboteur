@@ -13,6 +13,7 @@ import { ScorecardView } from "./components/ScorecardView";
 import { TargetsPage } from "./components/TargetsPage";
 import { TimelineDrawer } from "./components/TimelineDrawer";
 import { Landing } from "./landing/Landing";
+import { WalkthroughView } from "./walkthrough/WalkthroughView";
 import { RunProvider, useRun } from "./state/RunContext";
 
 type Tab = "grid" | "scorecard";
@@ -43,10 +44,20 @@ function Shell() {
     setSelectedAgent(id);
   };
 
+  // The static, backend-free demo walkthrough - its own top-level view.
+  if (page.kind === "walkthrough") {
+    return <WalkthroughView onExit={() => navigate({ kind: "landing" })} />;
+  }
+
   // The landing page is a chrome-less full-page marketing view. Launching the
   // console flips `page` in place (no reload) via the same hash router.
   if (page.kind === "landing") {
-    return <Landing onLaunch={() => navigate({ kind: "runs" })} />;
+    return (
+      <Landing
+        onLaunch={() => navigate({ kind: "runs" })}
+        onWatch={() => navigate({ kind: "walkthrough" })}
+      />
+    );
   }
 
   const drawerAgent = selectedAgent ?? lastAgent;

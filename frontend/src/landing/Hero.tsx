@@ -1,9 +1,9 @@
 import { ArrowRight, Play } from "lucide-react";
 
-import { Container, CTAButton, scrollToId, Wordmark } from "./parts";
+import { Container, CTAButton, Wordmark } from "./parts";
 import { HeroGrid } from "./HeroGrid";
 
-export function Hero({ onLaunch }: { onLaunch: () => void }) {
+export function Hero({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () => void }) {
   return (
     <header className="relative overflow-hidden border-b border-line">
       <Container className="grid items-center gap-12 py-20 sm:py-28 lg:grid-cols-2 lg:gap-10">
@@ -21,13 +21,13 @@ export function Hero({ onLaunch }: { onLaunch: () => void }) {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <CTAButton onClick={onLaunch}>
-              Launch Console
-              <ArrowRight size={16} />
-            </CTAButton>
-            <CTAButton onClick={() => scrollToId("how-it-works")} variant="ghost">
-              <Play size={14} />
+            <CTAButton onClick={onWatch}>
+              <Play size={15} />
               Watch the demo
+            </CTAButton>
+            <CTAButton onClick={onLaunch} variant="ghost">
+              Launch Console (local)
+              <ArrowRight size={16} />
             </CTAButton>
           </div>
         </div>

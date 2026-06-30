@@ -43,13 +43,14 @@ export interface ReplayControls {
 
 export type Page =
   | { kind: "landing" }
+  | { kind: "walkthrough" }
   | { kind: "runs" }
   | { kind: "live"; runId: string }
   | { kind: "targets" }
   | { kind: "profiles" }
   | { kind: "compare"; a?: string; b?: string };
 
-interface RunContextValue {
+export interface RunContextValue {
   state: RunViewState;
   /** The run id currently being watched or replayed. */
   activeRunId: string | null;
@@ -70,13 +71,16 @@ interface RunContextValue {
   reconnect: () => void;
 }
 
-const RunContext = createContext<RunContextValue | null>(null);
+/** Exported so the static WalkthroughProvider can supply a same-shaped value,
+ * letting the dashboard components consume it via `useRun()` unchanged. */
+export const RunContext = createContext<RunContextValue | null>(null);
 
 function parseHash(): Page {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [path, query] = raw.split("?");
   // Empty hash or #/landing → the marketing landing page (default front door).
   if (path === "" || path === "landing") return { kind: "landing" };
+  if (path === "walkthrough") return { kind: "walkthrough" };
   if (path.startsWith("live/")) {
     const runId = decodeURIComponent(path.slice(5));
     if (runId) return { kind: "live", runId };
@@ -98,6 +102,9 @@ function setHash(page: Page): void {
   switch (page.kind) {
     case "landing":
       window.location.hash = "#/landing";
+      break;
+    case "walkthrough":
+      window.location.hash = "#/walkthrough";
       break;
     case "runs":
       window.location.hash = "#/runs";

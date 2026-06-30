@@ -3,7 +3,7 @@
  * existing @theme tokens (index.css) - no new palette, type scale, or spacing.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 /** Wide, centered content column with the console's gutter rhythm. */
 export function Container({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -20,10 +20,9 @@ export function scrollToId(id: string) {
 }
 
 /**
- * A page section: vertical breathing room + a reveal-on-scroll entrance that
- * reuses the console's `card-in` keyframe. Falls back to visible when
- * IntersectionObserver is unavailable; reduced-motion is handled globally in
- * index.css (animation duration is forced to ~0).
+ * A page section: vertical breathing room + a centered content column. Motion
+ * lives on the children now (per-element `<Reveal>` staggers), not on the
+ * whole block - so the section just provides layout.
  */
 export function Section({
   id,
@@ -34,14 +33,8 @@ export function Section({
   children: ReactNode;
   className?: string;
 }) {
-  const { ref, shown } = useReveal<HTMLElement>();
   return (
-    <section
-      id={id}
-      ref={ref}
-      className={`py-16 sm:py-24 ${className}`}
-      style={shown ? { animation: "card-in 0.5s ease-out backwards" } : { opacity: 0 }}
-    >
+    <section id={id} className={`py-16 sm:py-24 ${className}`}>
       <Container>{children}</Container>
     </section>
   );
@@ -73,6 +66,99 @@ export function useReveal<T extends HTMLElement>() {
   }, []);
 
   return { ref, shown };
+}
+
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof matchMedia !== "undefined" &&
+    matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+type RevealDir = "up" | "left" | "right";
+
+/** Props to spread onto a semantic element (e.g. an `<li>`) so it reveals on
+ * scroll without an extra wrapper div. Merge your own classes AFTER. */
+export function useRevealProps<T extends HTMLElement>(delay = 0, dir: RevealDir = "up") {
+  const { ref, shown } = useReveal<T>();
+  return {
+    ref,
+    "data-dir": dir,
+    className: `reveal ${shown ? "is-visible" : ""}`,
+    style: { "--reveal-delay": `${delay}ms` } as CSSProperties,
+  };
+}
+
+/**
+ * Wrap any block so it fades + rises into view on scroll. `delay` (ms) staggers
+ * siblings via the `--reveal-delay` CSS var; `dir` picks the slide axis. The
+ * reveal CSS lives in index.css; reduced-motion shows it instantly.
+ */
+export function Reveal({
+  children,
+  delay = 0,
+  dir = "up",
+  className = "",
+}: {
+  children: ReactNode;
+  delay?: number;
+  dir?: RevealDir;
+  className?: string;
+}) {
+  const { ref, shown } = useReveal<HTMLDivElement>();
+  return (
+    <div
+      ref={ref}
+      data-dir={dir}
+      className={`reveal ${shown ? "is-visible" : ""} ${className}`}
+      style={{ "--reveal-delay": `${delay}ms` } as CSSProperties}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Counts a number up from 0 to `to` (ease-out cubic, ~900ms) the first time it
+ * scrolls into view. `format` turns the running value into display text. Starts
+ * at 0 and is offscreen until revealed, so there is no visible jump.
+ */
+export function CountUp({
+  to,
+  format,
+  className = "",
+}: {
+  to: number;
+  format: (n: number) => string;
+  className?: string;
+}) {
+  const { ref, shown } = useReveal<HTMLSpanElement>();
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!shown) return;
+    if (prefersReducedMotion()) {
+      setValue(to);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const dur = 900;
+    const tick = (t: number) => {
+      const p = Math.min((t - t0) / dur, 1);
+      setValue(to * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+      else setValue(to);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [shown, to]);
+
+  return (
+    <span ref={ref} className={className}>
+      {format(value)}
+    </span>
+  );
 }
 
 /** The console's micro-label recipe (accent tick + caps tracked label). */

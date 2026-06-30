@@ -207,6 +207,32 @@ body::before {
 }
 
 /* ------------------------------------------------------------------ */
+/* Scroll reveal - per-element fade + rise as it enters the viewport.  */
+/* JS (useReveal) toggles `.is-visible`; the stagger comes from the    */
+/* inline --reveal-delay var. One shared easing = one gradient of      */
+/* motion across a section.                                            */
+/* ------------------------------------------------------------------ */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+.reveal[data-dir="left"] {
+  transform: translateX(-24px);
+}
+.reveal[data-dir="right"] {
+  transform: translateX(24px);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ------------------------------------------------------------------ */
 /* Responsive breakpoints                                              */
 /* ------------------------------------------------------------------ */
 
@@ -285,6 +311,11 @@ input[type="number"] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* Scroll-reveal elements must end visible even with motion off. */
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 

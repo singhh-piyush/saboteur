@@ -1,7 +1,7 @@
 import { AlertTriangle, Gauge, Scissors, EyeOff } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Eyebrow, Heading, Lede, Panel, Section } from "./parts";
+import { Eyebrow, Heading, Lede, Panel, Reveal, Section } from "./parts";
 
 const FAILURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
@@ -29,21 +29,25 @@ const FAILURES: { icon: LucideIcon; title: string; body: string }[] = [
 export function ProblemSection() {
   return (
     <Section>
-      <Eyebrow>The problem</Eyebrow>
-      <Heading>Agents break in production.</Heading>
-      <Lede className="mt-4">
-        The failure modes that take down an agent aren't in your unit tests. They show up
-        live, under load, when a dependency degrades - and there's no standard pre-deploy
-        resilience test for agents today.
-      </Lede>
+      <Reveal><Eyebrow>The problem</Eyebrow></Reveal>
+      <Reveal delay={70}><Heading>Agents break in production.</Heading></Reveal>
+      <Reveal delay={140}>
+        <Lede className="mt-4">
+          The failure modes that take down an agent aren't in your unit tests. They show up
+          live, under load, when a dependency degrades - and there's no standard pre-deploy
+          resilience test for agents today.
+        </Lede>
+      </Reveal>
 
       <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {FAILURES.map(({ icon: Icon, title, body }) => (
-          <Panel key={title} className="p-5">
-            <Icon size={18} className="text-accent" />
-            <h3 className="mt-3 text-sm font-semibold text-ink">{title}</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-dim">{body}</p>
-          </Panel>
+        {FAILURES.map(({ icon: Icon, title, body }, i) => (
+          <Reveal key={title} delay={210 + i * 70}>
+            <Panel className="h-full p-5">
+              <Icon size={18} className="text-accent" />
+              <h3 className="mt-3 text-sm font-semibold text-ink">{title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-dim">{body}</p>
+            </Panel>
+          </Reveal>
         ))}
       </div>
     </Section>

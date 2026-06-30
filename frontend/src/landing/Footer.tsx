@@ -1,10 +1,10 @@
-import { ArrowRight, GitBranch } from "lucide-react";
+import { GitBranch, Play } from "lucide-react";
 
 import { Container, CTAButton, Wordmark } from "./parts";
 
 const REPO_URL = "https://github.com/singhh-piyush/saboteur";
 
-export function Footer({ onLaunch }: { onLaunch: () => void }) {
+export function Footer({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () => void }) {
   return (
     <footer className="border-t border-line">
       <Container className="flex flex-col items-start justify-between gap-8 py-14 sm:flex-row sm:items-center">
@@ -14,13 +14,16 @@ export function Footer({ onLaunch }: { onLaunch: () => void }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <CTAButton onClick={onLaunch}>
-            Launch Console
-            <ArrowRight size={16} />
+          <CTAButton onClick={onWatch}>
+            <Play size={15} />
+            Watch the demo
           </CTAButton>
           <CTAButton href={REPO_URL} variant="ghost">
             <GitBranch size={15} />
             GitHub
+          </CTAButton>
+          <CTAButton onClick={onLaunch} variant="ghost">
+            Console (local)
           </CTAButton>
         </div>
       </Container>

@@ -9,7 +9,7 @@
  * owns its own scroll container.
  */
 
-import { ArrowRight } from "lucide-react";
+import { Play } from "lucide-react";
 
 import { CTAButton, scrollToId, Wordmark } from "./parts";
 import { Hero } from "./Hero";
@@ -26,13 +26,13 @@ const NAV: { id: string; label: string }[] = [
   { id: "how-it-works", label: "How it works" },
 ];
 
-export function Landing({ onLaunch }: { onLaunch: () => void }) {
+export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () => void }) {
   return (
-    <div className="h-screen overflow-y-auto bg-void text-ink">
-      {/* Sticky top bar - wordmark + Launch Console, mirroring the console header. */}
+    <div className="h-screen overflow-y-auto scroll-smooth bg-void text-ink">
+      {/* Sticky top bar - wordmark + CTAs, mirroring the console header. */}
       <div className="sticky top-0 z-30 border-b border-line bg-void/85 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-5 py-3 sm:px-8">
-          <button type="button" onClick={onLaunch} className="flex items-center gap-3">
+          <button type="button" onClick={onWatch} className="flex items-center gap-3">
             <Wordmark className="text-xl" />
             <span className="hidden rounded-sm border border-accent/50 bg-accent/10 px-2 py-1 text-[10px] font-bold leading-none tracking-[0.3em] text-accent sm:inline-block">
               CHAOS CONSOLE
@@ -52,17 +52,20 @@ export function Landing({ onLaunch }: { onLaunch: () => void }) {
             ))}
           </nav>
 
-          <div className="ml-auto sm:ml-0">
-            <CTAButton onClick={onLaunch} size="sm">
-              Launch Console
-              <ArrowRight size={14} />
+          <div className="ml-auto flex items-center gap-2 sm:ml-0">
+            <CTAButton onClick={onLaunch} variant="ghost" size="sm">
+              Console
+            </CTAButton>
+            <CTAButton onClick={onWatch} size="sm">
+              <Play size={13} />
+              Watch the demo
             </CTAButton>
           </div>
         </div>
       </div>
 
       <main>
-        <Hero onLaunch={onLaunch} />
+        <Hero onLaunch={onLaunch} onWatch={onWatch} />
         <ProblemSection />
         <HowItWorks />
         <FaultTaxonomy />
@@ -72,7 +75,7 @@ export function Landing({ onLaunch }: { onLaunch: () => void }) {
         <Roadmap />
       </main>
 
-      <Footer onLaunch={onLaunch} />
+      <Footer onLaunch={onLaunch} onWatch={onWatch} />
     </div>
   );
 }

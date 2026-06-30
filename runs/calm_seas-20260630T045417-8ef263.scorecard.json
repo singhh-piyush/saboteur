@@ -1,0 +1,27 @@
+{
+  "run_id": "calm_seas-20260630T045417-8ef263",
+  "profile": "calm_seas",
+  "n_agents": 1,
+  "mttr_steps": null,
+  "recovery_breakdown": {},
+  "waste_factor": 1.0012523481527864,
+  "failure_modes": {},
+  "crash_rate": 0.0,
+  "latency_degradation": 0.8768835386286917,
+  "survival_rate": 1.0,
+  "survival_rate_reason": null,
+  "deception_detection_rate": null,
+  "deception_detection_rate_reason": "no_deception_probe",
+  "oracle": "builtin_reference",
+  "control_run_id": "calm_seas-20260630T045417-8ef263-control",
+  "per_agent": {
+    "0": {
+      "outcome": "completed",
+      "success": true,
+      "tokens_used": 14391,
+      "steps_taken": 6,
+      "faults": [],
+      "recoveries": []
+    }
+  }
+}

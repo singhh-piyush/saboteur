@@ -80,6 +80,39 @@ export class ApiError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Offline mode (static walkthrough deploy - no backend)
+// ---------------------------------------------------------------------------
+//
+// The static walkthrough serves a recorded run with no FastAPI behind it. To
+// keep the reused `ScorecardView` byte-identical (it statically imports
+// `fetchScorecard` / `fetchAllEvents`), we intercept those reads here instead
+// of editing the component: a registered run resolves from bundled data, and
+// any other read is refused WITHOUT touching the network while offline. Live
+// behavior is unchanged when `OFFLINE` is false (the default).
+
+let OFFLINE = false;
+const OFFLINE_RUNS = new Map<string, { scorecard: Scorecard; events: TelemetryEvent[] }>();
+
+/** Toggle offline mode. Set true by the walkthrough on mount, false on unmount. */
+export function setOffline(value: boolean): void {
+  OFFLINE = value;
+}
+
+/** Register a run's bundled scorecard + events so the reused views resolve it
+ * without any network request. */
+export function registerOfflineRun(
+  id: string,
+  scorecard: Scorecard,
+  events: TelemetryEvent[],
+): void {
+  OFFLINE_RUNS.set(id, { scorecard, events });
+}
+
+export function clearOfflineRuns(): void {
+  OFFLINE_RUNS.clear();
+}
+
 /** Full RunListEntry matching the backend RunListEntry model. */
 export interface RunListEntry {
   run_id: string;
@@ -132,11 +165,21 @@ export function fetchRunStatus(runId: string): Promise<RunStatusInfo> {
 }
 
 export function fetchScorecard(runId: string): Promise<Scorecard> {
+  const offline = OFFLINE_RUNS.get(runId);
+  if (offline) return Promise.resolve(offline.scorecard);
+  if (OFFLINE) {
+    return Promise.reject(new ApiError(404, `${runId}: no offline scorecard`));
+  }
   return request<Scorecard>(`/runs/${encodeURIComponent(runId)}/scorecard`);
 }
 
 /** Full event history for replay. The backend paginates; pull everything. */
 export async function fetchAllEvents(runId: string): Promise<TelemetryEvent[]> {
+  const offline = OFFLINE_RUNS.get(runId);
+  if (offline) return offline.events;
+  if (OFFLINE) {
+    throw new ApiError(404, `${runId}: no offline events`);
+  }
   const all: TelemetryEvent[] = [];
   let afterTs: string | null = null;
   const limit = 1000;
@@ -169,6 +212,8 @@ export async function deleteRun(runId: string): Promise<void> {
 
 /** Cancel a running or pending run. */
 export async function cancelRun(runId: string): Promise<void> {
+  // Offline (walkthrough): there is nothing to stop and no backend to call.
+  if (OFFLINE) return;
   const resp = await fetch(`/runs/${encodeURIComponent(runId)}/cancel`, {
     method: "POST",
   });

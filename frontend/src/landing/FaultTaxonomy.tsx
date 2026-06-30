@@ -1,6 +1,6 @@
 import { FAULT_STYLES, type FaultStyle } from "../lib/faults";
 import { Tooltip } from "../components/Tooltip";
-import { Eyebrow, Heading, Lede, Panel, Section } from "./parts";
+import { Eyebrow, Heading, Lede, Panel, Reveal, Section } from "./parts";
 
 type Layer = FaultStyle["layer"];
 
@@ -21,29 +21,34 @@ for (const [name, style] of Object.entries(FAULT_STYLES)) {
 export function FaultTaxonomy() {
   return (
     <Section>
-      <Eyebrow>Fault taxonomy</Eyebrow>
-      <Heading>8 faults. 3 layers.</Heading>
-      <Lede className="mt-4">
-        Every fault is seeded and deterministic at the decision layer. They hit where
-        agents actually fail: the tool boundary, the transport, and the context window.
-      </Lede>
+      <Reveal><Eyebrow>Fault taxonomy</Eyebrow></Reveal>
+      <Reveal delay={70}><Heading>8 faults. 3 layers.</Heading></Reveal>
+      <Reveal delay={140}>
+        <Lede className="mt-4">
+          Every fault is seeded and deterministic at the decision layer. They hit where
+          agents actually fail: the tool boundary, the transport, and the context window.
+        </Lede>
+      </Reveal>
 
       <div className="mt-10 grid gap-3 md:grid-cols-3">
-        {LAYER_ORDER.map((layer) => (
-          <Panel key={layer} className="p-5">
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim">
-              {LAYER_LABEL[layer]}
-            </h3>
-            <ul className="mt-4 space-y-2">
-              {BY_LAYER[layer].map((name) => (
-                <FaultRow key={name} name={name} style={FAULT_STYLES[name]} />
-              ))}
-            </ul>
-          </Panel>
+        {LAYER_ORDER.map((layer, i) => (
+          <Reveal key={layer} delay={210 + i * 70}>
+            <Panel className="h-full p-5">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim">
+                {LAYER_LABEL[layer]}
+              </h3>
+              <ul className="mt-4 space-y-2">
+                {BY_LAYER[layer].map((name) => (
+                  <FaultRow key={name} name={name} style={FAULT_STYLES[name]} />
+                ))}
+              </ul>
+            </Panel>
+          </Reveal>
         ))}
       </div>
 
       {/* silent_lie gets its own callout - the failure class benchmarks miss. */}
+      <Reveal delay={120}>
       <Panel className="mt-3 p-6" >
         <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:gap-4">
           <span
@@ -63,6 +68,7 @@ export function FaultTaxonomy() {
           </p>
         </div>
       </Panel>
+      </Reveal>
     </Section>
   );
 }
