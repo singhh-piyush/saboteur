@@ -12,6 +12,7 @@ import { RunsPage } from "./components/RunsPage";
 import { ScorecardView } from "./components/ScorecardView";
 import { TargetsPage } from "./components/TargetsPage";
 import { TimelineDrawer } from "./components/TimelineDrawer";
+import { Landing } from "./landing/Landing";
 import { RunProvider, useRun } from "./state/RunContext";
 
 type Tab = "grid" | "scorecard";
@@ -41,6 +42,12 @@ function Shell() {
     if (id !== null) setLastAgent(id);
     setSelectedAgent(id);
   };
+
+  // The landing page is a chrome-less full-page marketing view. Launching the
+  // console flips `page` in place (no reload) via the same hash router.
+  if (page.kind === "landing") {
+    return <Landing onLaunch={() => navigate({ kind: "runs" })} />;
+  }
 
   const drawerAgent = selectedAgent ?? lastAgent;
   const drawerOpen =
@@ -110,7 +117,7 @@ function Shell() {
 
       {/* ---------------------------------------------------------------- */}
       <div className="relative flex min-h-0 flex-1 gap-2 overflow-hidden">
-        {/* Sidebar — two stacked cards; off-canvas on mobile, visible on xl.
+        {/* Sidebar - two stacked cards; off-canvas on mobile, visible on xl.
             Run views only; management pages render full-width. */}
         {showSidebar && (
           <aside
@@ -203,7 +210,7 @@ function Shell() {
           )}
         </main>
 
-        {/* Timeline drawer card — width animates so the grid reflows smoothly.
+        {/* Timeline drawer card - width animates so the grid reflows smoothly.
             Content stays mounted (lastAgent) during the close transition. */}
         <div
           className={`shrink-0 overflow-hidden transition-[width] duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] ${

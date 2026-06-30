@@ -1,7 +1,7 @@
 /**
  * Wires the pure reducer to the two event sources: the live WebSocket and
  * the ReplayDriver. Components only ever read `state` and call the actions
- * exposed here — they never touch sockets or timers directly.
+ * exposed here - they never touch sockets or timers directly.
  *
  * Navigation: a simple hash-based router (no library). Pages:
  *   #/runs        → RunsPage (run management)
@@ -42,6 +42,7 @@ export interface ReplayControls {
 }
 
 export type Page =
+  | { kind: "landing" }
   | { kind: "runs" }
   | { kind: "live"; runId: string }
   | { kind: "targets" }
@@ -74,6 +75,8 @@ const RunContext = createContext<RunContextValue | null>(null);
 function parseHash(): Page {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [path, query] = raw.split("?");
+  // Empty hash or #/landing → the marketing landing page (default front door).
+  if (path === "" || path === "landing") return { kind: "landing" };
   if (path.startsWith("live/")) {
     const runId = decodeURIComponent(path.slice(5));
     if (runId) return { kind: "live", runId };
@@ -93,6 +96,9 @@ function parseHash(): Page {
 
 function setHash(page: Page): void {
   switch (page.kind) {
+    case "landing":
+      window.location.hash = "#/landing";
+      break;
     case "runs":
       window.location.hash = "#/runs";
       break;
