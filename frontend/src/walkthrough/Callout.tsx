@@ -5,7 +5,7 @@
  * uses the card's real size.
  */
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { usePrefersReducedMotion } from "./Spotlight";
@@ -26,7 +26,18 @@ interface CalloutProps {
 
 export function Callout({ rect, placement, anchorKey, children }: CalloutProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const childrenRef = useRef<ReactNode>(children);
+  childrenRef.current = children;
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [entered, setEntered] = useState(false);
+  // The content actually on screen. It is swapped only at the midpoint of the
+  // cross-fade (once the old text has faded out) so the body text transitions
+  // smoothly between beats instead of snapping.
+  const [shown, setShown] = useState<{ key: string; node: ReactNode }>(() => ({
+    key: anchorKey,
+    node: children,
+  }));
+  const [contentVisible, setContentVisible] = useState(true);
   const reduced = usePrefersReducedMotion();
 
   useLayoutEffect(() => {
@@ -87,7 +98,38 @@ export function Callout({ rect, placement, anchorKey, children }: CalloutProps) 
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
-  }, [rect, placement, anchorKey]);
+    // Recompute off the *shown* content (post-swap) so the card is measured at the
+    // size it actually displays, plus whenever the target rect/placement changes.
+  }, [rect, placement, shown.key]);
+
+  // Smooth first appearance: once positioned, place at the real spot (no glide in
+  // from the corner), then fade in on the next frame. `entered` also gates the
+  // left/top glide so the very first show never flies in.
+  useEffect(() => {
+    if (pos !== null && !entered) {
+      const r = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(r);
+    }
+  }, [pos, entered]);
+
+  // Cross-fade the body text on beat change: fade the current text out, swap it at
+  // the midpoint (while invisible), then fade the new text in. Reduced motion swaps
+  // instantly.
+  useEffect(() => {
+    if (anchorKey === shown.key) return;
+    if (reduced) {
+      setShown({ key: anchorKey, node: childrenRef.current });
+      return;
+    }
+    setContentVisible(false);
+    const t = window.setTimeout(() => {
+      setShown({ key: anchorKey, node: childrenRef.current });
+      setContentVisible(true);
+    }, 160);
+    return () => window.clearTimeout(t);
+  }, [anchorKey, shown.key, reduced]);
+
+  const POSE = "cubic-bezier(0.4, 0, 0.2, 1)";
 
   return createPortal(
     <div
@@ -98,15 +140,29 @@ export function Callout({ rect, placement, anchorKey, children }: CalloutProps) 
       style={{
         left: pos?.left ?? -9999,
         top: pos?.top ?? -9999,
-        opacity: pos === null ? 0 : 1,
+        opacity: entered ? 1 : 0,
         transition: reduced
           ? undefined
-          : "left 600ms cubic-bezier(0.4,0,0.2,1), top 600ms cubic-bezier(0.4,0,0.2,1)",
+          : entered
+            ? `left 560ms ${POSE}, top 560ms ${POSE}, opacity 320ms ease-out`
+            : "opacity 320ms ease-out",
       }}
     >
-      {/* Cross-fade the content as the card glides to the next beat. */}
-      <div key={anchorKey} className={reduced ? undefined : "animate-feed-in"}>
-        {children}
+      {/* Body text cross-fades (out -> swap -> in) as the card glides to the next beat. */}
+      <div
+        style={
+          reduced
+            ? undefined
+            : {
+                opacity: contentVisible ? 1 : 0,
+                transform: contentVisible ? "translateY(0)" : "translateY(4px)",
+                transition: contentVisible
+                  ? "opacity 280ms ease-out, transform 280ms cubic-bezier(0.22, 1, 0.36, 1)"
+                  : "opacity 160ms ease-in, transform 160ms ease-in",
+              }
+        }
+      >
+        {shown.node}
       </div>
     </div>,
     document.body,
