@@ -10,7 +10,8 @@
  * else is the genuine article.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { ChaosLog } from "../components/ChaosLog";
 import { CohortGrid } from "../components/CohortGrid";
@@ -22,6 +23,7 @@ import { TooltipSuppression } from "../components/Tooltip";
 import { useRun } from "../state/RunContext";
 import { DEMO_RUN } from "../demo";
 import { Playbar } from "./Playbar";
+import { usePrefersReducedMotion } from "./Spotlight";
 import { TourOverlay } from "./TourOverlay";
 import { buildTour } from "./tour";
 import { useWalkthrough, WalkthroughProvider } from "./WalkthroughProvider";
@@ -60,6 +62,23 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const drawerAgent = selectedAgent ?? lastAgent;
   const drawerOpen = selectedAgent !== null && state.agents[selectedAgent] !== undefined;
   const tourActive = tourMode === "tour";
+
+  // Fade in from black on entry, completing the dip-to-black handoff from the
+  // landing page (the demo mounts under a black cover that then lifts).
+  const reducedMotion = usePrefersReducedMotion();
+  const [covered, setCovered] = useState(!reducedMotion);
+  const [coverFade, setCoverFade] = useState(false);
+  useEffect(() => {
+    if (!covered) return;
+    const raf = requestAnimationFrame(() => setCoverFade(true));
+    const t = window.setTimeout(() => setCovered(false), 520);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+    // Run once on mount; the cover lifts and is then removed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const exitTour = () => {
     setTourMode("free");
@@ -261,6 +280,17 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
         selectAgent={selectAgent}
         setTab={setTab}
       />
+
+      {/* Fade-in-from-black cover (portaled above the tour overlays). */}
+      {covered &&
+        createPortal(
+          <div
+            aria-hidden
+            className="pointer-events-none fixed inset-0 z-[180] bg-black"
+            style={{ opacity: coverFade ? 0 : 1, transition: "opacity 460ms ease" }}
+          />,
+          document.body,
+        )}
     </div>
     </TooltipSuppression>
   );

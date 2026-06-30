@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
 
-import { CTAButton, scrollToId, Wordmark } from "./parts";
+import { CTAButton, prefersReducedMotion, scrollToId, Wordmark } from "./parts";
 import { Hero } from "./Hero";
 import { Intro, introShouldSkip } from "./Intro";
 import { ProblemSection } from "./ProblemSection";
@@ -30,13 +30,30 @@ const NAV: { id: string; label: string }[] = [
 
 export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () => void }) {
   const [introDone, setIntroDone] = useState(introShouldSkip);
+  const [leaving, setLeaving] = useState(false);
+  const [black, setBlack] = useState(false);
+
+  // Dip to black before opening the demo so the landing -> walkthrough handoff is a
+  // smooth fade, not an instant cut. The walkthrough fades back in from black, so the
+  // screen stays dark across the page swap. Reduced motion navigates immediately.
+  const handleWatch = () => {
+    if (leaving) return;
+    if (prefersReducedMotion()) {
+      onWatch();
+      return;
+    }
+    setLeaving(true);
+    requestAnimationFrame(() => setBlack(true));
+    window.setTimeout(onWatch, 420);
+  };
+
   return (
     <div className="h-screen overflow-y-auto scroll-smooth bg-void text-ink">
       {!introDone && <Intro onDone={() => setIntroDone(true)} />}
       {/* Sticky top bar - wordmark + CTAs, mirroring the console header. */}
       <div className="sticky top-0 z-30 border-b border-line bg-void/85 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-5 py-3 sm:px-8">
-          <button type="button" onClick={onWatch} className="flex items-center gap-3">
+          <button type="button" onClick={handleWatch} className="flex items-center gap-3">
             <Wordmark className="text-xl" />
             <span className="hidden rounded-sm border border-accent/50 bg-accent/10 px-2 py-1 text-[10px] font-bold leading-none tracking-[0.3em] text-accent sm:inline-block">
               CHAOS CONSOLE
@@ -60,7 +77,7 @@ export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: 
             <CTAButton onClick={onLaunch} variant="ghost" size="sm">
               Console
             </CTAButton>
-            <CTAButton onClick={onWatch} size="sm">
+            <CTAButton onClick={handleWatch} size="sm">
               <Play size={13} />
               Watch the demo
             </CTAButton>
@@ -69,7 +86,7 @@ export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: 
       </div>
 
       <main>
-        <Hero onLaunch={onLaunch} onWatch={onWatch} />
+        <Hero onLaunch={onLaunch} onWatch={handleWatch} />
         <ProblemSection />
         <HowItWorks />
         <FaultTaxonomy />
@@ -79,7 +96,16 @@ export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: 
         <Roadmap />
       </main>
 
-      <Footer onLaunch={onLaunch} onWatch={onWatch} />
+      <Footer onLaunch={onLaunch} onWatch={handleWatch} />
+
+      {/* Dip-to-black cover for the landing -> demo handoff. */}
+      {leaving && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-[150] bg-black"
+          style={{ opacity: black ? 1 : 0, transition: "opacity 400ms ease" }}
+        />
+      )}
     </div>
   );
 }
