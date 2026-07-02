@@ -20,7 +20,7 @@ Set `VITE_API_BASE_URL` if the FastAPI backend is not on `localhost:8000`.
 ## Build & test
 
 ```bash
-npm run build      # tsc --noEmit + vite build → dist/ (served by FastAPI)
+npm run build      # tsc --noEmit + vite build, outputs dist/ (served by FastAPI)
 npm test           # vitest (reducer determinism / live-replay parity)
 ```
 

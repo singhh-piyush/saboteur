@@ -2,107 +2,197 @@
 
 Chaos testing for AI agents.
 
-## What is this?
+## What it is
 
-AI agents look great in demos. In production, things break. APIs return errors, rate limits kick in, responses come back broken, and context gets lost. Many agents cannot handle this. They get stuck in retry loops, make up fake results, or quietly give up.
+AI agents look great in demos. In production, things break. APIs return 500s,
+rate limits kick in, tool responses come back mangled, and context gets lost.
+A lot of agents fall apart when that happens: they loop on retries, invent
+results, or quietly give up.
 
-Right now there is no standard way to test how an agent handles failure before you ship it. Saboteur fixes that.
+There is no standard way to find this out before you ship. Saboteur is that
+test. It runs your agent while deliberately breaking things around it, watches
+how the agent reacts, and gives you a scorecard of how well it recovers.
 
-Saboteur runs your agent and breaks things on purpose. It injects faults like API errors, rate limits, slow responses, corrupted data, and lost memory, then watches what the agent does. Does it retry? Back off? Find another way? Or does it crash?
-
-Think of it as a Chaos Monkey, but for AI agents.
+Think Chaos Monkey, but for agents.
 
 ## How it works
 
-1. You pick a chaos profile: a named, seeded set of faults. Same seed means the same faults every time, so runs can be repeated and compared.
-2. Saboteur spawns many identical agents at once and gives them all the same task while the faults hit them.
-3. A live dashboard shows every agent in a grid: who is healthy, who is recovering, who crashed, and who finished.
-4. At the end you get a Resilience Scorecard: survival rate, recovery time, wasted tokens, and a breakdown of how each agent failed or recovered.
+1. You pick a chaos profile: a named set of faults with a fixed random seed.
+   The seed matters. Given the same seed and the same sequence of calls, the
+   same fault decisions fire, so runs can be repeated and compared.
+2. Saboteur launches a cohort: N copies of the same agent, all given the same
+   task at the same time, all under the same profile.
+3. Every fault, tool call, recovery, and crash is written to an event log and
+   streamed to a live dashboard. You watch the whole cohort as a grid: green
+   is healthy, amber is recovering, red is crashed, cyan finished and passed.
+4. When the cohort ends you get a Resilience Scorecard, computed purely from
+   the event log. Because the log is the source of truth, replaying a saved
+   run renders exactly what the live run looked like.
 
-## The fault types
+## The faults
 
-- API errors (500s and 503s)
-- Rate limits (429 with Retry-After)
-- Timeouts and slow responses
-- Malformed tool output
-- Silent lies: tool output that looks correct but is wrong
-- Context drops: the agent loses part of its memory
-- Vanishing tools: a tool disappears in the middle of a run
+Eight faults across three layers:
 
-## Run it locally (no Docker)
+Tool layer
 
-**Install** (Python 3.11+; Node 20+ only to build the dashboard):
+- `api_error`: the call fails with a 500 or 503
+- `rate_limit`: a 429 with a Retry-After header
+- `malformed`: the response comes back truncated or broken
+- `silent_lie`: the response is well formed but the data is wrong
+- `tool_vanish`: a tool disappears mid-run and stays gone
+
+Transport layer
+
+- `latency`: calls get slow
+- `timeout`: calls hang and then fail
+
+Context layer
+
+- `context_drop`: the agent loses the last few steps of its memory
+
+Profiles combine these. `calm_seas` has no faults (it is the control),
+`flaky_friday` and `rate_limit_storm` are moderate, `liars_den` isolates the
+deception test, and `hell_mode` turns on all eight.
+
+## Quick start (no GPU needed)
+
+You need Python 3.11+ and Node 20+ (Node only builds the dashboard).
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-cd frontend && npm ci && npm run build && cd ..   # the console UI
+cd frontend && npm ci && npm run build && cd ..
 ```
 
-**Inference** — two ways to drive agents:
-
-- **Offline mock** (no GPU, no secrets): add `--mock` to any `saboteur run`
-  command below. It boots a bundled deterministic mock model, runs, and tears
-  it down — cohorts are reproducible.
-- **Real local LLM** (llama.cpp). `--jinja` is required for tool calls; `-np 8`
-  provides the parallel slots for the local N=8 cohort cap:
-
-  ```bash
-  llama-server -m ./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
-    --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
-  ```
-
-`.env` is optional for local dev (defaults target `http://localhost:8080/v1`);
-copy `.env.example` to change the model or endpoint — the swap is pure config.
-
-**Start the console** (orchestrator API + wire chaos proxy + dashboard, one port):
+Run a full cohort offline. The `--mock` flag boots a small deterministic mock
+model that plays the agent's role, so nothing needs a GPU or an API key:
 
 ```bash
-bash scripts/run_local.sh   # starts llama-server if down, then uvicorn on :8000
-# or, app only:  .venv/bin/uvicorn saboteur.api:app --reload --port 8000
-```
-
-Open **http://localhost:8000**. The chaos proxy is mounted at `/v1` (the
-standard OpenAI base path), run management at `/proxy/*`, the REST API at
-`/runs` / `/profiles` / `/targets`, live telemetry at `/ws/{run_id}`.
-
-**Run a cohort:**
-
-```bash
-# Saboteur's own reference agent (control + chaos), fully offline:
 saboteur run --target reference --profile hell_mode --control --mock
+```
 
-# Sabotage YOUR agent with zero code change: start a capture run on the
-# Targets page ("Sabotage my agent") — or:
-#   curl -X POST localhost:8000/proxy/runs -H 'content-type: application/json' \
-#     -d '{"profile": "hell_mode", "n_agents": 4, "capture_all": true}'
-# — then just repoint your agent:
+This runs a calm control cohort, then a hell_mode cohort, and prints the
+scorecard. Artifacts land in `runs/{run_id}.jsonl` and
+`runs/{run_id}.scorecard.json`.
+
+Useful commands:
+
+```bash
+saboteur profiles          # list the chaos profiles
+saboteur compare A B       # per-metric delta between two runs
+saboteur run --help        # all the knobs
+```
+
+## Using a real model
+
+Local development uses llama.cpp. The `--jinja` flag is required (it enables
+OpenAI-style tool calls) and `-np 8` gives the 8 parallel slots the local
+cohort uses:
+
+```bash
+llama-server -m ./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
+  --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
+```
+
+The defaults already point at `http://localhost:8080/v1`. To use a different
+endpoint or model, copy `.env.example` to `.env` and edit it. Swapping from a
+local 8B to a big vLLM box is a config change, never a code change.
+
+## The console
+
+The API, the chaos proxy, and the dashboard all run in one process on one
+port:
+
+```bash
+bash scripts/run_local.sh
+# or just the app: .venv/bin/uvicorn saboteur.api:app --reload --port 8000
+```
+
+Open http://localhost:8000. From the UI you can launch runs, watch the live
+grid, inspect any agent's step-by-step trace, read scorecards, build custom
+chaos profiles, and manage past runs.
+
+Paths worth knowing: the chaos proxy lives at `/v1` (the standard OpenAI base
+path), run management at `/proxy/*`, the REST API at `/runs`, `/profiles` and
+`/targets`, and live telemetry at `/ws/{run_id}`.
+
+## Testing your own agent
+
+Saboteur can sabotage an agent it does not own by sitting between the agent
+and its model. The proxy speaks the OpenAI wire protocol, injects faults into
+the traffic, and forwards everything else untouched.
+
+The simplest way needs one env var and zero code changes. Start a capture run
+(on the Targets page there is a "Sabotage my agent" card, or use curl):
+
+```bash
+curl -X POST localhost:8000/proxy/runs -H 'content-type: application/json' \
+  -d '{"profile": "hell_mode", "n_agents": 4, "capture_all": true}'
+```
+
+Then point your agent at the proxy and run it as usual:
+
+```bash
 OPENAI_BASE_URL=http://localhost:8000/v1 python your_agent.py
 ```
 
-Artifacts land in `runs/{run_id}.jsonl` + `runs/{run_id}.scorecard.json`.
-`saboteur profiles` lists the chaos profiles (calm_seas, flaky_friday,
-rate_limit_storm, liars_den, hell_mode); `saboteur compare A B` prints the
-per-metric delta between two runs. For registered subprocess cohorts with a
-success oracle (survival rate for an agent you don't own), see
-`examples/byo_min_agent/`.
+Each new conversation your agent starts becomes the next cell on the grid.
+When you are done, stop the run from the UI (or it finishes itself after
+going idle) and the scorecard is written.
 
-**Replay the bundled golden run** — re-drives the dashboard from a recorded
-JSONL with all inference offline (the app must be up):
+If you run many agent copies at once, add two headers so each one is tracked
+exactly: `X-Saboteur-Run-Id` and `X-Saboteur-Agent-Id`. Headers always take
+priority over capture mode.
+
+You can also register your agent as a target (a command Saboteur runs as a
+subprocess) and let it launch the whole cohort for you, including a success
+oracle that decides pass or fail. A working 40-line example using the raw
+OpenAI SDK lives in `examples/byo_min_agent/`.
+
+## The scorecard
+
+Two kinds of metrics, and Saboteur is strict about the difference.
+
+Behavioral metrics are always computed, because they need no ground truth:
+
+- mean time to recovery, in steps from a fault to the next productive action
+- recovery breakdown: retried, reformulated the call, fell back to another
+  tool, stalled, or gave up
+- waste factor: tokens burned under chaos versus the calm control run
+- crash rate and a histogram of failure modes (infinite retry, timeout,
+  silent abandonment, hard exception)
+
+Verdict metrics need a way to check the answer, so they only appear when one
+exists:
+
+- survival rate: the share of agents that finished with a correct result
+- deception detection rate: the share that caught the planted lie instead of
+  repeating it
+
+For Saboteur's own reference task the check is a hardcoded verifier (Tokyo is
+22.0 C, which is 71.6 F, and the report must say so). For your agent you
+supply the check: a regex over the final output, a command that exits 0 on
+success, or an HTTP callback. There is no LLM judge anywhere, on purpose. If
+no check ran, those metrics are null with a reason attached rather than a
+made-up number.
+
+## Replaying runs
+
+Every run's event log can re-drive the dashboard, no model needed. A recorded
+hell_mode run ships in the repo:
 
 ```bash
 saboteur replay runs/hell_mode-20260629T231833-2b225c.jsonl --speed 2.0 --follow
 ```
 
-**Tests:** `make test` (backend), `make lint` (ruff + mypy),
-`cd frontend && npx vitest run` (reducer parity).
+The grid and scorecard render identically to the original live run, because
+both are pure functions of the same event log.
 
-## CI gate: block the merge if resilience drops
+## CI gate
 
-Saboteur ships as a GitHub Action so resilience becomes a required check —
-chaos-test the agent on every PR, fail the merge when a metric breaches its
-threshold (direction-aware: survival fails below it, crash rate above it), and
-comment the per-metric delta vs the base branch's last run.
+Saboteur ships as a GitHub Action, so agent resilience can be a required
+check on every PR. It fails the check when a metric crosses your threshold
+and comments the per-metric delta against the base branch's last run.
 
 ```yaml
 # .github/workflows/resilience.yml (a working copy lives in this repo)
@@ -118,86 +208,65 @@ jobs:
           profile: hell_mode
           metric: survival_rate
           threshold: "0.85"   # raise to "0.95" to watch it block the merge
-          mock: "true"        # offline demo; set "false" + pass your endpoint
+          mock: "true"        # offline demo; set "false" to use your endpoint
 ```
 
-It runs **offline** out of the box: a bundled deterministic mock model
-(`saboteur/mock_inference.py`) drives the real agent with no GPU or secrets, so
-the demo is green/red and reproducible. To gate **your** agent, set
-`mock: "false"` and pass `openai-base-url` / `openai-api-key` / `model-id`
-(from repo secrets). The same gate runs locally via the CLI or Docker:
+Out of the box it runs offline against the bundled mock model, so the sample
+workflow is green or red with no GPU and no secrets. To gate your own agent,
+set `mock: "false"` and pass `openai-base-url`, `openai-api-key` and
+`model-id` from repo secrets.
+
+The gate is direction-aware: survival fails when it drops below the
+threshold, crash rate fails when it rises above it. The same gate works in a
+shell:
 
 ```bash
-saboteur run --target reference --mock --profile hell_mode --ci --threshold 0.85
-# or in CI's container:
-docker build -t saboteur:ci . && docker run --rm -v "$PWD/runs:/app/runs" \
-  saboteur:ci run --target reference --mock --profile hell_mode --ci --threshold 0.85
+saboteur run --target reference --mock --profile hell_mode \
+  --ci --metric survival_rate --threshold 0.85
+# exit 0 = pass, 1 = threshold breached, 2 = misconfigured gate
 ```
 
-## Built with
+## Docker
 
-- smolagents for the agent loop
-- FastAPI and Python asyncio for the orchestrator
-- React, Vite, and Tailwind for the dashboard
-- vLLM on ROCm with an AMD Instinct MI300X for running 50 agents at the same time
-- llama.cpp for local development
-
-Built for the AMD Developer Hackathon: ACT II.
-
-## Run it with Docker
-
-The whole console (orchestrator API + wire-level chaos proxy + dashboard) runs in
-one container. Inference stays on the host (llama.cpp), so the only thing you run
-outside Docker is `llama-server`.
-
-**1. Start the host llama-server** (the only host process). It **must** bind
-`0.0.0.0` so the container can reach it — the default `127.0.0.1` is unreachable
-from inside Docker:
+The whole console runs in one container. Inference stays on the host, so the
+only host process is llama-server, and it must bind 0.0.0.0 so the container
+can reach it:
 
 ```bash
 llama-server -m /path/to/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
   --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
+
+make up                        # build and start, waits for /health
+make run                       # POST a reference cohort (PROFILE=hell_mode make run)
+make logs                      # follow container logs
+make down                      # stop; runs/ persists on the host
 ```
 
-(`--jinja` enables tool calling; `-np 8` gives 8 parallel slots for the N=8 cohort.
-One-time GGUF download instructions are in `scripts/run_local.sh`.)
+`runs/` is bind-mounted, so history survives restarts. The SQLite run index
+is just a cache and rebuilds itself from the JSONL logs on startup.
 
-**2. Bring up the console:**
+To point the container at a remote vLLM endpoint instead of local llama.cpp,
+edit `compose.env` and bring it up again. No rebuild.
+
+## Tests
 
 ```bash
-make up                 # = docker compose --env-file compose.env up --build -d
+make test                      # backend (pytest)
+make lint                      # ruff + mypy
+cd frontend && npx vitest run  # dashboard reducer tests
 ```
 
-**3. Open the dashboard** at **http://localhost:8000** and launch a run from the UI,
-or fire a reference cohort from the CLI:
+The test suite covers the things that matter most here: fault sequences are
+byte-identical for the same seed, one agent's crash can never touch another,
+and re-scoring a saved event log always matches the scorecard that was
+written live.
 
-```bash
-make run                # POST a reference flaky_friday cohort
-# or pick a profile:  PROFILE=hell_mode make run
-```
+## Built with
 
-Watch the agent grid animate live; the Resilience Scorecard renders when the cohort
-finishes. Event logs + scorecards land in `./runs/` on the host.
+- smolagents for the reference agent loop
+- FastAPI and asyncio for the orchestrator and proxy
+- React, Vite and Tailwind for the dashboard
+- llama.cpp for local development
+- vLLM on ROCm with an AMD Instinct MI300X for the 50-agent cohort runs
 
-```bash
-make logs               # follow container logs
-make down               # stop the container (runs/ persists on the host)
-```
-
-`runs/` is bind-mounted, so history survives `make down` / `make up` (the SQLite
-index is rebuilt from the JSONL logs on startup).
-
-### Pointing at the cloud (post-deadline)
-
-Inference is a runtime-env swap — no rebuild. Edit `compose.env` (or set shell env)
-to point `OPENAI_BASE_URL` / `UPSTREAM_BASE_URL` at the MI300X vLLM endpoint and set
-`CONCURRENCY_LIMIT=0`, then `docker compose --env-file compose.env up`. See the
-commented `# CLOUD` block in `docker-compose.yml`.
-
-## Status
-
-End-to-end and demoable: chaos engine, wire proxy (with headerless capture-all
-mode), MCP shim, BYO subprocess cohorts, live dashboard + replay, two-tier
-scorecard, CLI with CI gate, GitHub Action, and the containerized console stack
-(`make up` → live dashboard + reference cohort with no host Python beyond
-llama.cpp).
+Built for the AMD Developer Hackathon: ACT II.
