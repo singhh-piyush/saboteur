@@ -4,7 +4,7 @@ const STEPS: { n: string; title: string; body: string }[] = [
   {
     n: "01",
     title: "Point your agent at the proxy",
-    body: "Swap one environment variable. No SDK, no decorators, no code change - the proxy speaks the OpenAI wire protocol your agent already uses.",
+    body: "Swap one environment variable and start a capture run. No SDK, no decorators, no code change - the proxy speaks the OpenAI wire protocol your agent already uses. Optional headers give exact per-agent attribution for concurrent cohorts.",
   },
   {
     n: "02",

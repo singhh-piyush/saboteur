@@ -67,6 +67,8 @@ export class RunSocket {
           // We handle completion in onclose to keep a single path.
           return;
         }
+        // Idle keepalive control frame - drop it, never dispatch to the reducer.
+        if (data.event === "__keepalive__") return;
         this.handlers.onEvent(data as unknown as TelemetryEvent);
       } catch {
         // A malformed frame must never kill the stream.

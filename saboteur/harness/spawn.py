@@ -208,9 +208,8 @@ async def _judge(
         }
         for rec in sess.history
     ]
-    outcome = "timeout" if terminal.timed_out else (
-        "hard_exception" if terminal.raised else "completed"
-    )
+    # timed_out returned above (frozen failure) — only exit-state outcomes here.
+    outcome = "hard_exception" if terminal.raised else "completed"
     ctx = OracleRunContext(
         agent_id=agent_id,
         final_output=terminal.final_output or "",

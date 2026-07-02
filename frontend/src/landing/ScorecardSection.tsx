@@ -1,25 +1,18 @@
 /**
  * A static example scorecard styled exactly like the live ScorecardView
- * (Tile / Panel / recharts BarChart), populated with our golden hell_mode run:
- * survival 0.88, deception detection 1.0. No fetch, no live data - deterministic
- * and offline. Charts have animation disabled so the section is stable.
+ * (Tile / Panel / recharts BarChart). Every number derives from the bundled
+ * demo run's scorecard (src/demo) - the same data the walkthrough replays -
+ * so this section can never drift from the real artifact. No fetch, no live
+ * data. Charts have animation disabled so the section is stable.
  */
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { PanelHeader } from "../components/PanelHeader";
+import { DEMO_RUNS } from "../demo";
 import { CountUp, Eyebrow, Heading, Lede, Reveal, Section } from "./parts";
 
-// Golden hell_mode run (runs/hell_mode-…, captured offline via the mock).
-const SC = {
-  survival_rate: 0.88,
-  deception_detection_rate: 1.0,
-  crash_rate: 0.08,
-  mttr_steps: 2.9,
-  waste_factor: 1.6,
-  recovery_breakdown: { retry: 14, reformulate: 6, fallback_tool: 4, no_action: 3, gave_up: 1 },
-  failure_modes: { timeout: 1, silent_abandonment: 1 },
-};
+const SC = DEMO_RUNS[0].scorecard;
 
 const TONES: Record<string, string> = {
   ok: "text-ok",
@@ -43,7 +36,8 @@ export function ScorecardSection() {
       <Reveal delay={140}>
         <Lede className="mt-4">
           Not a pass/fail. A behavioral resilience profile - how the cohort recovered, how
-          long it took, and what it failed on. Numbers below are a real hell_mode run.
+          long it took, and what it failed on. Numbers below are the bundled {SC.profile} run
+          (N={SC.n_agents}) - the same one the demo replays.
         </Lede>
       </Reveal>
 
@@ -51,18 +45,54 @@ export function ScorecardSection() {
         <Reveal delay={210}>
           <Tile
             label="survival - chaos"
-            value={<CountUp to={SC.survival_rate * 100} format={pctFmt} />}
-            tone={SC.survival_rate >= 0.75 ? "ok" : SC.survival_rate >= 0.4 ? "warn" : "crit"}
+            value={
+              SC.survival_rate === null ? "-" : <CountUp to={SC.survival_rate * 100} format={pctFmt} />
+            }
+            tone={
+              SC.survival_rate === null
+                ? "plain"
+                : SC.survival_rate >= 0.75
+                  ? "ok"
+                  : SC.survival_rate >= 0.4
+                    ? "warn"
+                    : "crit"
+            }
           />
         </Reveal>
         <Reveal delay={280}>
-          <Tile label="deception caught" value={<CountUp to={SC.deception_detection_rate * 100} format={pctFmt} />} tone="ok" />
+          <Tile
+            label="deception caught"
+            value={
+              SC.deception_detection_rate === null ? (
+                "-"
+              ) : (
+                <CountUp to={SC.deception_detection_rate * 100} format={pctFmt} />
+              )
+            }
+            tone={
+              SC.deception_detection_rate === null
+                ? "plain"
+                : SC.deception_detection_rate >= 0.75
+                  ? "ok"
+                  : SC.deception_detection_rate >= 0.4
+                    ? "warn"
+                    : "crit"
+            }
+          />
         </Reveal>
         <Reveal delay={350}>
-          <Tile label="crash rate" value={<CountUp to={SC.crash_rate * 100} format={pctFmt} />} tone={SC.crash_rate > 0 ? "crit" : "plain"} />
+          <Tile
+            label="crash rate"
+            value={<CountUp to={SC.crash_rate * 100} format={pctFmt} />}
+            tone={SC.crash_rate > 0 ? "crit" : "plain"}
+          />
         </Reveal>
         <Reveal delay={420}>
-          <Tile label="MTTR (steps)" value={<CountUp to={SC.mttr_steps} format={oneDp} />} tone="plain" />
+          <Tile
+            label="MTTR (steps)"
+            value={SC.mttr_steps === null ? "-" : <CountUp to={SC.mttr_steps} format={oneDp} />}
+            tone="plain"
+          />
         </Reveal>
       </div>
 
@@ -96,7 +126,11 @@ export function ScorecardSection() {
             <li className="flex items-center justify-between rounded-sm border border-line bg-raised/40 px-2.5 py-1.5 text-sm">
               <span className="text-ink-dim">waste factor</span>
               <span className="font-display text-base font-semibold text-ink">
-                <CountUp to={SC.waste_factor} format={(n) => `${n.toFixed(1)}x`} />
+                {SC.waste_factor === null ? (
+                  "-"
+                ) : (
+                  <CountUp to={SC.waste_factor} format={(n) => `${n.toFixed(1)}x`} />
+                )}
               </span>
             </li>
           </ul>

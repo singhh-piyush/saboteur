@@ -22,11 +22,11 @@ inputs:
     required: false
     default: "8"
   threshold:
-    description: "CI floor — the check fails if the metric is below this value."
+    description: "CI threshold — direction-aware: higher-is-better metrics (survival_rate, deception_detection_rate) fail below it; lower-is-better (crash_rate, mttr_steps, waste_factor) fail above it."
     required: false
     default: "0.85"
   metric:
-    description: "Metric to gate on: survival_rate | crash_rate | mttr_steps | deception_detection_rate | waste_factor | latency_degradation."
+    description: "Metric to gate on: survival_rate | crash_rate | mttr_steps | deception_detection_rate | waste_factor."
     required: false
     default: "survival_rate"
   mock:

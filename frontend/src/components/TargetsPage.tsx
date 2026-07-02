@@ -2,13 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   ApiError,
+  apiUrl,
   createTarget,
   deleteTarget,
+  fetchCaptureStatus,
+  fetchProfiles,
   fetchTargets,
+  finishProxyRun,
+  startProxyRun,
   updateTarget,
   type OracleKind,
+  type ProfileInfo,
   type Target,
 } from "../lib/api";
+import { useRun } from "../state/RunContext";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CrossIcon, EyeIcon, TrashIcon } from "./Icons";
 import { PanelHeader } from "./PanelHeader";
@@ -178,6 +185,8 @@ export function TargetsPage() {
           </div>
         )}
 
+        <CaptureCard />
+
         {editor && (
           <TargetEditor
             editor={editor}
@@ -214,6 +223,177 @@ export function TargetsPage() {
         onCancel={() => setDeleteName(null)}
       />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Capture-all: sabotage any agent by swapping one env var - no headers, no
+// registration. Starts a headerless capture run on the wire proxy.
+// ---------------------------------------------------------------------------
+
+function CaptureCard() {
+  const { watchRun } = useRun();
+  const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
+  const [profile, setProfile] = useState("hell_mode");
+  const [nAgents, setNAgents] = useState(4);
+  const [activeRun, setActiveRun] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetchProfiles()
+      .then((list) => {
+        setProfiles(list);
+        if (list.length > 0 && !list.some((p) => p.name === "hell_mode")) {
+          setProfile(list[0].name);
+        }
+      })
+      .catch(() => setProfiles([]));
+    fetchCaptureStatus()
+      .then(({ run_id }) => setActiveRun(run_id))
+      .catch(() => setActiveRun(null));
+  }, []);
+
+  const proxyBase = apiUrl("") !== "" ? apiUrl("") : window.location.origin;
+  const envLine = `OPENAI_BASE_URL=${proxyBase}/v1`;
+
+  async function handleStart() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { run_id } = await startProxyRun({
+        profile,
+        n_agents: nAgents,
+        capture_all: true,
+      });
+      setActiveRun(run_id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleStop() {
+    if (activeRun === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await finishProxyRun(activeRun);
+      setActiveRun(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function handleCopy() {
+    void navigator.clipboard.writeText(envLine).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <section className="rounded-md border border-accent/30 bg-panel">
+      <PanelHeader title="SABOTAGE MY AGENT" />
+      <div className="space-y-3 p-4">
+        <p className="text-sm font-medium text-ink-dim">
+          Point any OpenAI-compatible agent at the chaos proxy - one env var,
+          zero code change. Its conversations render live on the cohort grid.
+        </p>
+
+        {activeRun === null ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-40">
+              <span className={LABEL_CLS}>chaos profile</span>
+              <select
+                value={profile}
+                onChange={(e) => setProfile(e.target.value)}
+                className={`${INPUT_CLS} sb-select`}
+              >
+                {profiles.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-28">
+              <span className={LABEL_CLS}>max agents</span>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={nAgents}
+                onChange={(e) => setNAgents(Math.max(1, Number(e.target.value) || 1))}
+                className={INPUT_CLS}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleStart()}
+              disabled={busy || profiles.length === 0}
+              className="rounded-sm border border-accent/60 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-colors duration-150 hover:bg-accent/20 disabled:opacity-40"
+            >
+              {busy ? "Starting…" : "Start capture run"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
+              <span className="text-sm font-medium text-ink">
+                Capturing headerless traffic into{" "}
+                <span className="font-mono text-xs text-ink-dim">{activeRun}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-sm border border-line bg-raised px-3 py-2 font-mono text-xs text-ink">
+                {envLine}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="shrink-0 rounded-sm border border-line px-3 py-2 text-xs font-semibold text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink"
+              >
+                {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="text-xs font-medium text-ink-faint">
+              Each new conversation becomes the next agent on the grid. For
+              concurrent cohorts, send X-Saboteur-Agent-Id headers instead -
+              they always win.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => watchRun(activeRun, nAgents)}
+                className="rounded-sm border border-accent/60 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-colors duration-150 hover:bg-accent/20"
+              >
+                Watch live
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleStop()}
+                disabled={busy}
+                className="rounded-sm border border-line px-4 py-2 text-sm font-medium text-ink-dim transition-colors duration-150 hover:border-crit/40 hover:bg-crit/10 hover:text-crit disabled:opacity-40"
+              >
+                {busy ? "Stopping…" : "Stop & score"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-sm border border-crit/40 bg-crit/10 px-3 py-2 text-sm text-crit">
+            {error}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

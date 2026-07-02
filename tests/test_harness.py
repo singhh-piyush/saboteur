@@ -444,6 +444,25 @@ def test_adapter_fault_lifts_fault_field() -> None:
     assert telemetry.payload == {"tool": "weather", "call_index": 1}
 
 
+def test_adapter_fault_lifts_latency_ms() -> None:
+    """latency/timeout faults populate latency_ms from their drawn params."""
+    lat = to_telemetry(
+        AgentEvent(0, 1, "fault", {"fault": "latency", "detail": {"delay_s": 2.5}}),
+        RUN_ID,
+    )
+    assert lat is not None and lat.latency_ms == 2500.0
+    tmo = to_telemetry(
+        AgentEvent(0, 1, "fault", {"fault": "timeout", "detail": {"timeout_after_s": 9.0}}),
+        RUN_ID,
+    )
+    assert tmo is not None and tmo.latency_ms == 9000.0
+    other = to_telemetry(
+        AgentEvent(0, 1, "fault", {"fault": "api_error", "detail": {"status_code": 500}}),
+        RUN_ID,
+    )
+    assert other is not None and other.latency_ms is None
+
+
 def test_adapter_recovery_lifts_recovery_field() -> None:
     event = AgentEvent(1, 4, "recovery", {"kind": "retry", "after_fault": "api_error"})
     telemetry = to_telemetry(event, RUN_ID)

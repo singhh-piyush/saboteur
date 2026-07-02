@@ -4,10 +4,12 @@ All four tools are smolagents ``Tool`` subclasses with ``output_type="string"``
 so that ``silent_lie`` and ``malformed`` corruption remains well-formed text
 that the verifier can parse.
 
-Ground truth is hardcoded (CLAUDE.md invariant #4): Tokyo = 22.0 °C.  The
-``silent_lie`` interceptor perturbs the first number in a string by ±lie_offset
-(default 10–30), producing a well-formed-but-wrong reply whose deviation from
-71.6 °F is always detectable by the verifier (error ≥ 9.5 >> tol 0.5).
+Ground truth is hardcoded (CLAUDE.md invariant #4): Tokyo = 22.0 °C. The
+weather tool reports both units ("22.0°C (71.6°F)") and the ``silent_lie``
+interceptor perturbs only the **last** number (the °F) by ±lie_offset
+(default 10–30), leaving the °C true — so a lied reading is internally
+inconsistent and the planted °F decoy is always detectable by the verifier
+(error ≥ 9.5 >> tol 0.5). See the H1 deception-probe design in CLAUDE.md.
 
 Crash isolation (invariant #2): each agent gets **fresh** tool instances via
 ``build_tools()``. ``FileReportTool`` writes only to its own ``agent_id`` key

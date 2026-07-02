@@ -17,9 +17,6 @@ dependencies = [
     "pyyaml",
     "pydantic>=2",
     "pydantic-settings",
-    "python-dotenv",
-    "pytest",
-    "pytest-asyncio",
 ]
 
 [project.scripts]
@@ -28,6 +25,8 @@ saboteur-mcp = "saboteur.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
+    "pytest",
+    "pytest-asyncio",
     "mypy",
     "ruff",
     "types-PyYAML",

@@ -263,6 +263,36 @@ export function downloadScorecardUrl(runId: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Wire proxy (capture-all "sabotage my agent" mode)
+// ---------------------------------------------------------------------------
+
+/** Start a proxy run. With `capture_all`, headerless /v1 traffic is absorbed
+ * into it - point any agent's OPENAI_BASE_URL at the proxy and it renders live. */
+export function startProxyRun(body: {
+  profile: string;
+  n_agents?: number;
+  capture_all?: boolean;
+}): Promise<{ run_id: string }> {
+  return request<{ run_id: string }>("/proxy/runs", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** The run currently absorbing headerless /v1 traffic (run_id null = none). */
+export function fetchCaptureStatus(): Promise<{ run_id: string | null }> {
+  return request<{ run_id: string | null }>("/proxy/capture");
+}
+
+/** Finish a proxy run: emit terminals, score, persist the scorecard. */
+export function finishProxyRun(runId: string): Promise<{ status: string; run_id: string }> {
+  return request<{ status: string; run_id: string }>(
+    `/proxy/runs/${encodeURIComponent(runId)}/finish`,
+    { method: "POST" },
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Targets (registry of runnable agents)
 // ---------------------------------------------------------------------------
 

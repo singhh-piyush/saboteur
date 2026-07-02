@@ -29,11 +29,80 @@ Think of it as a Chaos Monkey, but for AI agents.
 - Context drops: the agent loses part of its memory
 - Vanishing tools: a tool disappears in the middle of a run
 
+## Run it locally (no Docker)
+
+**Install** (Python 3.11+; Node 20+ only to build the dashboard):
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+cd frontend && npm ci && npm run build && cd ..   # the console UI
+```
+
+**Inference** — two ways to drive agents:
+
+- **Offline mock** (no GPU, no secrets): add `--mock` to any `saboteur run`
+  command below. It boots a bundled deterministic mock model, runs, and tears
+  it down — cohorts are reproducible.
+- **Real local LLM** (llama.cpp). `--jinja` is required for tool calls; `-np 8`
+  provides the parallel slots for the local N=8 cohort cap:
+
+  ```bash
+  llama-server -m ./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
+    --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
+  ```
+
+`.env` is optional for local dev (defaults target `http://localhost:8080/v1`);
+copy `.env.example` to change the model or endpoint — the swap is pure config.
+
+**Start the console** (orchestrator API + wire chaos proxy + dashboard, one port):
+
+```bash
+bash scripts/run_local.sh   # starts llama-server if down, then uvicorn on :8000
+# or, app only:  .venv/bin/uvicorn saboteur.api:app --reload --port 8000
+```
+
+Open **http://localhost:8000**. The chaos proxy is mounted at `/v1` (the
+standard OpenAI base path), run management at `/proxy/*`, the REST API at
+`/runs` / `/profiles` / `/targets`, live telemetry at `/ws/{run_id}`.
+
+**Run a cohort:**
+
+```bash
+# Saboteur's own reference agent (control + chaos), fully offline:
+saboteur run --target reference --profile hell_mode --control --mock
+
+# Sabotage YOUR agent with zero code change: start a capture run on the
+# Targets page ("Sabotage my agent") — or:
+#   curl -X POST localhost:8000/proxy/runs -H 'content-type: application/json' \
+#     -d '{"profile": "hell_mode", "n_agents": 4, "capture_all": true}'
+# — then just repoint your agent:
+OPENAI_BASE_URL=http://localhost:8000/v1 python your_agent.py
+```
+
+Artifacts land in `runs/{run_id}.jsonl` + `runs/{run_id}.scorecard.json`.
+`saboteur profiles` lists the chaos profiles (calm_seas, flaky_friday,
+rate_limit_storm, liars_den, hell_mode); `saboteur compare A B` prints the
+per-metric delta between two runs. For registered subprocess cohorts with a
+success oracle (survival rate for an agent you don't own), see
+`examples/byo_min_agent/`.
+
+**Replay the bundled golden run** — re-drives the dashboard from a recorded
+JSONL with all inference offline (the app must be up):
+
+```bash
+saboteur replay runs/hell_mode-20260629T231833-2b225c.jsonl --speed 2.0 --follow
+```
+
+**Tests:** `make test` (backend), `make lint` (ruff + mypy),
+`cd frontend && npx vitest run` (reducer parity).
+
 ## CI gate: block the merge if resilience drops
 
 Saboteur ships as a GitHub Action so resilience becomes a required check —
-chaos-test the agent on every PR, fail the merge when a metric falls below a
-threshold, and comment the per-metric delta vs the base branch's last run.
+chaos-test the agent on every PR, fail the merge when a metric breaches its
+threshold (direction-aware: survival fails below it, crash rate above it), and
+comment the per-metric delta vs the base branch's last run.
 
 ```yaml
 # .github/workflows/resilience.yml (a working copy lives in this repo)
@@ -127,6 +196,8 @@ commented `# CLOUD` block in `docker-compose.yml`.
 
 ## Status
 
-Containerized console stack shipped (`Dockerfile.server` + `docker-compose.yml`):
-fresh clone + host `llama-server` → `make up` → live dashboard + reference cohort
-end-to-end, no host Python beyond llama.cpp.
+End-to-end and demoable: chaos engine, wire proxy (with headerless capture-all
+mode), MCP shim, BYO subprocess cohorts, live dashboard + replay, two-tier
+scorecard, CLI with CI gate, GitHub Action, and the containerized console stack
+(`make up` → live dashboard + reference cohort with no host Python beyond
+llama.cpp).

@@ -15,6 +15,7 @@ an agent.
 from __future__ import annotations
 
 from saboteur.agents.outcomes import AgentEvent
+from saboteur.telemetry.build import latency_ms_from_detail
 from saboteur.telemetry.bus import TelemetryBus
 from saboteur.telemetry.schema import EventKind, TelemetryEvent
 
@@ -45,9 +46,13 @@ def to_telemetry(event: AgentEvent, run_id: str) -> TelemetryEvent | None:
     fault: str | None = None
     recovery: str | None = None
     tokens_used: int | None = None
+    latency_ms: float | None = None
 
     if event.kind == "fault":
         fault = data.pop("fault", None)
+        detail = data.get("detail")
+        if isinstance(detail, dict):
+            latency_ms = latency_ms_from_detail(detail)
     elif event.kind == "recovery":
         recovery = data.pop("kind", None)
     elif event.kind == "terminal":
@@ -61,6 +66,7 @@ def to_telemetry(event: AgentEvent, run_id: str) -> TelemetryEvent | None:
         fault=fault,
         recovery=recovery,
         tokens_used=tokens_used,
+        latency_ms=latency_ms,
         payload=data,
     )
 

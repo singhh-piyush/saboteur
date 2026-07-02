@@ -117,6 +117,7 @@ class ProxyRun:
         *,
         runs_dir: Path = _DEFAULT_RUNS_DIR,
         idle_timeout_s: float | None = None,
+        capture_all: bool = False,
     ) -> None:
         self.run_id = run_id
         self.profile = profile
@@ -129,6 +130,11 @@ class ProxyRun:
             if idle_timeout_s is not None
             else float(get_settings().proxy_idle_timeout_s)
         )
+        self.capture_all = capture_all
+        # Headerless attribution state (capture-all mode only): the next id to
+        # hand out on a conversation start, and the most recently started agent.
+        self._capture_next = 0
+        self._capture_current: int | None = None
         self.sessions: dict[int, ProxySession] = {}
         self.events: list[TelemetryEvent] = []
         self.last_activity = time.monotonic()
@@ -144,6 +150,29 @@ class ProxyRun:
             sess = ProxySession(self.run_id, agent_id, self.profile)
             self.sessions[agent_id] = sess
         return sess
+
+    def capture_agent_id(self, parsed: dict[str, Any]) -> int:
+        """Attribute a headerless request to an agent id (capture-all mode).
+
+        Heuristic: a request whose ``messages`` carry no assistant turn is a
+        conversation start → allocate the next agent id (capped at
+        ``n_agents - 1``, then the last id is reused); any other request
+        belongs to the most recently started conversation. Sound for the
+        common case (one agent process at a time, or sequential cohorts);
+        agents that interleave conversations concurrently should send the
+        ``X-Saboteur-Agent-Id`` header for exact attribution — headers always
+        win over this heuristic (see router.chat_completions).
+
+        Runs on the event loop between awaits, so allocation is atomic.
+        """
+        messages = parsed.get("messages") or []
+        is_start = not any(
+            isinstance(m, dict) and m.get("role") == "assistant" for m in messages
+        )
+        if is_start or self._capture_current is None:
+            self._capture_current = min(self._capture_next, self.n_agents - 1)
+            self._capture_next += 1
+        return self._capture_current
 
     def touch(self) -> None:
         self.last_activity = time.monotonic()
@@ -278,6 +307,10 @@ class ProxyRun:
                 return
             self._finished = True
 
+        # Stop absorbing headerless traffic the moment teardown begins.
+        if manager.capture_run is self:
+            manager.clear_capture(self)
+
         # Which agents get a terminal: every observed session in the pure path;
         # the full cohort (∪ terminals ∪ sessions) when the spawner drove it.
         if terminals is None:
@@ -370,9 +403,19 @@ class ProxyRunManager:
 
     def __init__(self) -> None:
         self._runs: dict[str, ProxyRun] = {}
+        # At most one capture-all run: the sink for headerless /v1 traffic.
+        self._capture_run: ProxyRun | None = None
 
     def get(self, run_id: str) -> ProxyRun | None:
         return self._runs.get(run_id)
+
+    @property
+    def capture_run(self) -> ProxyRun | None:
+        return self._capture_run
+
+    def clear_capture(self, run: ProxyRun) -> None:
+        if self._capture_run is run:
+            self._capture_run = None
 
     async def create(
         self,
@@ -381,11 +424,17 @@ class ProxyRunManager:
         n_agents: int,
         *,
         runs_dir: Path = _DEFAULT_RUNS_DIR,
+        capture_all: bool = False,
     ) -> ProxyRun:
         """Set up a run's bus/writer/registrations and emit ``run_started``.
 
-        Must be awaited from the event loop (binds the bus to it).
+        ``capture_all=True`` makes this run the sink for headerless /v1
+        traffic (at most one at a time — starting a new capture run finishes
+        the previous one). Must be awaited from the event loop (binds the bus
+        to it).
         """
+        if capture_all and self._capture_run is not None:
+            await self._capture_run.finish()
         bus = TelemetryBus()
         bus.bind(asyncio.get_running_loop())
         ws_registry.register(run_id, bus)
@@ -414,9 +463,17 @@ class ProxyRunManager:
             )
 
         run = ProxyRun(
-            run_id, profile, n_agents, bus, writer_task, runs_dir=runs_dir
+            run_id,
+            profile,
+            n_agents,
+            bus,
+            writer_task,
+            runs_dir=runs_dir,
+            capture_all=capture_all,
         )
         self._runs[run_id] = run
+        if capture_all:
+            self._capture_run = run
         run.emit_run_started()
         run.start_watchdog()
         return run

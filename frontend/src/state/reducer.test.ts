@@ -203,6 +203,20 @@ describe("agent status transitions", () => {
     expect(recovered.agents[0].recoveryCount).toBe(1);
   });
 
+  it("chaos-log detail renders context_drop's dropped_steps (backend field name)", () => {
+    const state = foldEvents([
+      ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),
+      ev({
+        event: "fault_injected",
+        step: 2,
+        fault: "context_drop",
+        payload: { detail: { dropped_steps: 3 } },
+        ts: "2026-06-10T12:00:02+00:00",
+      }),
+    ]);
+    expect(state.chaosLog[0].detail).toContain("dropped 3 steps");
+  });
+
   it("a clean tool call also resolves a fault", () => {
     const state = foldEvents([
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } }),

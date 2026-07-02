@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from typing import Any
 
 from fastapi import Response
@@ -191,8 +191,16 @@ async def _inject(
         body = json.dumps(parsed).encode("utf-8") if mutated else raw_body
 
         if stream and malformed is None:
+            # Tee the passthrough to pick up a trailing `usage` chunk (present
+            # when the client sends stream_options.include_usage). Bytes are
+            # yielded unchanged — the transparency contract holds. Streaming
+            # WITHOUT include_usage carries no usage data, so waste_factor
+            # under-counts those tokens.
             response = StreamingResponse(
-                forward.stream_passthrough(_UPSTREAM_SUBPATH, headers, body),
+                _stream_count_usage(
+                    session,
+                    forward.stream_passthrough(_UPSTREAM_SUBPATH, headers, body),
+                ),
                 media_type="text/event-stream",
             )
             errored = False
@@ -375,11 +383,48 @@ def _lie_request_tool_result(
 
 def _accumulate_tokens(session: ProxySession, content: bytes) -> None:
     try:
-        usage = (json.loads(content) or {}).get("usage") or {}
-        total = usage.get("total_tokens")
-        if total is None:
-            total = (usage.get("prompt_tokens") or 0) + (usage.get("completion_tokens") or 0)
-        session.tokens += int(total)
+        _add_usage(session, (json.loads(content) or {}).get("usage"))
+    except Exception:
+        pass
+
+
+def _add_usage(session: ProxySession, usage: Any) -> None:
+    if not isinstance(usage, dict):
+        return
+    total = usage.get("total_tokens")
+    if total is None:
+        total = (usage.get("prompt_tokens") or 0) + (usage.get("completion_tokens") or 0)
+    session.tokens += int(total)
+
+
+async def _stream_count_usage(
+    session: ProxySession, upstream: AsyncIterator[bytes]
+) -> AsyncIterator[bytes]:
+    """Yield SSE chunks unchanged while scanning for the final `usage` chunk.
+
+    Per the OpenAI streaming spec, with ``stream_options.include_usage`` every
+    chunk carries ``"usage": null`` except one terminal chunk with the totals —
+    so accumulating every non-null usage never double-counts.
+    """
+    tail = b""
+    async for chunk in upstream:
+        yield chunk
+        tail += chunk
+        *lines, tail = tail.split(b"\n")
+        for line in lines:
+            _scan_sse_line(session, line)
+    _scan_sse_line(session, tail)
+
+
+def _scan_sse_line(session: ProxySession, line: bytes) -> None:
+    line = line.strip()
+    if not line.startswith(b"data:"):
+        return
+    payload = line[len(b"data:") :].strip()
+    if not payload or payload == b"[DONE]":
+        return
+    try:
+        _add_usage(session, (json.loads(payload) or {}).get("usage"))
     except Exception:
         pass
 

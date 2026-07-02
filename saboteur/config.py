@@ -93,8 +93,8 @@ def get_model() -> OpenAIServerModel:
         api_key=s.openai_api_key,
         temperature=s.temperature,
         seed=s.model_seed,
-        # Stored in model.kwargs → applied at highest priority on every
-        # chat.completions.create call (models.py:546-550). This guarantees
-        # constrained generation even across smolagents version upgrades.
+        # Extra kwargs are stored on the model and applied at highest priority
+        # on every chat.completions.create call, guaranteeing constrained
+        # generation even across smolagents version upgrades.
         tool_choice=s.tool_choice,
     )

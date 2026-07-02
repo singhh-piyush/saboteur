@@ -1,13 +1,16 @@
 /**
- * The single swap point for the static walkthrough demo.
+ * The swap point for the static walkthrough demo.
  *
- * To point the walkthrough at a later run (e.g. an AMD MI300X cohort), replace
- * the two bundled files - `run.jsonl` and `scorecard.json` - and nothing else.
- * `DEMO_RUN.id` is derived from the scorecard's `run_id`, so it follows the
- * data automatically; no constant needs editing.
+ * To add or replace a demo run: drop a `{name}.jsonl` + `{name}.scorecard.json`
+ * pair in this directory, import them below, and add one entry to `DEMO_RUNS`
+ * with a human label (e.g. "Llama-3.1-8B" / "Llama-3.3-70B"). Nothing else
+ * changes - each run's `id` is derived from its scorecard's `run_id`, the
+ * walkthrough tour rebuilds from the data, and the landing scorecard renders
+ * `DEMO_RUNS[0]`. With more than one entry, the walkthrough playbar shows a
+ * run switcher.
  *
- * Both files are imported as raw text (`?raw`) and parsed at runtime. This
- * keeps `resolveJsonModule` out of tsconfig and makes the JSONL parse explicit.
+ * Files are imported as raw text (`?raw`) and parsed at runtime. This keeps
+ * `resolveJsonModule` out of tsconfig and makes the JSONL parse explicit.
  */
 
 import type { Scorecard } from "../lib/api";
@@ -40,14 +43,18 @@ export function parseScorecard(raw: string): Scorecard {
 export interface DemoRun {
   /** The run id - drives the offline registry + ScorecardView's activeRunId. */
   id: string;
+  /** Human label for the run switcher (typically the model under test). */
+  label: string;
   events: TelemetryEvent[];
   scorecard: Scorecard;
 }
 
-const scorecard = parseScorecard(scorecardRaw);
+function makeRun(label: string, eventsRaw: string, scRaw: string): DemoRun {
+  const scorecard = parseScorecard(scRaw);
+  return { id: scorecard.run_id, label, events: parseEvents(eventsRaw), scorecard };
+}
 
-export const DEMO_RUN: DemoRun = {
-  id: scorecard.run_id,
-  events: parseEvents(runRaw),
-  scorecard,
-};
+/** The bundled demo runs. `DEMO_RUNS[0]` is the default everywhere. */
+export const DEMO_RUNS: DemoRun[] = [
+  makeRun("MI300X · N=50", runRaw, scorecardRaw),
+];

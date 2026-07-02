@@ -185,6 +185,22 @@ def test_reconcile_indexes_and_prunes(tmp_path):
     assert db.run_get(run_id) is None
 
 
+def test_reconcile_skips_replay_sessions(tmp_path):
+    """replay-* JSONLs are dashboard re-emissions, never indexed as runs."""
+    db = Database(tmp_path / "saboteur.db")
+    replay_id = "replay-20260101T000000-cccccc"
+    _write_run(
+        tmp_path,
+        replay_id,
+        profile="hell_mode",
+        n_agents=2,
+        started=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    reconcile_runs(db, tmp_path)
+    assert db.run_get(replay_id) is None
+    assert replay_id not in db.run_ids()
+
+
 def test_reconcile_picks_up_new_scorecard(tmp_path):
     db = Database(tmp_path / "saboteur.db")
     run_id = "hell_mode-20260101T000000-bbbbbb"

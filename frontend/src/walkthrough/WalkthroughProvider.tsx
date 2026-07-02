@@ -31,7 +31,7 @@ import { clearOfflineRuns, registerOfflineRun, setOffline } from "../lib/api";
 import { ReplayDriver } from "../lib/replay";
 import { foldEvents, reduce } from "../state/reducer";
 import { RunContext, type RunContextValue } from "../state/RunContext";
-import { DEMO_RUN } from "../demo";
+import type { DemoRun } from "../demo";
 import { introFoldIndex } from "./tour";
 
 export interface WalkthroughControls {
@@ -67,18 +67,30 @@ interface Tick {
   speed: number;
 }
 
-/** Seed the very first paint with a populated grid (rather than an empty
- * "NO ACTIVE COHORT" frame) by folding events up to the intro index. The tour's
- * first beat seeks to the same index, so nothing visibly jumps. */
-const INITIAL_FOLD = introFoldIndex(DEMO_RUN.events);
+export function WalkthroughProvider({
+  run,
+  children,
+}: {
+  run: DemoRun;
+  children: ReactNode;
+}) {
+  // Seed the very first paint with a populated grid (rather than an empty
+  // "NO ACTIVE COHORT" frame) by folding events up to the intro index. The
+  // tour's first beat seeks to the same index, so nothing visibly jumps.
+  // The provider is remounted (keyed) when the demo run switches, so these
+  // once-per-mount initializers always see the current run.
+  const initialFoldRef = useRef<number | null>(null);
+  if (initialFoldRef.current === null) {
+    initialFoldRef.current = introFoldIndex(run.events);
+  }
+  const initialFold = initialFoldRef.current;
 
-export function WalkthroughProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reduce, undefined, () =>
-    foldEvents(DEMO_RUN.events.slice(0, INITIAL_FOLD)),
+    foldEvents(run.events.slice(0, initialFold)),
   );
   const [tick, setTick] = useState<Tick>({
-    position: INITIAL_FOLD,
-    length: DEMO_RUN.events.length,
+    position: initialFold,
+    length: run.events.length,
     playing: false,
     speed: INITIAL_SPEED,
   });
@@ -92,7 +104,7 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
   const driverRef = useRef<ReplayDriver | null>(null);
   if (driverRef.current === null) {
     const driver = new ReplayDriver(
-      DEMO_RUN.events,
+      run.events,
       dispatch,
       (i, t, p) => tickRef.current(i, t, p),
       REPLAY_OPTIONS,
@@ -108,13 +120,15 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
     const driver = driverRef.current;
     if (driver === null) return;
     setOffline(true);
-    registerOfflineRun(DEMO_RUN.id, DEMO_RUN.scorecard, DEMO_RUN.events);
-    driver.seek(INITIAL_FOLD);
+    registerOfflineRun(run.id, run.scorecard, run.events);
+    driver.seek(initialFold);
     return () => {
       driver.dispose();
       clearOfflineRuns();
       setOffline(false);
     };
+    // Once per mount: the provider is keyed by the run, never re-run in place.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const controls = useMemo<WalkthroughControls>(() => {
@@ -146,17 +160,17 @@ export function WalkthroughProvider({ children }: { children: ReactNode }) {
   const runValue = useMemo<RunContextValue>(
     () => ({
       state,
-      activeRunId: DEMO_RUN.id,
-      page: { kind: "live", runId: DEMO_RUN.id },
+      activeRunId: run.id,
+      page: { kind: "live", runId: run.id },
       navigate: noop,
       watchRun: noop,
-      expectedAgents: DEMO_RUN.scorecard.n_agents,
+      expectedAgents: run.scorecard.n_agents,
       startReplay: noop,
       replay: null,
       stop: noop,
       reconnect: noop,
     }),
-    [state],
+    [state, run],
   );
 
   return (

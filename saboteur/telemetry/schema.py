@@ -42,6 +42,8 @@ class TelemetryEvent(BaseModel):
     fault: str | None = None
     recovery: str | None = None
     tokens_used: int | None = None
+    # Injected wall-clock delay on latency/timeout fault_injected events
+    # (lifted from detail.delay_s / detail.timeout_after_s); null elsewhere.
     latency_ms: float | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
 

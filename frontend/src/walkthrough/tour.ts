@@ -51,6 +51,7 @@ export interface Beat {
 const REAL_RECOVERIES = new Set(["retry", "reformulate", "fallback_tool"]);
 
 interface PerAgent {
+  outcome: string;
   success: boolean | null;
   faults: string[];
   recoveries: string[];
@@ -138,6 +139,36 @@ function asPct(value: number | null | undefined): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/** How the picked crashed agent actually failed, from its frozen outcome -
+ * never assert a failure story the data doesn't back. */
+function crashStory(agent: PerAgent | undefined): string {
+  switch (agent?.outcome) {
+    case "infinite_retry":
+      return "This agent kept retrying the same dead call until its step budget ran out.";
+    case "timeout":
+      return "This agent ran out its wall-clock budget and the harness cut it off.";
+    case "hard_exception":
+      return "This agent died on an unhandled exception mid-task.";
+    case "silent_abandonment":
+      return "This agent quietly stopped acting and never filed a report.";
+    case "completed":
+      return "This agent finished - but filed a wrong answer, and the verifier caught it.";
+    default:
+      return "This agent never made it to a correct report.";
+  }
+}
+
+/** The recovery actions the picked surviving agent actually took. */
+function recoveryStory(agent: PerAgent | undefined): string {
+  const kinds = new Set((agent?.recoveries ?? []).filter((r) => REAL_RECOVERIES.has(r)));
+  const parts: string[] = [];
+  if (kinds.has("retry")) parts.push("retried");
+  if (kinds.has("reformulate")) parts.push("reformulated its call");
+  if (kinds.has("fallback_tool")) parts.push("fell back to an alternate tool");
+  const did = parts.length > 0 ? parts.join(", then ") : "kept making progress";
+  return `Hit by faults, this agent ${did} - and still filed a correct report. The green rows are its productive recovery actions.`;
+}
+
 export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[] {
   const end = events.length;
   const intro = introFoldIndex(events);
@@ -148,9 +179,8 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
   const mixedIdx = clampIdx(Math.round(end * 0.3));
   const feedBusyIdx = clampIdx(Math.round(end * 0.46));
 
-  const { recovering, crashed, deceived } = pickAgents(
-    scorecard.per_agent as unknown as Record<string, PerAgent>,
-  );
+  const perAgent = scorecard.per_agent as unknown as Record<string, PerAgent>;
+  const { recovering, crashed, deceived } = pickAgents(perAgent);
   const seed = seedFrom(events);
   const n = scorecard.n_agents;
   const surv = asPct(scorecard.survival_rate);
@@ -165,7 +195,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
     placement: "bottom",
     eyebrow: "Recorded run",
     title: "A real Saboteur cohort",
-    body: `${n} agents run the same task at once under hell_mode, with every one of the 8 fault types firing on a fixed seed${seed === null ? "" : ` (${seed})`}. The survival ticker resolves as agents finish.`,
+    body: `${n} agents run the same task at once under ${scorecard.profile}, with all 8 fault types in play on a fixed seed${seed === null ? "" : ` (${seed})`}. The survival ticker resolves as agents finish.`,
     onEnter: (ctx) => {
       ctx.selectAgent(null);
       ctx.setTab("grid");
@@ -194,7 +224,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
     placement: "right",
     eyebrow: "Chaos feed",
     title: "Faults are landing",
-    body: "Every injection streams here in order: API 500s, 429 rate limits, injected latency, malformed and silent-lie tool results, vanished tools, dropped context. Same seed, same sequence, every run.",
+    body: "Every injection streams here in order: API 500s, 429 rate limits, injected latency, malformed and silent-lie tool results, vanished tools, dropped context. All seeded - the same profile and seed replay the same fault decisions for a given call sequence.",
     onEnter: (ctx) => {
       ctx.selectAgent(null);
       ctx.seek(feedBusyIdx);
@@ -211,7 +241,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
       title: `${agentLabel(recovering)} recovers`,
       interactive: { agent: recovering },
       promptBody: `${agentLabel(recovering)} was hit by faults but still passed. Click its cell to open the step-by-step trace and see how.`,
-      body: "Hit by faults, this agent retried and then fell back to an alternate tool, and still filed a correct report. The green rows are its productive recovery actions.",
+      body: recoveryStory(perAgent[String(recovering)]),
       onEnter: (ctx) => {
         ctx.setTab("grid");
         ctx.selectAgent(null);
@@ -230,7 +260,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
       title: `${agentLabel(crashed)} goes down`,
       interactive: { agent: crashed },
       promptBody: `Not everyone survives. Click ${agentLabel(crashed)} to see where it ran out of road.`,
-      body: "This agent kept retrying a tool that had vanished and ran out its step budget. The trace shows exactly where it stalled.",
+      body: `${crashStory(perAgent[String(crashed)])} The trace shows exactly where it went wrong.`,
       onEnter: (ctx) => {
         ctx.setTab("grid");
         ctx.selectAgent(null);
@@ -280,7 +310,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
     placement: "top",
     eyebrow: "Explore freely",
     title: "Now it's yours to drive",
-    body: "Drag the timeline to scrub, change speed, switch to the scorecard, or click any agent to open its trace. Same profile and seed reproduce this exact run - point Saboteur at your own agent and get this scorecard in CI.",
+    body: "Drag the timeline to scrub, change speed, switch to the scorecard, or click any agent to open its trace. Everything you see re-derives from the recorded event log - point Saboteur at your own agent and get this scorecard in CI.",
     actions: [
       { label: "Back to landing", variant: "ghost", kind: "exit" },
       { label: "View on GitHub", variant: "primary", kind: "link", href: REPO_URL },

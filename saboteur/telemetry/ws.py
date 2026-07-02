@@ -16,8 +16,10 @@ The ``__stream_complete__`` frame is a **transport-only control message**:
   - Clients use it to distinguish "stream finished cleanly" from "connection
     lost unexpectedly", avoiding the tight-reconnect-loop bug on finished runs.
 
-A 20-second server-side keepalive ping is sent for idle live connections so
-they survive proxies that close stale-seeming TCP connections.
+A ``{"event":"__keepalive__"}`` control frame is sent every 20 seconds of idle
+time on live connections so they survive proxies that close stale-seeming TCP
+connections. Like ``__stream_complete__``, it is transport-only: never written
+to JSONL, explicitly ignored by clients.
 
 Registry usage::
 
@@ -96,6 +98,20 @@ registry = BusRegistry()
 # ---------------------------------------------------------------------------
 
 _STREAM_COMPLETE_FRAME = json.dumps({"event": "__stream_complete__"})
+_KEEPALIVE_FRAME = json.dumps({"event": "__keepalive__"})
+
+
+async def _send_keepalive(websocket: WebSocket) -> None:
+    """Send the idle-connection keepalive control frame.
+
+    Transport-only, like ``__stream_complete__``: never a TelemetryEvent,
+    never written to JSONL (invariant #3); the frontend drops it explicitly.
+    Raises WebSocketDisconnect if the client is gone.
+    """
+    try:
+        await websocket.send_text(_KEEPALIVE_FRAME)
+    except Exception:
+        raise WebSocketDisconnect(code=1001)
 
 
 async def _send_stream_complete(websocket: WebSocket) -> None:
@@ -129,8 +145,8 @@ async def websocket_run(websocket: WebSocket, run_id: str) -> None:
     - Real events are sent as ``TelemetryEvent`` JSON objects.
     - After all events have been delivered, a ``{"event":"__stream_complete__"}``
       control frame is sent and the socket is closed with code 1000.
-    - For live runs, a WebSocket-level ping is sent every 20 seconds of
-      inactivity so proxies do not drop the connection.
+    - For live runs, a ``{"event":"__keepalive__"}`` control frame is sent
+      every 20 seconds of inactivity so proxies do not drop the connection.
     """
     await websocket.accept()
 
@@ -151,10 +167,7 @@ async def websocket_run(websocket: WebSocket, run_id: str) -> None:
             
             ticks += 1
             if ticks % 10 == 0:
-                try:
-                    await websocket.send_bytes(b"")
-                except Exception:
-                    raise WebSocketDisconnect(code=1001)
+                await _send_keepalive(websocket)
 
     try:
         if bus is not None:
@@ -210,10 +223,10 @@ async def _stream_live(
 ) -> None:
     """Forward live events to the client, deduplicating against the backlog.
 
-    Sends a WebSocket ping every ``_KEEPALIVE_INTERVAL_S`` seconds of idle
-    time so the connection survives proxies that aggressively close stale
-    connections.  The keepalive ping is at the WebSocket framing layer and is
-    transparent to the application-level event stream.
+    Sends a ``__keepalive__`` control frame every ``_KEEPALIVE_INTERVAL_S``
+    seconds of idle time so the connection survives proxies that aggressively
+    close stale connections. Clients drop the frame; it never reaches the
+    event-sourced state.
     """
     # We need a raw async iterator; the bus subscriber yields one. The param is
     # typed ``object`` to avoid leaking the bus subscriber type into the signature.
@@ -229,12 +242,8 @@ async def _stream_live(
             # Bus closed — run finished; return so caller sends control frame.
             return
         except asyncio.TimeoutError:
-            # No event in the last 20 s — send a keepalive ping and continue.
-            try:
-                await websocket.send_bytes(b"")  # WebSocket ping equivalent
-            except Exception:
-                # Client disconnected during idle wait.
-                raise WebSocketDisconnect(code=1001)
+            # No event in the last 20 s — send a keepalive frame and continue.
+            await _send_keepalive(websocket)
             continue
 
         if _identity(event) in replayed:

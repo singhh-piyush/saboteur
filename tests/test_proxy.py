@@ -177,6 +177,27 @@ async def test_passthrough_streaming_preserved(monkeypatch, tmp_path):
     assert _faults(run) == []
 
 
+async def test_streaming_usage_chunk_counted(monkeypatch, tmp_path):
+    """A trailing usage chunk (stream_options.include_usage) feeds waste_factor."""
+    fake = FakeUpstream().install(monkeypatch)
+
+    async def stream_with_usage(subpath, headers, body):
+        fake.bodies.append(body)
+        yield b'data: {"choices":[{"delta":{"content":"42"}}],"usage":null}\n\n'
+        yield b'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":7,"total_tokens":17}}\n\n'
+        yield b"data: [DONE]\n\n"
+
+    monkeypatch.setattr(forward, "stream_passthrough", stream_with_usage)
+    run = await _make_run(_profile(), tmp=tmp_path)
+    raw, parsed = _chat(_basic_messages(), stream=True)
+
+    resp = await _send(run, 0, raw, parsed)
+    body = await _read_stream(resp)  # drain — bytes still passthrough-identical
+
+    assert b"[DONE]" in body
+    assert run.session(0).tokens == 17
+
+
 # ---------------------------------------------------------------------------
 # Each fault at probability 1.0
 # ---------------------------------------------------------------------------
@@ -251,6 +272,9 @@ async def test_latency_sleeps_then_forwards(monkeypatch, tmp_path):
     assert slept and slept[0] >= 0.5
     assert fake.bodies == [raw]  # still forwarded, unchanged
     assert "latency" in _faults(run)
+    # The drawn delay is lifted onto the event's latency_ms field.
+    lat = next(e for e in run.events if e.fault == "latency")
+    assert lat.latency_ms == pytest.approx(slept[0] * 1000)
 
 
 async def test_malformed_truncates_response(monkeypatch, tmp_path):
@@ -448,6 +472,213 @@ async def test_finish_emits_terminals_and_is_idempotent(monkeypatch, tmp_path):
     assert len(done) == 1
     assert len(run_finished) == 1
     assert done[0].payload["success"] is None
+
+
+# ---------------------------------------------------------------------------
+# Headerless capture-all mode ("one env var, zero code change")
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def clean_capture():
+    """The manager is a module singleton — never leak capture state across tests."""
+    yield
+    manager._capture_run = None
+
+
+def _start_messages() -> list[dict[str, Any]]:
+    """A conversation-start request: no assistant turn yet."""
+    return [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "task"},
+    ]
+
+
+async def test_capture_agent_id_allocation(monkeypatch, tmp_path, clean_capture):
+    FakeUpstream().install(monkeypatch)
+    run = await manager.create(
+        "capture-alloc", _profile(), 3, runs_dir=tmp_path, capture_all=True
+    )
+
+    # Conversation start → agent 0; continuations stick to it.
+    assert run.capture_agent_id({"messages": _start_messages()}) == 0
+    assert run.capture_agent_id({"messages": _basic_messages()}) == 0
+    # New conversation start → agent 1.
+    assert run.capture_agent_id({"messages": _start_messages()}) == 1
+    assert run.capture_agent_id({"messages": _basic_messages()}) == 1
+    # Third and fourth starts: allocation caps at n_agents - 1.
+    assert run.capture_agent_id({"messages": _start_messages()}) == 2
+    assert run.capture_agent_id({"messages": _start_messages()}) == 2
+    await run.finish()
+
+
+async def test_capture_run_absorbs_headerless_and_faults_fire(
+    monkeypatch, tmp_path, clean_capture
+):
+    fake = FakeUpstream().install(monkeypatch)
+    run = await manager.create(
+        "capture-faults",
+        _profile({"type": "silent_lie", "probability": 1.0, "target_tools": ["weather"]}),
+        1,
+        runs_dir=tmp_path,
+        capture_all=True,
+    )
+    assert manager.capture_run is run
+
+    from starlette.testclient import TestClient
+
+    from saboteur.api import app
+
+    raw, _ = _chat(_basic_messages())
+    with TestClient(app) as client:
+        resp = client.post("/v1/chat/completions", content=raw)  # NO headers
+    assert resp.status_code == 200
+
+    # The fault fired inside the capture run, on the forwarded body.
+    assert "silent_lie" in _faults(run)
+    forwarded = json.loads(fake.bodies[0])
+    assert forwarded["messages"][-1]["content"] != "22.0°C (71.6°F)"
+    await run.finish()
+
+
+async def test_headers_override_capture(monkeypatch, tmp_path, clean_capture):
+    FakeUpstream().install(monkeypatch)
+    capture = await manager.create(
+        "capture-bg", _profile(), 1, runs_dir=tmp_path, capture_all=True
+    )
+    headered = await manager.create(
+        "capture-target",
+        _profile({"type": "api_error", "probability": 1.0}),
+        1,
+        runs_dir=tmp_path,
+    )
+
+    from starlette.testclient import TestClient
+
+    from saboteur.api import app
+
+    raw, _ = _chat(_basic_messages())
+    with TestClient(app) as client:
+        resp = client.post(
+            "/v1/chat/completions",
+            content=raw,
+            headers={"X-Saboteur-Run-Id": "capture-target", "X-Saboteur-Agent-Id": "0"},
+        )
+    # Routed to the headered run (its api_error fired), not the capture run.
+    assert resp.status_code in (500, 503)
+    assert "api_error" in _faults(headered)
+    assert capture.events == [e for e in capture.events if e.event == "run_started"]
+    await headered.finish()
+    await capture.finish()
+
+
+async def test_unknown_run_header_passes_through_never_captured(
+    monkeypatch, tmp_path, clean_capture
+):
+    fake = FakeUpstream().install(monkeypatch)
+    capture = await manager.create(
+        "capture-strict", _profile({"type": "api_error", "probability": 1.0}),
+        1, runs_dir=tmp_path, capture_all=True,
+    )
+
+    from starlette.testclient import TestClient
+
+    from saboteur.api import app
+
+    raw, _ = _chat(_basic_messages())
+    with TestClient(app) as client:
+        resp = client.post(
+            "/v1/chat/completions",
+            content=raw,
+            headers={"X-Saboteur-Run-Id": "no-such-run"},
+        )
+    # Explicitly-targeted unknown run → transparent passthrough, NOT captured.
+    assert resp.status_code == 200
+    assert resp.content == _CANNED_BYTES
+    assert fake.bodies == [raw]
+    assert _faults(capture) == []
+    await capture.finish()
+
+
+async def test_second_capture_run_finishes_the_first(monkeypatch, tmp_path, clean_capture):
+    FakeUpstream().install(monkeypatch)
+    first = await manager.create(
+        "capture-one", _profile(), 1, runs_dir=tmp_path, capture_all=True
+    )
+    second = await manager.create(
+        "capture-two", _profile(), 1, runs_dir=tmp_path, capture_all=True
+    )
+    assert manager.capture_run is second
+    # The first was finished (scorecard persisted) when the second started.
+    assert (tmp_path / "capture-one.scorecard.json").exists()
+    assert any(e.event == "run_finished" for e in first.events)
+    await second.finish()
+    assert manager.capture_run is None
+
+
+async def test_finish_clears_capture(monkeypatch, tmp_path, clean_capture):
+    FakeUpstream().install(monkeypatch)
+    run = await manager.create(
+        "capture-clear", _profile(), 1, runs_dir=tmp_path, capture_all=True
+    )
+    assert manager.capture_run is run
+    await run.finish()
+    assert manager.capture_run is None
+
+
+async def test_capture_replay_parity(monkeypatch, tmp_path, clean_capture):
+    """A captured headerless cohort re-scores from its JSONL identically."""
+    FakeUpstream().install(monkeypatch)
+    profile = _profile(
+        {"type": "api_error", "probability": 0.4},
+        {"type": "silent_lie", "probability": 0.5, "target_tools": ["weather"]},
+        seed=42,
+        name="capture",
+    )
+    run = await manager.create(
+        "capture-parity", profile, 2, runs_dir=tmp_path, capture_all=True
+    )
+    for _conversation in range(2):
+        raw, parsed = _chat(_start_messages())
+        session = run.session(run.capture_agent_id(parsed))
+        await inject.inject_chat_completion(
+            run, session, raw_body=raw, parsed=parsed, headers={}
+        )
+        for _turn in range(5):
+            raw, parsed = _chat(_basic_messages())
+            session = run.session(run.capture_agent_id(parsed))
+            await inject.inject_chat_completion(
+                run, session, raw_body=raw, parsed=parsed, headers={}
+            )
+    assert set(run.sessions) == {0, 1}
+    await run.finish()
+
+    persisted = Scorecard.model_validate_json(
+        (tmp_path / "capture-parity.scorecard.json").read_text()
+    )
+    rescored = score(
+        read_jsonl(tmp_path / "capture-parity.jsonl"),
+        [],
+        run_id="capture-parity",
+        profile=profile.name,
+    )
+    assert rescored.model_dump() == persisted.model_dump()
+
+
+def test_capture_status_endpoint(http_env, clean_capture):
+    from starlette.testclient import TestClient
+
+    from saboteur.api import app
+
+    with TestClient(app) as client:
+        assert client.get("/proxy/capture").json() == {"run_id": None}
+        started = client.post(
+            "/proxy/runs", json={"profile": "calm_seas", "n_agents": 1, "capture_all": True}
+        )
+        run_id = started.json()["run_id"]
+        assert client.get("/proxy/capture").json() == {"run_id": run_id}
+        client.post(f"/proxy/runs/{run_id}/finish")
+        assert client.get("/proxy/capture").json() == {"run_id": None}
 
 
 # ---------------------------------------------------------------------------

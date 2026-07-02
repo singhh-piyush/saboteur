@@ -30,9 +30,6 @@ class ChaosRandom:
     def uniform(self, low: float, high: float) -> float:
         return self._rng.uniform(low, high)
 
-    def randint(self, low: int, high: int) -> int:
-        return self._rng.randint(low, high)
-
     def choice(self, options: Sequence[T]) -> T:
         return self._rng.choice(options)
 

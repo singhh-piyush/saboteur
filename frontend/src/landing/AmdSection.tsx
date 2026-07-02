@@ -11,7 +11,7 @@ const POINTS: { stat: string; countTo?: number; label: string; body: string }[] 
   {
     stat: "ROCm",
     label: "vLLM on MI300X",
-    body: "An open inference stack on AMD: vLLM on ROCm and Fireworks. No proprietary runtime in the path.",
+    body: "An open inference stack on AMD: vLLM on ROCm. No proprietary runtime in the path.",
   },
   {
     stat: "1",

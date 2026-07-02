@@ -29,6 +29,7 @@ def event(
     fault: str | None = None,
     recovery: str | None = None,
     tokens_used: int | None = None,
+    latency_ms: float | None = None,
     payload: dict[str, Any] | None = None,
 ) -> TelemetryEvent:
     """The generic constructor every other builder delegates to."""
@@ -40,8 +41,22 @@ def event(
         fault=fault,
         recovery=recovery,
         tokens_used=tokens_used,
+        latency_ms=latency_ms,
         payload=payload or {},
     )
+
+
+def latency_ms_from_detail(detail: dict[str, Any]) -> float | None:
+    """The injected wall-clock delay of a latency/timeout fault, in ms.
+
+    Lifted onto ``fault_injected`` events so the schema's ``latency_ms`` field
+    is populated where the data exists; other fault kinds leave it null.
+    """
+    for key in ("delay_s", "timeout_after_s"):
+        value = detail.get(key)
+        if isinstance(value, (int, float)):
+            return float(value) * 1000.0
+    return None
 
 
 def run_started_event(
@@ -113,6 +128,7 @@ def fault_event(
         step,
         "fault_injected",
         fault=fault,
+        latency_ms=latency_ms_from_detail(detail),
         payload={"tool": tool, "call_index": step, "detail": detail},
     )
 

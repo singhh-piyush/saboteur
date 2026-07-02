@@ -427,14 +427,16 @@ def reconcile_runs(db: Database, runs_dir: Path) -> None:
     Indexes any run not yet present and re-indexes one whose scorecard appeared
     since (so a just-finished run picks up its metrics). Prunes rows whose JSONL
     no longer exists — disk is the source of truth. Control cohorts
-    (``*-control``) are folded into their parent and never indexed.
+    (``*-control``) are folded into their parent and never indexed. Replay
+    sessions (``replay-*``) are dashboard re-emissions of an existing run, not
+    runs of their own — indexing them would double-count the source run.
     """
     if not runs_dir.is_dir():
         return
     on_disk: set[str] = set()
     for log in runs_dir.glob("*.jsonl"):
         run_id = log.stem
-        if run_id.endswith("-control"):
+        if run_id.endswith("-control") or run_id.startswith("replay-"):
             continue
         on_disk.add(run_id)
         existing = db.run_get(run_id)

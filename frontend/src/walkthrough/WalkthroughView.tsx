@@ -21,7 +21,7 @@ import { ScorecardView } from "../components/ScorecardView";
 import { TimelineDrawer } from "../components/TimelineDrawer";
 import { TooltipSuppression } from "../components/Tooltip";
 import { useRun } from "../state/RunContext";
-import { DEMO_RUN } from "../demo";
+import { DEMO_RUNS, type DemoRun } from "../demo";
 import { Playbar } from "./Playbar";
 import { usePrefersReducedMotion } from "./Spotlight";
 import { TourOverlay } from "./TourOverlay";
@@ -33,14 +33,28 @@ type Tab = "grid" | "scorecard";
 const CARD = "rounded-lg border border-line bg-panel";
 
 export function WalkthroughView({ onExit }: { onExit: () => void }) {
+  // Which bundled demo run is playing. Keying the provider remounts the whole
+  // replay (driver, reducer state, tour) cleanly on switch.
+  const [runIndex, setRunIndex] = useState(0);
+  const run = DEMO_RUNS[runIndex] ?? DEMO_RUNS[0];
   return (
-    <WalkthroughProvider>
-      <WalkthroughShell onExit={onExit} />
+    <WalkthroughProvider key={run.id} run={run}>
+      <WalkthroughShell run={run} runIndex={runIndex} onSwitchRun={setRunIndex} onExit={onExit} />
     </WalkthroughProvider>
   );
 }
 
-function WalkthroughShell({ onExit }: { onExit: () => void }) {
+function WalkthroughShell({
+  run,
+  runIndex,
+  onSwitchRun,
+  onExit,
+}: {
+  run: DemoRun;
+  runIndex: number;
+  onSwitchRun: (index: number) => void;
+  onExit: () => void;
+}) {
   const { state } = useRun();
   const { play, setSpeed, restart } = useWalkthrough();
 
@@ -52,7 +66,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const [tourMode, setTourMode] = useState<"tour" | "free">("tour");
   const [tourBeat, setTourBeat] = useState(0);
 
-  const beats = useMemo(() => buildTour(DEMO_RUN.events, DEMO_RUN.scorecard), []);
+  const beats = useMemo(() => buildTour(run.events, run.scorecard), [run]);
 
   const selectAgent = (id: number | null) => {
     if (id !== null) setLastAgent(id);
@@ -159,9 +173,10 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
           <div className={`${CARD} overflow-hidden max-xl:bg-panel/95 max-xl:backdrop-blur-md`}>
             <PanelHeader title="RECORDED RUN" />
             <dl className="space-y-2 p-3 text-sm">
-              <InfoRow k="profile" v={state.profile ?? DEMO_RUN.scorecard.profile} />
+              <InfoRow k="run" v={run.label} />
+              <InfoRow k="profile" v={state.profile ?? run.scorecard.profile} />
               <InfoRow k="seed" v={state.seed === null ? "-" : String(state.seed)} />
-              <InfoRow k="agents" v={String(DEMO_RUN.scorecard.n_agents)} />
+              <InfoRow k="agents" v={String(run.scorecard.n_agents)} />
               <InfoRow k="source" v="static replay" />
             </dl>
           </div>
@@ -237,7 +252,12 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
           </div>
 
           <div data-tour="playbar">
-            <Playbar onReplayTour={replayTour} showReplayTour={tourMode === "free"} />
+            <Playbar
+              onReplayTour={replayTour}
+              showReplayTour={tourMode === "free"}
+              runIndex={runIndex}
+              onSwitchRun={onSwitchRun}
+            />
           </div>
         </main>
 

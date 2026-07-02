@@ -323,7 +323,8 @@ function describeFault(ev: TelemetryEvent): string {
       parts.push(`retry-after ${d["retry_after_s"]}s`);
     if (typeof d["status_code"] === "number") parts.push(`HTTP ${d["status_code"]}`);
     if (typeof d["delay_s"] === "number") parts.push(`+${d["delay_s"]}s`);
-    if (typeof d["dropped"] === "number") parts.push(`dropped ${d["dropped"]} steps`);
+    if (typeof d["dropped_steps"] === "number")
+      parts.push(`dropped ${d["dropped_steps"]} steps`);
   }
   return parts.join(" · ");
 }

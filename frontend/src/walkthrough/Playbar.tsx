@@ -6,6 +6,7 @@
  */
 
 import { PauseIcon, PlayIcon, RestartIcon } from "../components/Icons";
+import { DEMO_RUNS } from "../demo";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 const SPEEDS = [0.5, 1, 2, 4];
@@ -14,15 +15,38 @@ interface PlaybarProps {
   /** Restart the guided tour (shown only in free mode). */
   onReplayTour?: () => void;
   showReplayTour: boolean;
+  /** Bundled-run switcher (rendered only when more than one run is bundled). */
+  runIndex: number;
+  onSwitchRun: (index: number) => void;
 }
 
-export function Playbar({ onReplayTour, showReplayTour }: PlaybarProps) {
+export function Playbar({ onReplayTour, showReplayTour, runIndex, onSwitchRun }: PlaybarProps) {
   const { position, length, playing, speed, play, pause, restart, setSpeed, seek } =
     useWalkthrough();
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-t border-line bg-panel px-3 py-2">
       <span className="font-display text-xs font-semibold tracking-widest text-win">REPLAY</span>
+
+      {/* Run/model switcher - switching remounts the replay with that run. */}
+      {DEMO_RUNS.length > 1 && (
+        <div className="flex gap-1">
+          {DEMO_RUNS.map((run, i) => (
+            <button
+              key={run.id}
+              type="button"
+              onClick={() => onSwitchRun(i)}
+              className={`rounded-sm border px-2 py-0.5 text-xs font-semibold transition-colors duration-150 ${
+                runIndex === i
+                  ? "border-accent/50 bg-accent/10 text-accent"
+                  : "border-line text-ink-faint hover:text-ink"
+              }`}
+            >
+              {run.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <button
         type="button"

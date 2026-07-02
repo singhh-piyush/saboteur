@@ -595,14 +595,20 @@ def bulk_delete_runs(
     if not _RUNS_DIR.is_dir():
         return {"deleted": 0}
 
-    # Collect all non-control run IDs that have a JSONL file.
-    run_ids: list[str] = [
+    # Collect all non-control run IDs that have a JSONL file — plus any run
+    # left with only a scorecard (its JSONL was removed out-of-band).
+    run_ids: set[str] = {
         log.stem
         for log in _RUNS_DIR.glob("*.jsonl")
         if not log.stem.endswith("-control")
-    ]
+    }
+    run_ids.update(
+        sc.name.removesuffix(".scorecard.json")
+        for sc in _RUNS_DIR.glob("*.scorecard.json")
+        if not sc.name.removesuffix(".scorecard.json").endswith("-control")
+    )
 
-    for run_id in run_ids:
+    for run_id in sorted(run_ids):
         reg_state = run_registry.get(run_id)
         if reg_state is not None and reg_state.status in (
             RunStatus.RUNNING,

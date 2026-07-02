@@ -4,8 +4,9 @@ type Stage = "now" | "next" | "later";
 
 const ITEMS: { stage: Stage; title: string; body: string }[] = [
   { stage: "now", title: "Local-first", body: "Full chaos engine, proxy, scorecard, and CI gate running on a single local GPU today." },
-  { stage: "next", title: "N=50 on MI300X", body: "The full cohort run - 50 concurrent agents under one seeded profile on AMD." },
-  { stage: "next", title: "MCP chaos shim", body: "Tool-layer chaos for any MCP client via a stdio relay - sabotage tools/call and tools/list." },
+  { stage: "now", title: "N=50 on MI300X", body: "The full cohort run - 50 concurrent agents under one seeded profile on AMD. The bundled demo replay is one." },
+  { stage: "now", title: "MCP chaos shim", body: "Tool-layer chaos for any MCP client via a stdio relay - sabotage tools/call and tools/list." },
+  { stage: "next", title: "Model resilience comparisons", body: "The same seeded chaos across model sizes and families - resilience as a benchmark axis, not an anecdote." },
   { stage: "later", title: "Hosted resilience CI", body: "Resilience checks as a service, wired to your PRs with no infrastructure to run." },
 ];
 

@@ -7,10 +7,14 @@ CLAUDE.md
 # Local env (secrets / host-specific). Only .env.example is committed.
 .env
 
-# SQLite run index/cache — rebuildable from runs/*.jsonl, never authoritative.
-runs/saboteur.db
-runs/saboteur.db-wal
-runs/saboteur.db-shm
+# Run artifacts stay local (the SQLite index is rebuildable from the JSONL).
+# Only the golden offline demo run is tracked — it drives `saboteur replay`
+# on a fresh clone with no inference.
+runs/*
+!runs/.gitkeep
+!runs/hell_mode-20260629T231833-2b225c.jsonl
+!runs/hell_mode-20260629T231833-2b225c-control.jsonl
+!runs/hell_mode-20260629T231833-2b225c.scorecard.json
 
 # Python
 __pycache__/
@@ -31,4 +35,6 @@ frontend/dist/
 
 # Logs
 *.log
+
+# Local run guide — stays untracked; the README carries the running instructions.
 RUNNING.md

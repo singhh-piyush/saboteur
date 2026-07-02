@@ -547,6 +547,20 @@ def test_bulk_delete_skips_running_runs(tmp_runs, clean_registry):
         assert not (tmp_runs / f"bulk-finished-{i}.jsonl").exists()
 
 
+def test_bulk_delete_catches_scorecard_only_runs(tmp_runs, clean_registry):
+    """A run left with only a scorecard (JSONL removed out-of-band) is deleted too."""
+    from saboteur.api import app
+
+    (tmp_runs / "bulk-orphan.scorecard.json").write_text('{"run_id":"x"}')
+
+    with TestClient(app) as client:
+        resp = client.delete("/runs", params={"status": "finished"})
+
+    assert resp.status_code == 200
+    assert resp.json()["deleted"] == 1
+    assert not (tmp_runs / "bulk-orphan.scorecard.json").exists()
+
+
 # ---------------------------------------------------------------------------
 # POST /runs target routing (BYO vs reference)
 # ---------------------------------------------------------------------------
