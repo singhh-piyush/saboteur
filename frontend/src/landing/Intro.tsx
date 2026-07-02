@@ -4,7 +4,8 @@
  *   1. Two statements fade/stagger in (brand type, accent-lit key phrases):
  *      "You wouldn't ship a microservice without load testing."
  *      "Don't ship an agent without chaos testing."
- *   2. They cross-fade into a large "SABOTEUR" wordmark with a cyberpunk glitch.
+ *   2. They cross-fade into a large "SABOTEUR" wordmark that glitches hard on
+ *      entry, then settles clean (chaos resolving into something solid).
  *   3. The whole overlay fades out to reveal the landing (already painted beneath).
  *
  * Guardrails: instantly skippable (click / scroll / any key), and skipped entirely
@@ -27,8 +28,12 @@ export function introShouldSkip(): boolean {
 
 const FADE_MS = 1100; // slow, smooth fade-out to the landing
 const LINES_HOLD_MS = 5000; // statements on screen before they fade
-const BLACK_MS = 1500; // pure-black beat after the lines, before the wordmark
-const WORDMARK_MS = 3200; // glitch wordmark hold before the final fade
+// A dramatic pause reads as intentional around half a second; much longer and
+// a black screen starts to read as "it broke".
+const BLACK_MS = 600;
+// Entry glitch (1.2s) + a clean hold, then the fade. Long enough to register,
+// short enough that the logo never feels parked.
+const WORDMARK_MS = 2200;
 
 type Phase = "lines" | "black" | "wordmark";
 
@@ -124,7 +129,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
         </p>
       </div>
 
-      {/* Phase 2 - the wordmark, cyberpunk glitch. */}
+      {/* Phase 2 - the wordmark: glitches on entry, settles clean, fades. */}
       <div
         className="absolute"
         style={{
@@ -134,8 +139,10 @@ export function Intro({ onDone }: { onDone: () => void }) {
           pointerEvents: "none",
         }}
       >
+        {/* glitch-in is applied only once this phase is visible - the one-shot
+            entry animation starts on class change, not on (hidden) mount. */}
         <span
-          className="glitch font-brand text-7xl font-extrabold leading-none tracking-[0.16em] sm:text-8xl md:text-9xl"
+          className={`${showWordmark ? "glitch-in " : ""}font-brand text-7xl font-extrabold leading-none tracking-[0.16em] text-ink sm:text-8xl md:text-9xl`}
           data-text="SABOTEUR"
         >
           SABOTEUR

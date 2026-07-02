@@ -9,7 +9,7 @@ export function Hero({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: () 
       <Container className="grid items-center gap-12 py-20 sm:py-28 lg:grid-cols-2 lg:gap-10">
         {/* Copy */}
         <div style={{ animation: "card-in 0.5s ease-out backwards" }}>
-          <Wordmark className="block text-5xl sm:text-7xl" />
+          <Wordmark className="block text-5xl sm:text-7xl" glitch="ambient" />
 
           <p className="mt-6 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             Chaos engineering for AI agents.

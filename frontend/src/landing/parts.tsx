@@ -205,10 +205,21 @@ export function Panel({ children, className = "" }: { children: ReactNode; class
 }
 
 /** The SABOTEUR wordmark - `font-brand` only, with the console's accent glow. */
-export function Wordmark({ className = "" }: { className?: string }) {
+export function Wordmark({
+  className = "",
+  glitch,
+}: {
+  className?: string;
+  /** Rationed glitch treatment: "hover" bursts once per hover (header),
+   * "ambient" bursts briefly every 12s (hero). Omit for a plain wordmark. */
+  glitch?: "hover" | "ambient";
+}) {
+  const glitchCls =
+    glitch === "hover" ? "glitch-hover " : glitch === "ambient" ? "glitch-ambient " : "";
   return (
     <span
-      className={`font-brand font-extrabold leading-none tracking-[0.22em] text-ink transition-all duration-200 hover:text-accent hover:[text-shadow:0_0_24px_color-mix(in_oklch,var(--color-accent)_55%,transparent)] ${className}`}
+      data-text={glitch ? "SABOTEUR" : undefined}
+      className={`${glitchCls}font-brand font-extrabold leading-none tracking-[0.22em] text-ink transition-all duration-200 hover:text-accent hover:[text-shadow:0_0_24px_color-mix(in_oklch,var(--color-accent)_55%,transparent)] ${className}`}
     >
       SABOTEUR
     </span>

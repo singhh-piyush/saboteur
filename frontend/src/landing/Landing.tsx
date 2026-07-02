@@ -54,7 +54,7 @@ export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: 
       <div className="sticky top-0 z-30 border-b border-line bg-void/85 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-5 py-3 sm:px-8">
           <button type="button" onClick={handleWatch} className="flex items-center gap-3">
-            <Wordmark className="text-xl" />
+            <Wordmark className="text-xl" glitch="hover" />
             <span className="hidden rounded-sm border border-accent/50 bg-accent/10 px-2 py-1 text-[10px] font-bold leading-none tracking-[0.3em] text-accent sm:inline-block">
               CHAOS CONSOLE
             </span>
