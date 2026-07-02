@@ -11,9 +11,33 @@ import pytest
 import saboteur.config as cfg_module
 
 
+# Every env var Settings reads. smolagents (imported by saboteur.config)
+# calls load_dotenv() at import time, copying the developer's .env into
+# os.environ — so without scrubbing these, the "default" tests below would
+# assert against whatever .env the checkout happens to have (e.g. a leftover
+# MI300X config), not the built-in defaults.
+_SETTINGS_ENV_VARS = (
+    "OPENAI_BASE_URL",
+    "OPENAI_API_KEY",
+    "MODEL_ID",
+    "UPSTREAM_BASE_URL",
+    "PROXY_IDLE_TIMEOUT_S",
+    "PROXY_PUBLIC_BASE_URL",
+    "TEMPERATURE",
+    "MODEL_SEED",
+    "TOOL_CHOICE",
+    "N_AGENTS",
+    "MAX_STEPS",
+    "AGENT_TIMEOUT_S",
+    "CONCURRENCY_LIMIT",
+)
+
+
 @pytest.fixture(autouse=True)
-def clear_settings_cache():
-    """Reset the lru_cache between tests so each test gets a fresh Settings."""
+def clear_settings_cache(monkeypatch):
+    """Fresh Settings per test: clear the lru_cache + scrub ambient env vars."""
+    for name in _SETTINGS_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
     cfg_module.get_settings.cache_clear()
     yield
     cfg_module.get_settings.cache_clear()
@@ -61,9 +85,13 @@ def test_env_override(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("N_AGENTS", "4")
     monkeypatch.setenv("MODEL_ID", "my-custom-model")
+    # The heavy-model knob: a raised ceiling must reach settings (factory's
+    # asyncio.wait_for reads it from here — see test_factory's timeout test).
+    monkeypatch.setenv("AGENT_TIMEOUT_S", "600")
     s = cfg_module.get_settings()
     assert s.n_agents == 4
     assert s.model_id == "my-custom-model"
+    assert s.agent_timeout_s == 600
 
 
 def test_default_tool_choice(monkeypatch, tmp_path):

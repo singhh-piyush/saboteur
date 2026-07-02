@@ -276,6 +276,24 @@ def test_scoring_exact_math() -> None:
     assert card.per_agent[2]["success"] is True
 
 
+def test_timeout_terminal_never_counts_as_survived() -> None:
+    """Regression (MI300X run): a wall-clock-killed agent freezes a failed
+    verdict, so survival counts only genuine completions. The scorer stays a
+    pure reader of the frozen ``success`` — the fix lives in verdict
+    derivation (factory/spawn), and this pins the resulting contract."""
+    events = [
+        _tev(-1, "run_started", payload={"n_agents": 2}),
+        _done(0, success=False, tokens=100, outcome="timeout"),
+        _done(1, success=True, tokens=100),
+        _tev(-1, "run_finished", payload={"n_agents": 2}),
+    ]
+    card = score(events, [], run_id=RUN_ID, profile="hell_mode")
+
+    assert card.survival_rate == pytest.approx(1 / 2)
+    assert card.failure_modes == {"timeout": 1}
+    assert card.per_agent[0]["success"] is False
+
+
 def test_scoring_gave_up_is_not_a_recovery_for_mttr() -> None:
     events = [
         _tev(-1, "run_started", payload={"n_agents": 1}),

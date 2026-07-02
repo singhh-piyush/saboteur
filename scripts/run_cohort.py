@@ -6,10 +6,12 @@ chaos cohort under the given profile, both at N agents, producing
 ``runs/{run_id}-control.jsonl``, ``runs/{run_id}.jsonl`` and
 ``runs/{run_id}.scorecard.json``.
 
-Prereq: ``llama-server`` running on :8080 **with --jinja** (so the chat
-template emits OpenAI-style tool calls). Start it via ``scripts/run_local.sh``
-or directly. If tool calls come back malformed/garbage, the first thing to
-check is that ``--jinja`` was passed — before suspecting this code.
+Prereq: an OpenAI-compatible server reachable at ``OPENAI_BASE_URL`` (see
+``.env`` / ``saboteur.config.get_settings()`` — local llama.cpp or a remote
+vLLM endpoint both work). Local llama.cpp needs ``--jinja`` (so the chat
+template emits OpenAI-style tool calls). If tool calls come back
+malformed/garbage on a local server, the first thing to check is that
+``--jinja`` was passed — before suspecting this code.
 
 Usage::
 
@@ -22,19 +24,19 @@ from __future__ import annotations
 import asyncio
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 from saboteur.config import get_settings
 from saboteur.harness import orchestrate
 
-_HEALTH_URL = "http://localhost:8080/health"
 _RUNS_DIR = Path("runs")
 
 
-def _server_is_up() -> bool:
+def _server_is_up(base_url: str) -> bool:
     try:
-        with urllib.request.urlopen(_HEALTH_URL, timeout=2) as resp:
+        with urllib.request.urlopen(f"{base_url}/models", timeout=2) as resp:
             return resp.status == 200
     except (urllib.error.URLError, OSError):
         return False
@@ -52,13 +54,23 @@ def _pct(value: float | None, reason: str | None = None) -> str:
 
 async def _main(profile_path: str, n_agents: int | None) -> int:
     settings = get_settings()
-    if not _server_is_up():
+    if not _server_is_up(settings.openai_base_url):
+        host = urllib.parse.urlparse(settings.openai_base_url).hostname
+        if host in ("localhost", "127.0.0.1"):
+            hint = (
+                "Start it first, e.g.:\n"
+                "  bash scripts/run_local.sh        # idempotent: starts it + uvicorn\n"
+                "or directly (note --jinja is REQUIRED for tool calling):\n"
+                "  llama-server -m \"$MODEL_GGUF\" --port 8080 -c 32768 -np 8 --jinja\n"
+            )
+        else:
+            hint = (
+                "Check that the remote endpoint is up and reachable (e.g. the SSH "
+                "tunnel to it is still open).\n"
+            )
         print(
-            "llama-server is not reachable at http://localhost:8080.\n"
-            "Start it first, e.g.:\n"
-            "  bash scripts/run_local.sh        # idempotent: starts it + uvicorn\n"
-            "or directly (note --jinja is REQUIRED for tool calling):\n"
-            "  llama-server -m \"$MODEL_GGUF\" --port 8080 -c 32768 -np 8 --jinja\n",
+            f"inference server is not reachable at {settings.openai_base_url}.\n"
+            f"{hint}",
             file=sys.stderr,
         )
         return 1

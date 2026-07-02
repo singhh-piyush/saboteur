@@ -185,6 +185,16 @@ async def _judge(
     """
     if oracle is None:
         return terminal
+    if terminal.timed_out:
+        # The process was SIGKILL'd mid-flight — it did not complete the task,
+        # whatever a lenient oracle would say about its partial output. Freeze
+        # a failure instead of judging (the oracle is still recorded so the
+        # timeout counts as a failed verdict, not as "no oracle").
+        terminal.success = False
+        terminal.oracle = oracle.name
+        terminal.deception_aware = oracle.deception_aware
+        terminal.oracle_detail = "wall-clock timeout — not judged"
+        return terminal
     sess = run.session(agent_id)
     faults = sorted({ft for rec in sess.history for ft in rec.fault_types})
     trace = [

@@ -282,3 +282,58 @@ class TestParseErrorTelemetry:
         step_events = [e for e in events if e.kind == "step_start"]
         assert step_events, "no step_start event emitted"
         assert step_events[0].data == {}
+
+
+# ---------------------------------------------------------------------------
+# Wall-clock timeout verdict (regression: MI300X run — timeout + success:true)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeoutVerdict:
+    """A wall-clock-killed run must never freeze ``success=True``.
+
+    ``asyncio.wait_for`` cannot kill the smolagents worker thread, so on
+    timeout the orphan thread keeps running and can file a valid report into
+    the store before ``verify()`` reads it — which used to score a killed
+    agent as a pass (MI300X run, agent 6). The verdict derivation must freeze
+    a failure without consulting the oracle; the outcome taxonomy and the
+    (pure) scorer are untouched.
+    """
+
+    async def test_timeout_freezes_failure_despite_passing_verifier(
+        self, monkeypatch
+    ) -> None:
+        import time
+
+        from saboteur import config as cfg
+        from saboteur.agents.factory import SaboteurAgent
+        from saboteur.agents.tools import FiledReport
+
+        # AGENT_TIMEOUT_S must flow from the environment to asyncio.wait_for
+        # end-to-end (the heavy-model config knob) — the stub below is killed
+        # at this ceiling, which proves the plumbing too.
+        monkeypatch.setenv("AGENT_TIMEOUT_S", "1")
+        cfg.get_settings.cache_clear()
+        try:
+            # The store already holds a PASSING report — mimicking the orphan
+            # worker thread that completes the task around/after the kill.
+            store = {7: [FiledReport(title="Tokyo report", body="71.6 F")]}
+            events: list[AgentEvent] = []
+            shell = SaboteurAgent(agent_id=7, store=store, on_event=events.append)
+            shell.agent = SimpleNamespace(
+                run=lambda *a, **k: time.sleep(2.0), step_number=1
+            )
+
+            result = await shell.run()
+        finally:
+            cfg.get_settings.cache_clear()
+
+        assert result.outcome is Outcome.TIMEOUT
+        # The raw verifier verdict stays honest (the report IS valid)…
+        assert result.task_result.success is True
+        # …but the frozen success verdict must be a failure: the run never
+        # returned, so it cannot be a pass.
+        terminal = next(e for e in events if e.kind == "terminal")
+        assert terminal.data["outcome"] == "timeout"
+        assert terminal.data["success"] is False
+        assert "timeout" in terminal.data["oracle_detail"]

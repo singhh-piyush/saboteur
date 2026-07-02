@@ -32,7 +32,7 @@ from saboteur.chaos.events import FaultEvent
 from saboteur.chaos.profile import ChaosProfile
 from saboteur.config import get_model, get_settings
 
-from .oracle import BuiltinReferenceOracle, Oracle, OracleRunContext
+from .oracle import BuiltinReferenceOracle, Oracle, OracleRunContext, OracleVerdict
 from .outcomes import (
     AgentEvent,
     AgentRunResult,
@@ -325,7 +325,21 @@ class SaboteurAgent:
             reference_success=task_result.success,
             trace=self._trace_records(),
         )
-        verdict = await asyncio.to_thread(self._oracle.judge, ctx)
+        if timed_out:
+            # A wall-clock kill means agent.run never returned — the task was
+            # not completed. The orphan worker thread can still file a valid
+            # report into the store before verify() reads it, so consulting the
+            # oracle here would score a killed agent as a pass. Freeze a
+            # failure instead of judging.
+            verdict = OracleVerdict(
+                success=False,
+                detail=(
+                    f"wall-clock timeout after {settings.agent_timeout_s}s "
+                    "— not judged"
+                ),
+            )
+        else:
+            verdict = await asyncio.to_thread(self._oracle.judge, ctx)
 
         self._emit(
             "terminal",

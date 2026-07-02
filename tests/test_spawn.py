@@ -123,6 +123,34 @@ async def test_timeout_kill_is_bounded(tmp_path):
     assert done.payload["timed_out"] is True
 
 
+async def test_timeout_never_scores_as_success_even_with_lenient_oracle(tmp_path):
+    """Regression (MI300X run): a SIGKILL'd agent must freeze success=False.
+
+    The oracle is not consulted on a wall-clock kill — a lenient one (here a
+    match-anything regex) would otherwise pass the partial output of a process
+    that never completed the task.
+    """
+    run_id = _rid("timeout-oracle")
+    sleeper = [sys.executable, "-c", "import time; time.sleep(30)"]
+    lenient = OracleConfig(kind="regex", pattern=".*")
+    await run_byo_cohort(
+        run_id,
+        _target(sleeper, oracle=lenient),
+        _profile(),
+        1,
+        runs_dir=tmp_path,
+        agent_timeout_s=0.5,
+    )
+    run = manager.get(run_id)
+    done = _done(run, 0)
+    assert done.payload["outcome"] == "timeout"
+    assert done.payload["success"] is False
+    # The oracle is still recorded: this is a failed verdict, not "no oracle"
+    # (survival_rate stays gated on, with the timeout counted as a failure).
+    assert done.payload["oracle"] == "regex"
+    assert "timeout" in done.payload["oracle_detail"]
+
+
 # ---------------------------------------------------------------------------
 # Crash isolation (one killed agent never affects its siblings)
 # ---------------------------------------------------------------------------

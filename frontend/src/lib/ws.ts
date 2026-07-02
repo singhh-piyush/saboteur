@@ -14,6 +14,7 @@
  */
 
 import type { TelemetryEvent } from "../types/telemetry";
+import { wsUrl } from "./api";
 
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 15000;
@@ -47,9 +48,7 @@ export class RunSocket {
   connect(): void {
     if (this.closed) return;
     this.streamComplete = false;
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${proto}//${window.location.host}/ws/${encodeURIComponent(this.runId)}`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(wsUrl(this.runId));
     this.ws = ws;
 
     ws.onopen = () => {

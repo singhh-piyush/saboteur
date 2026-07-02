@@ -6,9 +6,13 @@
 # cleanly on Ctrl+C — never killing a llama-server it did not start.
 #
 # Usage: ./scripts/dev.sh [--no-llm] [--no-web] [--quiet-llm]
-#   --no-llm      skip llama-server (assume :8080 already running)
+#   --no-llm      skip llama-server (assume LLM_PORT already serving)
 #   --no-web      skip vite (backend-only, useful for curl-driven testing)
 #   --quiet-llm   suppress [LLM] lines except errors/warnings
+#
+# Ports (env or .env overridable — e.g. when an SSH tunnel owns :8000):
+#   API_PORT  uvicorn port        (default 8000)
+#   LLM_PORT  llama-server port   (default 8080)
 
 set -euo pipefail
 
@@ -23,6 +27,9 @@ if [[ -f .env ]]; then
     source .env
     set +a
 fi
+
+API_PORT="${API_PORT:-8000}"
+LLM_PORT="${LLM_PORT:-8080}"
 
 # --- colors ---
 C_LLM=$'\033[36m'   # cyan
@@ -125,10 +132,10 @@ UVICORN=uvicorn
 # ─── 1. LLM ──────────────────────────────────────────────────────────────────
 
 if (( NO_LLM )); then
-    printf '%s--no-llm: assuming server on :8080\n' "$LLM_PFX"
+    printf '%s--no-llm: assuming server on :%s\n' "$LLM_PFX" "$LLM_PORT"
     MODEL_LABEL="--no-llm (assumed external)"
 
-elif curl -sf "http://localhost:8080/health" >/dev/null 2>&1; then
+elif curl -sf "http://localhost:$LLM_PORT/health" >/dev/null 2>&1; then
     printf '%sreusing existing server\n' "$LLM_PFX"
     # LLAMA_STARTED stays 0 → cleanup will not pkill this server.
     MODEL_LABEL="reused (external)"
@@ -144,17 +151,17 @@ else
 
     if (( QUIET_LLM )); then
         # Under --quiet-llm, only surface error/warning lines.
-        llama-server -m "$MODEL_GGUF" --port 8080 -c 32768 -np 8 --jinja \
+        llama-server -m "$MODEL_GGUF" --port "$LLM_PORT" -c 32768 -np 8 --jinja \
             > >(grep --line-buffered -iE 'error|fail|fatal|warn' \
                 | prefix_stream "$LLM_PFX") 2>&1 &
     else
-        llama-server -m "$MODEL_GGUF" --port 8080 -c 32768 -np 8 --jinja \
+        llama-server -m "$MODEL_GGUF" --port "$LLM_PORT" -c 32768 -np 8 --jinja \
             > >(prefix_stream "$LLM_PFX") 2>&1 &
     fi
     PIDS+=("$!")
     LLAMA_STARTED=1
 
-    if ! wait_http "http://localhost:8080/health" 60; then
+    if ! wait_http "http://localhost:$LLM_PORT/health" 60; then
         printf '%s[dev] llama-server did not become ready in 60 s%s\n' "$C_ERR" "$NC" >&2
         exit 1
     fi
@@ -164,8 +171,8 @@ fi
 # ─── 2. API ──────────────────────────────────────────────────────────────────
 
 printf '%sstarting uvicorn ...\n' "$API_PFX"
-launch "$API_PFX" "$UVICORN" saboteur.api:app --reload --host 0.0.0.0 --port 8000
-if ! wait_http "http://localhost:8000/health" 30; then
+launch "$API_PFX" "$UVICORN" saboteur.api:app --reload --host 0.0.0.0 --port "$API_PORT"
+if ! wait_http "http://localhost:$API_PORT/health" 30; then
     printf '%s[dev] API did not become ready in 30 s%s\n' "$C_ERR" "$NC" >&2
     exit 1
 fi
@@ -175,7 +182,10 @@ printf '%shealthy\n' "$API_PFX"
 
 if (( ! NO_WEB )); then
     printf '%sstarting vite ...\n' "$WEB_PFX"
-    launch "$WEB_PFX" npm --prefix frontend run dev
+    # Point the vite dev proxy (and the runtime API base) at our uvicorn,
+    # wherever it landed. An explicit VITE_API_BASE_URL still wins.
+    launch "$WEB_PFX" env "VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:$API_PORT}" \
+        npm --prefix frontend run dev
     if ! wait_port 5173 30; then
         printf '%s[dev] Vite did not start in 30 s%s\n' "$C_ERR" "$NC" >&2
         exit 1
@@ -187,7 +197,7 @@ fi
 
 printf '\n  ┌─ saboteur dev ─────────────────────\n'
 (( ! NO_WEB )) && printf '  │ Dashboard  : http://localhost:5173\n'
-printf '  │ API docs   : http://localhost:8000/docs\n'
+printf '  │ API docs   : http://localhost:%s/docs\n' "$API_PORT"
 printf '  │ Model      : %s\n' "$MODEL_LABEL"
 printf '  └────────────────────────────────────\n\n'
 printf '[dev] Ctrl+C to stop all services\n'

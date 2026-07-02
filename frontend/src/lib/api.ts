@@ -1,10 +1,32 @@
 /**
- * Typed fetchers for the orchestrator REST API. All paths are relative:
- * the Vite dev server proxies them to FastAPI, and the production build is
- * served by FastAPI itself.
+ * Typed fetchers for the orchestrator REST API. Paths are same-origin by
+ * default: the Vite dev server proxies them to FastAPI, and the production
+ * build is served by FastAPI itself. When the API lives elsewhere (split
+ * ports, SSH tunnels, a static deploy), set VITE_API_BASE_URL and every
+ * request - REST and WebSocket - is rebased onto it.
  */
 
 import type { TelemetryEvent } from "../types/telemetry";
+
+/** The configured API origin, "" = same-origin (the default). Read at call
+ * time so tests can stub the env without re-importing the module. */
+function apiBase(): string {
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
+  return base.replace(/\/+$/, "");
+}
+
+/** Prefix an API path with the configured base (no-op when same-origin). */
+export function apiUrl(path: string): string {
+  return `${apiBase()}${path}`;
+}
+
+/** WebSocket URL for a run's telemetry channel, derived from the API base
+ * (http→ws / https→wss) or from the page origin when same-origin. */
+export function wsUrl(runId: string): string {
+  const base = apiBase();
+  const origin = base !== "" ? base : `${window.location.protocol}//${window.location.host}`;
+  return `${origin.replace(/^http/, "ws")}/ws/${encodeURIComponent(runId)}`;
+}
 
 export interface ProfileInfo {
   name: string;
@@ -60,7 +82,7 @@ export interface Scorecard {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(path, {
+  const resp = await fetch(apiUrl(path), {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
@@ -201,7 +223,7 @@ export async function fetchAllEvents(runId: string): Promise<TelemetryEvent[]> {
 
 /** Delete a single run and its artifacts. Returns 204 on success. */
 export async function deleteRun(runId: string): Promise<void> {
-  const resp = await fetch(`/runs/${encodeURIComponent(runId)}`, {
+  const resp = await fetch(apiUrl(`/runs/${encodeURIComponent(runId)}`), {
     method: "DELETE",
   });
   if (!resp.ok) {
@@ -214,7 +236,7 @@ export async function deleteRun(runId: string): Promise<void> {
 export async function cancelRun(runId: string): Promise<void> {
   // Offline (walkthrough): there is nothing to stop and no backend to call.
   if (OFFLINE) return;
-  const resp = await fetch(`/runs/${encodeURIComponent(runId)}/cancel`, {
+  const resp = await fetch(apiUrl(`/runs/${encodeURIComponent(runId)}/cancel`), {
     method: "POST",
   });
   if (!resp.ok) {
@@ -232,12 +254,12 @@ export async function bulkDeleteRuns(): Promise<{ deleted: number }> {
 
 /** Direct download URL for a run's JSONL event log. */
 export function downloadJsonlUrl(runId: string): string {
-  return `/runs/${encodeURIComponent(runId)}/download/jsonl`;
+  return apiUrl(`/runs/${encodeURIComponent(runId)}/download/jsonl`);
 }
 
 /** Direct download URL for a run's scorecard JSON. */
 export function downloadScorecardUrl(runId: string): string {
-  return `/runs/${encodeURIComponent(runId)}/download/scorecard`;
+  return apiUrl(`/runs/${encodeURIComponent(runId)}/download/scorecard`);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +303,7 @@ export function updateTarget(name: string, target: Target): Promise<Target> {
 }
 
 export async function deleteTarget(name: string): Promise<void> {
-  const resp = await fetch(`/targets/${encodeURIComponent(name)}`, {
+  const resp = await fetch(apiUrl(`/targets/${encodeURIComponent(name)}`), {
     method: "DELETE",
   });
   if (!resp.ok) {
@@ -361,7 +383,7 @@ export function saveProfile(draft: ProfileDraft): Promise<ProfileInfo> {
 }
 
 export async function deleteProfile(name: string): Promise<void> {
-  const resp = await fetch(`/profiles/${encodeURIComponent(name)}`, {
+  const resp = await fetch(apiUrl(`/profiles/${encodeURIComponent(name)}`), {
     method: "DELETE",
   });
   if (!resp.ok) {

@@ -31,13 +31,16 @@ fi
 
 : "${MODEL_GGUF:?MODEL_GGUF is not set. Add it to .env or export it before running this script.}"
 
-LLAMA_HEALTH="http://localhost:8080/health"
+# Ports (env or .env overridable — e.g. when an SSH tunnel owns :8000).
+API_PORT="${API_PORT:-8000}"
+LLM_PORT="${LLM_PORT:-8080}"
+LLAMA_HEALTH="http://localhost:$LLM_PORT/health"
 
 start_llama_server() {
     echo "[run_local] Starting llama-server..."
     llama-server \
         -m "$MODEL_GGUF" \
-        --port 8080 \
+        --port "$LLM_PORT" \
         -c 32768 \
         -np 8 \
         --jinja \
@@ -70,4 +73,4 @@ fi
 
 echo "[run_local] Starting uvicorn (reload mode)..."
 cd "$REPO_ROOT"
-exec uvicorn saboteur.api:app --reload --host 0.0.0.0 --port 8000
+exec uvicorn saboteur.api:app --reload --host 0.0.0.0 --port "$API_PORT"

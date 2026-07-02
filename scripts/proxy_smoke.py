@@ -74,7 +74,9 @@ def main() -> int:
     proxy_v1 = f"{args.api.rstrip('/')}/v1"
     model = settings.model_id
 
-    if not _up(f"{upstream.rstrip('/')}/models") and not _up("http://localhost:8080/health"):
+    # llama-server's /health lives at the server root, above the /v1 mount.
+    upstream_root = upstream.rstrip("/").removesuffix("/v1")
+    if not _up(f"{upstream.rstrip('/')}/models") and not _up(f"{upstream_root}/health"):
         print(f"Upstream not reachable at {upstream}. Start scripts/run_local.sh first.")
         return 1
     if not _up(f"{args.api.rstrip('/')}/proxy/health"):
