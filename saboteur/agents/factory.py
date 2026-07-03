@@ -286,6 +286,39 @@ class SaboteurAgent:
             )
         except asyncio.TimeoutError:
             timed_out = True
+        except asyncio.CancelledError:
+            # External stop (STOP RUN / shutdown) — the one exit that must not
+            # unwind silently: emit the terminal *before* propagating so the
+            # grid never freezes on a live state and score() sees every agent
+            # (invariants #2/#3). Synchronous only — no awaits during
+            # cancellation; like the timeout path, the oracle is not judged
+            # and a failure verdict is frozen instead.
+            duration_ms = (time.perf_counter() - t0) * 1000.0
+            outcome = classify_outcome(
+                self._history,
+                filed_report=bool(self.store.get(self.agent_id)),
+                hit_step_cap=False,
+                raised=False,
+                timed_out=True,
+            )
+            self._emit(
+                "terminal",
+                None,
+                {
+                    "outcome": str(outcome),
+                    "success": False,
+                    "cancelled": True,
+                    "tokens_used": 0,
+                    "steps_taken": len(self._history),
+                    "oracle": self._oracle.name,
+                    "deception_aware": self._oracle.deception_aware,
+                    "oracle_detail": "cancelled before completion - not judged",
+                    "final_output": None,
+                    "duration_ms": duration_ms,
+                },
+            )
+            self._finished = True
+            raise
         except Exception as exc:  # a non-AgentError escaped → real crash
             raised = True
             error = repr(exc)

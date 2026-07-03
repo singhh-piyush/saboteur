@@ -95,6 +95,12 @@ async def orchestrate(
             concurrency_limit=concurrency_limit,
             agent_factory=bound_factory,
         )
+        if control_report.cancelled:
+            # Stopped before the chaos cohort even started: launching it now
+            # would ignore the stop, and scoring an empty chaos stream would
+            # persist a misleading scorecard. Propagate the cancellation
+            # (cohort_run swallowed it to finish its own teardown cleanly).
+            raise asyncio.CancelledError
 
     report = await _execute_cohort(
         run_id,

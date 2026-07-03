@@ -29,7 +29,7 @@ from typing import Protocol
 
 from saboteur.agents.factory import OnEvent, build_agent
 from saboteur.agents.oracle import Oracle
-from saboteur.agents.outcomes import AgentRunResult, Outcome
+from saboteur.agents.outcomes import AgentEvent, AgentRunResult, Outcome
 from saboteur.agents.tools import ReportStore
 from saboteur.chaos.profile import ChaosProfile
 from saboteur.config import get_settings
@@ -79,6 +79,9 @@ class RunReport:
     n_agents: int
     results: list[AgentRunResult] = field(default_factory=list)
     events: list[TelemetryEvent] = field(default_factory=list)
+    # True when the cohort was externally cancelled (STOP RUN / shutdown):
+    # events hold whatever the agents emitted up to the stop, results is empty.
+    cancelled: bool = False
 
 
 async def cohort_run(
@@ -113,7 +116,19 @@ async def cohort_run(
     semaphore = asyncio.Semaphore(limit) if limit > 0 else None
 
     store: ReportStore = {}
-    on_event = make_on_event(bus, run_id)
+    base_on_event = make_on_event(bus, run_id)
+
+    # Which agents have emitted their terminal. Tracked here (not scraped from
+    # the collected events, which lag the loop) so a cancelled cohort can
+    # synthesize terminals for agents that never got to emit one — e.g. an
+    # agent still waiting on the semaphore when STOP landed (invariant #2:
+    # every agent id gets exactly one terminal, the grid can never freeze).
+    seen_terminal: set[int] = set()
+
+    def on_event(event: AgentEvent) -> None:
+        if event.kind == "terminal":
+            seen_terminal.add(event.agent_id)
+        base_on_event(event)
 
     # Collect this run's events from our own subscription, started before
     # run_started is emitted so the report misses nothing. The collector
@@ -162,9 +177,45 @@ async def cohort_run(
             except Exception as exc:
                 return _crashed(bus, run_id, agent_id, exc)
 
-        raw = await asyncio.gather(
-            *(_run_one(i) for i in range(n_agents)), return_exceptions=True
-        )
+        cancelled = False
+        try:
+            raw = await asyncio.gather(
+                *(_run_one(i) for i in range(n_agents)), return_exceptions=True
+            )
+        except asyncio.CancelledError:
+            # External stop (STOP RUN / shutdown). gather has already waited
+            # for every child to finish unwinding, so each agent's terminal
+            # (emitted in SaboteurAgent.run's CancelledError arm) is on the
+            # bus. Swallow the cancellation and finish gracefully — emit
+            # run_finished and return a partial report so the caller can
+            # still score and persist what happened (invariants #2/#3).
+            cancelled = True
+            raw = []
+
+        if cancelled:
+            # Belt for agents that never reached SaboteurAgent.run's own
+            # CancelledError arm (e.g. still queued on the semaphore): emit a
+            # synthesized terminal so score() and the grid see every agent.
+            for agent_id in range(n_agents):
+                if agent_id in seen_terminal:
+                    continue
+                bus.emit(
+                    TelemetryEvent(
+                        run_id=run_id,
+                        agent_id=agent_id,
+                        step=None,
+                        event="agent_done",
+                        payload={
+                            "outcome": str(Outcome.TIMEOUT),
+                            "success": False,
+                            "cancelled": True,
+                            "synthesized": True,
+                            "tokens_used": 0,
+                            "steps_taken": 0,
+                        },
+                    )
+                )
+
         # _run_one already converts exceptions; this handles anything that
         # slipped past it (e.g. CancelledError-adjacent edge cases).
         results = [
@@ -173,19 +224,20 @@ async def cohort_run(
         ]
 
         outcome_counts = Counter(str(r.outcome) for r in results)
-        bus.emit(
-            _run_event(
-                run_id,
-                "run_finished",
-                {"n_agents": n_agents, "outcomes": dict(outcome_counts)},
-            )
-        )
+        finished_payload: dict = {"n_agents": n_agents, "outcomes": dict(outcome_counts)}
+        if cancelled:
+            finished_payload["cancelled"] = True
+        bus.emit(_run_event(run_id, "run_finished", finished_payload))
 
         try:
             await asyncio.wait_for(collector, timeout=_COLLECTOR_DRAIN_TIMEOUT_S)
         except asyncio.TimeoutError:
             # Bus never delivered run_finished (unbound bus?) — keep what we
             # have rather than hanging the run.
+            collector.cancel()
+        except asyncio.CancelledError:
+            # A second STOP landed during the drain — keep what we have; the
+            # JSONL writer (flushed per event) already has everything.
             collector.cancel()
         except Exception:
             # The collector should never raise (its body is guarded), but if it
@@ -202,6 +254,7 @@ async def cohort_run(
         n_agents=n_agents,
         results=results,
         events=events,
+        cancelled=cancelled,
     )
 
 
