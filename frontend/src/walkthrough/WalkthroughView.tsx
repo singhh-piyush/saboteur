@@ -33,30 +33,21 @@ type Tab = "grid" | "scorecard";
 const CARD = "rounded-lg border border-line bg-panel";
 
 export function WalkthroughView({ onExit }: { onExit: () => void }) {
-  // Which bundled demo run is playing. Keying the provider remounts the whole
-  // replay (driver, reducer state, tour) cleanly on switch.
-  const [runIndex, setRunIndex] = useState(0);
-  const run = DEMO_RUNS[runIndex] ?? DEMO_RUNS[0];
+  // The provider owns which bundled run is playing and swaps runs IN PLACE
+  // (no keyed remount): the shell, tour overlay, and grid cells all stay
+  // mounted across a switch, so the tour's face-off beat and the free-mode
+  // switcher are seamless.
   return (
-    <WalkthroughProvider key={run.id} run={run}>
-      <WalkthroughShell run={run} runIndex={runIndex} onSwitchRun={setRunIndex} onExit={onExit} />
+    <WalkthroughProvider runs={DEMO_RUNS}>
+      <WalkthroughShell onExit={onExit} />
     </WalkthroughProvider>
   );
 }
 
-function WalkthroughShell({
-  run,
-  runIndex,
-  onSwitchRun,
-  onExit,
-}: {
-  run: DemoRun;
-  runIndex: number;
-  onSwitchRun: (index: number) => void;
-  onExit: () => void;
-}) {
+function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const { state } = useRun();
-  const { play, setSpeed, restart } = useWalkthrough();
+  const { play, setSpeed, restart, runIndex, switchRun } = useWalkthrough();
+  const run: DemoRun = DEMO_RUNS[runIndex] ?? DEMO_RUNS[0];
 
   const [tab, setTab] = useState<Tab>("grid");
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
@@ -66,11 +57,21 @@ function WalkthroughShell({
   const [tourMode, setTourMode] = useState<"tour" | "free">("tour");
   const [tourBeat, setTourBeat] = useState(0);
 
-  const beats = useMemo(() => buildTour(run.events, run.scorecard), [run]);
+  // Built once over ALL bundled runs; each beat carries its run binding, so
+  // the list stays stable across in-place run switches.
+  const beats = useMemo(() => buildTour(DEMO_RUNS), []);
 
   const selectAgent = (id: number | null) => {
     if (id !== null) setLastAgent(id);
     setSelectedAgent(id);
+  };
+
+  // Free-mode run switch: land on a clean paused grid at the new run's intro
+  // fold (the swap itself seeks there). Tour beats do their own tab/selection.
+  const switchRunFree = (index: number) => {
+    switchRun(index);
+    selectAgent(null);
+    setTab("grid");
   };
 
   const drawerAgent = selectedAgent ?? lastAgent;
@@ -256,7 +257,8 @@ function WalkthroughShell({
               onReplayTour={replayTour}
               showReplayTour={tourMode === "free"}
               runIndex={runIndex}
-              onSwitchRun={onSwitchRun}
+              onSwitchRun={switchRunFree}
+              switcherDisabled={tourActive}
             />
           </div>
         </main>

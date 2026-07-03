@@ -11,9 +11,16 @@
  * served from the offline registry (lib/api), and ControlPanel (which fetches)
  * is simply not rendered in the walkthrough.
  *
+ * The provider also owns WHICH bundled run is active. `switchRun` swaps the
+ * driver and re-derives reducer state **in place** - synchronously, so React
+ * batches the whole swap into one commit and nothing ever unmounts or paints
+ * an empty frame. That is what makes the tour's mid-run face-off (and the
+ * free-mode run switcher) seamless: the grid cells stay mounted and tint to
+ * the new outcomes via their normal CSS state transitions.
+ *
  * A second context, WalkthroughContext, exposes the richer playback controls
- * (scrub / 0.5-4x / seek) that the walkthrough chrome (Playbar, tour) needs but
- * the live ReplayBar does not.
+ * (scrub / 0.5-4x / seek / run switching) that the walkthrough chrome
+ * (Playbar, tour) needs but the live ReplayBar does not.
  */
 
 import {
@@ -42,6 +49,8 @@ export interface WalkthroughControls {
   speed: number;
   /** position / length, clamped to [0,1]. */
   progress: number;
+  /** Index of the active bundled run. */
+  runIndex: number;
   play: () => void;
   pause: () => void;
   /** Restart from the beginning and play (free-mode replay button). */
@@ -49,6 +58,9 @@ export interface WalkthroughControls {
   setSpeed: (speed: number) => void;
   /** Seek to an event index (re-derives state from a fresh reducer). */
   seek: (index: number) => void;
+  /** Swap the active run in place (paused at its intro fold). No-op when the
+   * index is already active or out of range. */
+  switchRun: (index: number) => void;
 }
 
 const WalkthroughContext = createContext<WalkthroughControls | null>(null);
@@ -68,29 +80,31 @@ interface Tick {
 }
 
 export function WalkthroughProvider({
-  run,
+  runs,
   children,
 }: {
-  run: DemoRun;
+  runs: DemoRun[];
   children: ReactNode;
 }) {
+  const [runIndex, setRunIndex] = useState(0);
+  const runIndexRef = useRef(0);
+  const activeRun = runs[runIndex] ?? runs[0];
+
   // Seed the very first paint with a populated grid (rather than an empty
   // "NO ACTIVE COHORT" frame) by folding events up to the intro index. The
   // tour's first beat seeks to the same index, so nothing visibly jumps.
-  // The provider is remounted (keyed) when the demo run switches, so these
-  // once-per-mount initializers always see the current run.
   const initialFoldRef = useRef<number | null>(null);
   if (initialFoldRef.current === null) {
-    initialFoldRef.current = introFoldIndex(run.events);
+    initialFoldRef.current = introFoldIndex(runs[0].events);
   }
   const initialFold = initialFoldRef.current;
 
   const [state, dispatch] = useReducer(reduce, undefined, () =>
-    foldEvents(run.events.slice(0, initialFold)),
+    foldEvents(runs[0].events.slice(0, initialFold)),
   );
   const [tick, setTick] = useState<Tick>({
     position: initialFold,
-    length: run.events.length,
+    length: runs[0].events.length,
     playing: false,
     speed: INITIAL_SPEED,
   });
@@ -100,59 +114,81 @@ export function WalkthroughProvider({
   tickRef.current = (position, length, playing) =>
     setTick((prev) => ({ position, length, playing, speed: prev.speed }));
 
-  // Lazily create the single driver (survives re-renders via the ref).
-  const driverRef = useRef<ReplayDriver | null>(null);
-  if (driverRef.current === null) {
+  const makeDriver = (run: DemoRun, speed: number): ReplayDriver => {
     const driver = new ReplayDriver(
       run.events,
       dispatch,
       (i, t, p) => tickRef.current(i, t, p),
       REPLAY_OPTIONS,
     );
-    driver.speed = INITIAL_SPEED;
-    driverRef.current = driver;
+    driver.speed = speed;
+    return driver;
+  };
+
+  // Lazily create the first driver (survives re-renders via the ref).
+  const driverRef = useRef<ReplayDriver | null>(null);
+  if (driverRef.current === null) {
+    driverRef.current = makeDriver(runs[0], INITIAL_SPEED);
   }
 
-  // Mount: go offline + register the bundled run; sync the driver to the seeded
-  // frame (paused - the tour drives playback from here). Unmount: restore live
-  // behavior fully.
+  // Mount: go offline + register EVERY bundled run (so a mid-session run switch
+  // resolves ScorecardView's refetch instantly from memory - no error flash);
+  // sync the driver to the seeded frame (paused - the tour drives playback from
+  // here). Unmount: restore live behavior fully.
   useEffect(() => {
     const driver = driverRef.current;
     if (driver === null) return;
     setOffline(true);
-    registerOfflineRun(run.id, run.scorecard, run.events);
+    for (const run of runs) registerOfflineRun(run.id, run.scorecard, run.events);
     driver.seek(initialFold);
     return () => {
-      driver.dispose();
+      driverRef.current?.dispose();
       clearOfflineRuns();
       setOffline(false);
     };
-    // Once per mount: the provider is keyed by the run, never re-run in place.
+    // Once per mount: the bundled runs never change at runtime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const controls = useMemo<WalkthroughControls>(() => {
-    const driver = driverRef.current!;
-    const length = tick.length || driver.length;
+    // Closures read driverRef.current at call time (never a captured driver),
+    // so they stay correct after switchRun swaps the driver.
+    const length = tick.length || driverRef.current!.length;
     return {
       position: tick.position,
       length,
       playing: tick.playing,
       speed: tick.speed,
       progress: length > 0 ? Math.min(tick.position / length, 1) : 0,
-      play: () => driver.play(),
-      pause: () => driver.pause(),
+      runIndex,
+      play: () => driverRef.current!.play(),
+      pause: () => driverRef.current!.pause(),
       restart: () => {
-        driver.restart();
-        driver.play();
+        driverRef.current!.restart();
+        driverRef.current!.play();
       },
       setSpeed: (speed) => {
-        driver.speed = speed;
+        driverRef.current!.speed = speed;
         setTick((prev) => ({ ...prev, speed }));
       },
-      seek: (index) => driver.seek(index),
+      seek: (index) => driverRef.current!.seek(index),
+      switchRun: (index) => {
+        if (index === runIndexRef.current) return;
+        const run = runs[index];
+        if (run === undefined) return;
+        // Synchronous swap: dispose, rebuild, seek. React batches the reducer
+        // reset + refold and the runIndex change into ONE commit - the mounted
+        // grid repaints straight to the new run's frame, no empty state.
+        driverRef.current?.dispose();
+        const driver = makeDriver(run, tick.speed);
+        driverRef.current = driver;
+        driver.seek(introFoldIndex(run.events));
+        runIndexRef.current = index;
+        setRunIndex(index);
+      },
     };
-  }, [tick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, runIndex]);
 
   // Same shape as the live RunContext value, so reused components work as-is.
   // activeRunId is what ScorecardView needs to load the (offline) scorecard;
@@ -160,17 +196,17 @@ export function WalkthroughProvider({
   const runValue = useMemo<RunContextValue>(
     () => ({
       state,
-      activeRunId: run.id,
-      page: { kind: "live", runId: run.id },
+      activeRunId: activeRun.id,
+      page: { kind: "live", runId: activeRun.id },
       navigate: noop,
       watchRun: noop,
-      expectedAgents: run.scorecard.n_agents,
+      expectedAgents: activeRun.scorecard.n_agents,
       startReplay: noop,
       replay: null,
       stop: noop,
       reconnect: noop,
     }),
-    [state, run],
+    [state, activeRun],
   );
 
   return (

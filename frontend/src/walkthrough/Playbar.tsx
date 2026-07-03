@@ -18,9 +18,18 @@ interface PlaybarProps {
   /** Bundled-run switcher (rendered only when more than one run is bundled). */
   runIndex: number;
   onSwitchRun: (index: number) => void;
+  /** True while the guided tour is active - the tour owns the run then, so the
+   * switcher renders dimmed and inert. Fully usable in free mode. */
+  switcherDisabled?: boolean;
 }
 
-export function Playbar({ onReplayTour, showReplayTour, runIndex, onSwitchRun }: PlaybarProps) {
+export function Playbar({
+  onReplayTour,
+  showReplayTour,
+  runIndex,
+  onSwitchRun,
+  switcherDisabled = false,
+}: PlaybarProps) {
   const { position, length, playing, speed, play, pause, restart, setSpeed, seek } =
     useWalkthrough();
 
@@ -35,11 +44,12 @@ export function Playbar({ onReplayTour, showReplayTour, runIndex, onSwitchRun }:
             <button
               key={run.id}
               type="button"
+              disabled={switcherDisabled}
               onClick={() => onSwitchRun(i)}
-              className={`rounded-sm border px-2 py-0.5 text-xs font-semibold transition-colors duration-150 ${
+              className={`rounded-sm border px-2 py-0.5 text-xs font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
                 runIndex === i
                   ? "border-accent/50 bg-accent/10 text-accent"
-                  : "border-line text-ink-faint hover:text-ink"
+                  : `border-line text-ink-faint ${switcherDisabled ? "" : "hover:text-ink"}`
               }`}
             >
               {run.label}

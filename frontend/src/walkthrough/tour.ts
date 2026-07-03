@@ -2,12 +2,18 @@
  * The guided tour is data-driven: it scans the bundled run to pick
  * representative agents (one that recovers and survives, one that crashes, one
  * that resists a planted lie) and the event indices to seek to, then emits an
- * ordered list of beats. Swapping the run rebinds everything automatically -
- * nothing here is hardcoded to a specific agent id.
+ * ordered list of beats. Swapping the runs rebinds everything automatically -
+ * nothing here is hardcoded to a specific agent id, model, or number.
+ *
+ * The tour is built ONCE over ALL bundled runs. Each beat carries the index of
+ * the run it narrates; entering a beat first ensures that run is active (a
+ * no-op when it already is), so stepping forward or backward across the
+ * face-off boundary always shows the right run. With two runs bundled, the
+ * tour walks DEMO_RUNS[0] and ends by switching to DEMO_RUNS[1] in place.
  */
 
 import { agentLabel } from "../lib/format";
-import type { Scorecard } from "../lib/api";
+import type { DemoRun } from "../demo";
 import type { TelemetryEvent } from "../types/telemetry";
 
 export const REPO_URL = "https://github.com/singhh-piyush/saboteur";
@@ -27,10 +33,14 @@ export interface TourCtx {
   pause: () => void;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
+  /** Make a bundled run active (in-place swap; no-op when already active). */
+  switchRun: (index: number) => void;
 }
 
 export interface Beat {
   id: string;
+  /** Which bundled run this beat narrates; entering the beat activates it. */
+  run: number;
   /** The phase-2 (or sole) target. Interactive beats override this with the
    * agent cell during phase 1 (handled in TourOverlay). */
   target: TourTarget;
@@ -80,8 +90,9 @@ function nthFoldIndex(
 
 /** A small fold index where the cohort is visibly underway (a handful of faults
  * have landed) but nothing has finished yet - the opening shot. Also used by the
- * provider to seed the first paint so it matches the tour's first beat. All
- * cells already exist from run_started, so this is purely for visual liveness. */
+ * provider to seed the first paint (and every run switch), so it matches the
+ * tour's first beat. All cells already exist from run_started, so this is
+ * purely for visual liveness. */
 export function introFoldIndex(events: TelemetryEvent[]): number {
   return nthFoldIndex(
     events,
@@ -169,7 +180,10 @@ function recoveryStory(agent: PerAgent | undefined): string {
   return `Hit by faults, this agent ${did} - and still filed a correct report. The green rows are its productive recovery actions.`;
 }
 
-export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[] {
+export function buildTour(runs: DemoRun[]): Beat[] {
+  const primary = runs[0];
+  const events = primary.events;
+  const scorecard = primary.scorecard;
   const end = events.length;
   const intro = introFoldIndex(events);
   const clampIdx = (i: number) => Math.max(intro, Math.min(i, end));
@@ -187,16 +201,21 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
   const dec = asPct(scorecard.deception_detection_rate);
   const mttr = scorecard.mttr_steps === null ? "-" : scorecard.mttr_steps.toFixed(1);
 
+  const faceoff: DemoRun | undefined = runs[1];
+  const lastRun = faceoff === undefined ? 0 : 1;
+
   const beats: Beat[] = [];
 
   beats.push({
     id: "intro",
+    run: 0,
     target: { kind: "region", name: "runbar" },
     placement: "bottom",
     eyebrow: "Recorded run",
     title: "A real Saboteur cohort",
-    body: `${n} agents run the same task at once under ${scorecard.profile}, with all 8 fault types in play on a fixed seed${seed === null ? "" : ` (${seed})`}. The survival ticker resolves as agents finish.`,
+    body: `${n} agents (${primary.label}) run the same task at once under ${scorecard.profile}, with all 8 fault types in play on a fixed seed${seed === null ? "" : ` (${seed})`}. The survival ticker resolves as agents finish.`,
     onEnter: (ctx) => {
+      ctx.switchRun(0);
       ctx.selectAgent(null);
       ctx.setTab("grid");
       ctx.seek(intro);
@@ -206,13 +225,16 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
 
   beats.push({
     id: "grid",
+    run: 0,
     target: { kind: "region", name: "grid" },
     placement: "top",
     eyebrow: "Cohort grid",
     title: "One cell per agent",
     body: "Green is nominal, amber is recovering from a fault, red has crashed, cyan has completed and passed the verifier. Cells change state the moment chaos hits.",
     onEnter: (ctx) => {
+      ctx.switchRun(0);
       ctx.selectAgent(null);
+      ctx.setTab("grid");
       ctx.seek(mixedIdx);
       ctx.pause();
     },
@@ -220,13 +242,16 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
 
   beats.push({
     id: "chaos",
+    run: 0,
     target: { kind: "region", name: "chaoslog" },
     placement: "right",
     eyebrow: "Chaos feed",
     title: "Faults are landing",
     body: "Every injection streams here in order: API 500s, 429 rate limits, injected latency, malformed and silent-lie tool results, vanished tools, dropped context. All seeded - the same profile and seed replay the same fault decisions for a given call sequence.",
     onEnter: (ctx) => {
+      ctx.switchRun(0);
       ctx.selectAgent(null);
+      ctx.setTab("grid");
       ctx.seek(feedBusyIdx);
       ctx.pause();
     },
@@ -235,6 +260,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
   if (recovering !== null) {
     beats.push({
       id: "recover",
+      run: 0,
       target: { kind: "region", name: "timeline" },
       placement: "left",
       eyebrow: "Self-healing",
@@ -243,6 +269,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
       promptBody: `${agentLabel(recovering)} was hit by faults but still passed. Click its cell to open the step-by-step trace and see how.`,
       body: recoveryStory(perAgent[String(recovering)]),
       onEnter: (ctx) => {
+        ctx.switchRun(0);
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.seek(end);
@@ -254,6 +281,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
   if (crashed !== null) {
     beats.push({
       id: "crash",
+      run: 0,
       target: { kind: "region", name: "timeline" },
       placement: "left",
       eyebrow: "Failure mode",
@@ -262,6 +290,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
       promptBody: `Not everyone survives. Click ${agentLabel(crashed)} to see where it ran out of road.`,
       body: `${crashStory(perAgent[String(crashed)])} The trace shows exactly where it went wrong.`,
       onEnter: (ctx) => {
+        ctx.switchRun(0);
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.seek(end);
@@ -273,6 +302,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
   if (deceived !== null) {
     beats.push({
       id: "deception",
+      run: 0,
       target: { kind: "region", name: "timeline" },
       placement: "left",
       eyebrow: "Deception test",
@@ -281,6 +311,7 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
       promptBody: `${agentLabel(deceived)} was fed a well-formed but wrong tool result - a planted decoy. Click it to see how it caught the lie.`,
       body: "It cross-checked, refused the decoy, and still passed. Deception resistance is the metric Saboteur exists to measure - and the one most agent benchmarks miss.",
       onEnter: (ctx) => {
+        ctx.switchRun(0);
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.seek(end);
@@ -291,12 +322,14 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
 
   beats.push({
     id: "scorecard",
+    run: 0,
     target: { kind: "region", name: "scorecard" },
     placement: "top",
     eyebrow: "Resilience scorecard",
     title: "Every number is earned",
     body: `When the cohort finishes, the scorecard is a pure function of the event log: survival ${surv}, deception caught ${dec}, mean time to recovery ${mttr} steps, plus the recovery and failure-mode breakdowns.`,
     onEnter: (ctx) => {
+      ctx.switchRun(0);
       ctx.selectAgent(null);
       ctx.setTab("scorecard");
       ctx.seek(end);
@@ -304,21 +337,44 @@ export function buildTour(events: TelemetryEvent[], scorecard: Scorecard): Beat[
     },
   });
 
+  if (faceoff !== undefined) {
+    const sc2 = faceoff.scorecard;
+    const end2 = faceoff.events.length;
+    beats.push({
+      id: "faceoff",
+      run: 1,
+      target: { kind: "region", name: "scorecard" },
+      placement: "top",
+      eyebrow: "Face-off",
+      title: "Same chaos, bigger model",
+      body: `Same task, same profile, same seed - now ${faceoff.label}. Survival ${surv} to ${asPct(sc2.survival_rate)}, deception caught ${dec} to ${asPct(sc2.deception_detection_rate)}. Resilience is a model property, and now you can measure it.`,
+      onEnter: (ctx) => {
+        ctx.switchRun(1);
+        ctx.selectAgent(null);
+        ctx.setTab("scorecard");
+        ctx.seek(end2);
+        ctx.pause();
+      },
+    });
+  }
+
   beats.push({
     id: "close",
+    run: lastRun,
     target: { kind: "region", name: "playbar" },
     placement: "top",
     eyebrow: "Explore freely",
     title: "Now it's yours to drive",
-    body: "Drag the timeline to scrub, change speed, switch to the scorecard, or click any agent to open its trace. Everything you see re-derives from the recorded event log - point Saboteur at your own agent and get this scorecard in CI.",
+    body: `Drag the timeline to scrub, change speed, ${faceoff === undefined ? "" : "flip runs from the bar below to compare models, "}or click any agent to open its trace. Everything you see re-derives from the recorded event logs - point Saboteur at your own agent and get this scorecard in CI.`,
     actions: [
       { label: "Back to landing", variant: "ghost", kind: "exit" },
       { label: "View on GitHub", variant: "primary", kind: "link", href: REPO_URL },
     ],
     onEnter: (ctx) => {
+      ctx.switchRun(lastRun);
       ctx.selectAgent(null);
       ctx.setTab("grid");
-      ctx.seek(end);
+      ctx.seek(lastRun === 0 ? end : runs[1].events.length);
       ctx.pause();
     },
   });
