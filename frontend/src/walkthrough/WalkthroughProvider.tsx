@@ -58,6 +58,9 @@ export interface WalkthroughControls {
   setSpeed: (speed: number) => void;
   /** Seek to an event index (re-derives state from a fresh reducer). */
   seek: (index: number) => void;
+  /** Seek forward as a brief animated time-lapse (the tour's beat-to-beat
+   * move); backward or reduced-motion falls back to an instant seek. */
+  seekSmooth: (index: number) => void;
   /** Swap the active run in place (paused at its intro fold). No-op when the
    * index is already active or out of range. */
   switchRun: (index: number) => void;
@@ -172,6 +175,13 @@ export function WalkthroughProvider({
         setTick((prev) => ({ ...prev, speed }));
       },
       seek: (index) => driverRef.current!.seek(index),
+      seekSmooth: (index) => {
+        const reduced =
+          typeof window !== "undefined" &&
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        if (reduced) driverRef.current!.seek(index);
+        else driverRef.current!.sprintTo(index);
+      },
       switchRun: (index) => {
         if (index === runIndexRef.current) return;
         const run = runs[index];

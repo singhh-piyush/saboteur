@@ -99,10 +99,14 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
     setTourMode("free");
     play();
   };
-  // Finishing the tour (last beat -> Finish) drops into free mode and auto-plays the
-  // full replay from the very beginning at 2x.
+  // Finishing the tour ("Watch the full run" on the last beat) drops into free
+  // mode and auto-plays the full replay from the very beginning at 2x - the
+  // grid tab fades in as the run starts, so the canvas only changes because
+  // the viewer chose to watch.
   const finishTour = () => {
     setTourMode("free");
+    selectAgent(null);
+    setTab("grid");
     setSpeed(2);
     restart(); // seeks to the start and plays
   };

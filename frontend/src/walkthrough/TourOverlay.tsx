@@ -60,7 +60,7 @@ export function TourOverlay({
   selectAgent,
   setTab,
 }: TourOverlayProps) {
-  const { seek, pause, switchRun } = useWalkthrough();
+  const { seek, seekSmooth, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
 
@@ -71,8 +71,8 @@ export function TourOverlay({
   // exactly once per beat (not on every playback tick that re-memoizes seek).
   // switchRun swaps the bundled run in place, so this overlay (and the
   // coachmark it renders) stays mounted straight through the face-off beat.
-  const ctxRef = useRef<TourCtx>({ seek, pause, selectAgent, setTab, switchRun });
-  ctxRef.current = { seek, pause, selectAgent, setTab, switchRun };
+  const ctxRef = useRef<TourCtx>({ seek, seekSmooth, pause, selectAgent, setTab, switchRun });
+  ctxRef.current = { seek, seekSmooth, pause, selectAgent, setTab, switchRun };
 
   // Run the beat's entrance side effects when the active beat changes; reset the
   // reveal; and (for interactive beats) scroll the target cell into view.
@@ -212,7 +212,7 @@ export function TourOverlay({
                 </button>
               ) : (
                 <button type="button" onClick={next} className={BTN_PRIMARY}>
-                  {isLast ? "Finish" : "Next"}
+                  {isLast ? (beat.finishLabel ?? "Finish") : "Next"}
                 </button>
               )}
             </div>

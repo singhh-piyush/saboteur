@@ -30,6 +30,9 @@ export type TourAction =
 /** Side-effect surface a beat can drive when it becomes active. */
 export interface TourCtx {
   seek: (index: number) => void;
+  /** Forward: a brief animated time-lapse to the index (the grid visibly
+   * resolves instead of snapping). Backward / reduced motion: instant. */
+  seekSmooth: (index: number) => void;
   pause: () => void;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
@@ -55,6 +58,8 @@ export interface Beat {
   /** Phase-1 call to action, shown while waiting for the click. */
   promptBody?: string;
   actions?: TourAction[];
+  /** Label for the last beat's primary footer button (default "Finish"). */
+  finishLabel?: string;
   onEnter: (ctx: TourCtx) => void;
 }
 
@@ -218,8 +223,8 @@ export function buildTour(runs: DemoRun[]): Beat[] {
       ctx.switchRun(0);
       ctx.selectAgent(null);
       ctx.setTab("grid");
-      ctx.seek(intro);
       ctx.pause();
+      ctx.seekSmooth(intro);
     },
   });
 
@@ -235,8 +240,8 @@ export function buildTour(runs: DemoRun[]): Beat[] {
       ctx.switchRun(0);
       ctx.selectAgent(null);
       ctx.setTab("grid");
-      ctx.seek(mixedIdx);
       ctx.pause();
+      ctx.seekSmooth(mixedIdx);
     },
   });
 
@@ -252,8 +257,8 @@ export function buildTour(runs: DemoRun[]): Beat[] {
       ctx.switchRun(0);
       ctx.selectAgent(null);
       ctx.setTab("grid");
-      ctx.seek(feedBusyIdx);
       ctx.pause();
+      ctx.seekSmooth(feedBusyIdx);
     },
   });
 
@@ -272,8 +277,10 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.switchRun(0);
         ctx.setTab("grid");
         ctx.selectAgent(null);
-        ctx.seek(end);
         ctx.pause();
+        // Time-lapse the rest of the run so the grid resolves on screen
+        // instead of snapping to the finished state.
+        ctx.seekSmooth(end);
       },
     });
   }
@@ -293,8 +300,10 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.switchRun(0);
         ctx.setTab("grid");
         ctx.selectAgent(null);
-        ctx.seek(end);
         ctx.pause();
+        // Time-lapse the rest of the run so the grid resolves on screen
+        // instead of snapping to the finished state.
+        ctx.seekSmooth(end);
       },
     });
   }
@@ -314,8 +323,10 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.switchRun(0);
         ctx.setTab("grid");
         ctx.selectAgent(null);
-        ctx.seek(end);
         ctx.pause();
+        // Time-lapse the rest of the run so the grid resolves on screen
+        // instead of snapping to the finished state.
+        ctx.seekSmooth(end);
       },
     });
   }
@@ -358,6 +369,10 @@ export function buildTour(runs: DemoRun[]): Beat[] {
     });
   }
 
+  // The tour ends on a choice, not a hard cut: the scorecard stays on screen
+  // (nothing behind the card changes on the way in), and the viewer picks
+  // between watching the full replay (free mode: scrubber, speed, run
+  // switcher) or heading back to the landing.
   beats.push({
     id: "close",
     run: lastRun,
@@ -365,15 +380,16 @@ export function buildTour(runs: DemoRun[]): Beat[] {
     placement: "top",
     eyebrow: "Explore freely",
     title: "Now it's yours to drive",
-    body: `Drag the timeline to scrub, change speed, ${faceoff === undefined ? "" : "flip runs from the bar below to compare models, "}or click any agent to open its trace. Everything you see re-derives from the recorded event logs - point Saboteur at your own agent and get this scorecard in CI.`,
+    body: `That's the tour. Watch the full run play out - scrub the timeline, change speed, ${faceoff === undefined ? "" : "flip runs to compare models, "}click any agent to open its trace. Or head back to the landing. Everything you see re-derives from the recorded event logs - point Saboteur at your own agent and get this scorecard in CI.`,
+    finishLabel: "Watch the full run",
     actions: [
       { label: "Back to landing", variant: "ghost", kind: "exit" },
-      { label: "View on GitHub", variant: "primary", kind: "link", href: REPO_URL },
+      { label: "View on GitHub", variant: "ghost", kind: "link", href: REPO_URL },
     ],
     onEnter: (ctx) => {
       ctx.switchRun(lastRun);
       ctx.selectAgent(null);
-      ctx.setTab("grid");
+      ctx.setTab("scorecard");
       ctx.seek(lastRun === 0 ? end : runs[1].events.length);
       ctx.pause();
     },

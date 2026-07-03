@@ -72,6 +72,7 @@ describe("buildTour over the bundled runs", () => {
     const switched: number[] = [];
     const ctx = {
       seek: () => {},
+      seekSmooth: () => {},
       pause: () => {},
       selectAgent: () => {},
       setTab: () => {},
@@ -82,6 +83,25 @@ describe("buildTour over the bundled runs", () => {
       beat.onEnter(ctx);
       expect(switched).toEqual([beat.run]);
     }
+  });
+
+  it("close beat offers the watch-vs-landing choice on the scorecard", () => {
+    const close = beats.find((b) => b.id === "close")!;
+    expect(close.finishLabel).toBe("Watch the full run");
+    expect(close.actions?.some((a) => a.kind === "exit")).toBe(true);
+    // The close beat must not swap the canvas: it stays on the scorecard tab
+    // the face-off already shows (the grid only appears when the viewer picks
+    // "Watch the full run").
+    const tabs: string[] = [];
+    close.onEnter({
+      seek: () => {},
+      seekSmooth: () => {},
+      pause: () => {},
+      selectAgent: () => {},
+      setTab: (t: string) => tabs.push(t),
+      switchRun: () => {},
+    });
+    expect(tabs).toEqual(["scorecard"]);
   });
 
   it("copy contains no em dashes", () => {

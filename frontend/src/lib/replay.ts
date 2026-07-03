@@ -30,6 +30,7 @@ export interface ReplayOptions {
 export class ReplayDriver {
   private index = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private sprintRaf: number | null = null;
   private _playing = false;
   private readonly minGapMs: number;
   private readonly maxGapMs: number;
@@ -66,6 +67,7 @@ export class ReplayDriver {
   }
 
   play(): void {
+    this.cancelSprint();
     if (this._playing || this.index >= this.events.length) return;
     if (this.index === 0) {
       this.dispatch({ type: "reset" });
@@ -77,6 +79,7 @@ export class ReplayDriver {
   }
 
   pause(): void {
+    this.cancelSprint();
     this._playing = false;
     if (this.timer !== null) {
       clearTimeout(this.timer);
@@ -136,6 +139,48 @@ export class ReplayDriver {
     }
     this.index = target;
     this.notify();
+  }
+
+  /** Animated forward seek: fold the remaining events steadily over
+   * `durationMs` (eased), so the UI shows a rapid time-lapse of the run
+   * resolving instead of an instant jump. Ends paused at `target`. Backward
+   * targets fall back to an instant `seek` (the reducer only folds forward),
+   * as does a missing rAF (SSR / tests). Any play/pause/seek cancels a sprint
+   * in flight. */
+  sprintTo(target: number, durationMs = 1000): void {
+    const to = Math.max(0, Math.min(target, this.events.length));
+    if (
+      to <= this.index ||
+      durationMs <= 0 ||
+      typeof requestAnimationFrame === "undefined"
+    ) {
+      this.seek(to);
+      return;
+    }
+    this.pause(); // stops the transport and any previous sprint
+    const from = this.index;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      this.sprintRaf = null;
+      const p = Math.min((now - t0) / durationMs, 1);
+      // Ease-in-out: the rush starts and lands gently.
+      const eased = p < 0.5 ? 2 * p * p : 1 - (2 - 2 * p) ** 2 / 2;
+      const idx = from + Math.round((to - from) * eased);
+      while (this.index < idx) {
+        this.dispatch({ type: "event", event: this.events[this.index] });
+        this.index += 1;
+      }
+      this.notify();
+      if (p < 1) this.sprintRaf = requestAnimationFrame(tick);
+    };
+    this.sprintRaf = requestAnimationFrame(tick);
+  }
+
+  private cancelSprint(): void {
+    if (this.sprintRaf !== null) {
+      cancelAnimationFrame(this.sprintRaf);
+      this.sprintRaf = null;
+    }
   }
 
   private gapMs(i: number): number {
