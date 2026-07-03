@@ -74,8 +74,10 @@ export interface RunViewState {
   nAgents: number;
   finished: boolean;
   agents: Record<number, AgentState>;
-  /** Newest-first feed of fault injections, capped. */
+  /** Newest-first feed of fault injections, capped (rendering only). */
   chaosLog: ChaosLogEntry[];
+  /** Total fault injections seen - keeps counting past the render cap. */
+  faultCount: number;
   /** agent_done / agent_crashed marks, for the survival-over-time line. */
   terminals: TerminalMark[];
   eventCount: number;
@@ -99,6 +101,7 @@ export const initialState: RunViewState = {
   finished: false,
   agents: {},
   chaosLog: [],
+  faultCount: 0,
   terminals: [],
   eventCount: 0,
   conn: "idle",
@@ -189,6 +192,7 @@ function applyEvent(state: RunViewState, ev: TelemetryEvent): RunViewState {
       detail: describeFault(ev),
     };
     next.chaosLog = [entry, ...state.chaosLog].slice(0, CHAOS_LOG_CAP);
+    next.faultCount = state.faultCount + 1;
   }
 
   if (ev.event === "agent_done" || ev.event === "agent_crashed") {

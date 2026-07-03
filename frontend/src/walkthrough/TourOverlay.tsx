@@ -35,6 +35,9 @@ interface TourOverlayProps {
   selectedAgent: number | null;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
+  /** Shell-provided fade-through seek: hides the grid pane for the instant of
+   * the jump so only the destination state is visible (no mid-run churn). */
+  seekSmooth: (index: number) => void;
 }
 
 const BTN_GHOST =
@@ -59,8 +62,9 @@ export function TourOverlay({
   selectedAgent,
   selectAgent,
   setTab,
+  seekSmooth,
 }: TourOverlayProps) {
-  const { seek, seekSmooth, pause, switchRun } = useWalkthrough();
+  const { seek, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
 

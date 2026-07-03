@@ -58,9 +58,6 @@ export interface WalkthroughControls {
   setSpeed: (speed: number) => void;
   /** Seek to an event index (re-derives state from a fresh reducer). */
   seek: (index: number) => void;
-  /** Seek forward as a brief animated time-lapse (the tour's beat-to-beat
-   * move); backward or reduced-motion falls back to an instant seek. */
-  seekSmooth: (index: number) => void;
   /** Swap the active run in place (paused at its intro fold). No-op when the
    * index is already active or out of range. */
   switchRun: (index: number) => void;
@@ -128,26 +125,42 @@ export function WalkthroughProvider({
     return driver;
   };
 
-  // Lazily create the first driver (survives re-renders via the ref).
+  // Lazily create the first driver (survives re-renders via the ref). Going
+  // offline + registering EVERY bundled run happens HERE, during the first
+  // render, and not in the mount effect: child effects (ScorecardView's
+  // fetch) run BEFORE a parent's effect, so an effect-time switch would let
+  // the first scorecard read escape to the real network (a dev-proxy
+  // ECONNREFUSED locally; a doomed request on a static deploy). Registering
+  // all runs up front also makes a mid-session run switch resolve instantly
+  // from memory - no error flash.
   const driverRef = useRef<ReplayDriver | null>(null);
   if (driverRef.current === null) {
+    setOffline(true);
+    for (const run of runs) registerOfflineRun(run.id, run.scorecard, run.events);
     driverRef.current = makeDriver(runs[0], INITIAL_SPEED);
   }
 
-  // Mount: go offline + register EVERY bundled run (so a mid-session run switch
-  // resolves ScorecardView's refetch instantly from memory - no error flash);
-  // sync the driver to the seeded frame (paused - the tour drives playback from
-  // here). Unmount: restore live behavior fully.
+  // Mount: sync the driver to the seeded frame (paused - the tour drives
+  // playback from here). Unmount: restore live behavior fully. The offline
+  // teardown is deferred a tick and cancelled by a re-setup, so StrictMode's
+  // dev-mode unmount/remount cycle never opens a window where a child's
+  // refetch (they re-run before this effect does) hits the real network.
+  const offlineTeardown = useRef<number | null>(null);
   useEffect(() => {
-    const driver = driverRef.current;
-    if (driver === null) return;
+    if (offlineTeardown.current !== null) {
+      window.clearTimeout(offlineTeardown.current);
+      offlineTeardown.current = null;
+    }
     setOffline(true);
     for (const run of runs) registerOfflineRun(run.id, run.scorecard, run.events);
-    driver.seek(initialFold);
+    driverRef.current?.seek(initialFold);
     return () => {
       driverRef.current?.dispose();
-      clearOfflineRuns();
-      setOffline(false);
+      offlineTeardown.current = window.setTimeout(() => {
+        offlineTeardown.current = null;
+        clearOfflineRuns();
+        setOffline(false);
+      }, 0);
     };
     // Once per mount: the bundled runs never change at runtime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,13 +188,6 @@ export function WalkthroughProvider({
         setTick((prev) => ({ ...prev, speed }));
       },
       seek: (index) => driverRef.current!.seek(index),
-      seekSmooth: (index) => {
-        const reduced =
-          typeof window !== "undefined" &&
-          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-        if (reduced) driverRef.current!.seek(index);
-        else driverRef.current!.sprintTo(index);
-      },
       switchRun: (index) => {
         if (index === runIndexRef.current) return;
         const run = runs[index];

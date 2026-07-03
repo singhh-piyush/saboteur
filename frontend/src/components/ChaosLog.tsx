@@ -20,7 +20,7 @@ export function ChaosLog({ collapsed, onToggle }: Props) {
         onToggle={onToggle}
         right={
           <span className="text-xs font-medium tracking-widest text-ink-faint">
-            {state.chaosLog.length} INJECTIONS
+            {state.faultCount} INJECTIONS
           </span>
         }
       />

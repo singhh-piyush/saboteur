@@ -10,7 +10,7 @@
  * else is the genuine article.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ChaosLog } from "../components/ChaosLog";
@@ -32,6 +32,9 @@ type Tab = "grid" | "scorecard";
 
 const CARD = "rounded-lg border border-line bg-panel";
 
+/** Fade-out time for a tour position jump; the seek happens just after. */
+const WARP_OUT_MS = 160;
+
 export function WalkthroughView({ onExit }: { onExit: () => void }) {
   // The provider owns which bundled run is playing and swaps runs IN PLACE
   // (no keyed remount): the shell, tour overlay, and grid cells all stay
@@ -46,7 +49,7 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
 
 function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const { state } = useRun();
-  const { play, setSpeed, restart, runIndex, switchRun } = useWalkthrough();
+  const { play, setSpeed, restart, seek, position, runIndex, switchRun } = useWalkthrough();
   const run: DemoRun = DEMO_RUNS[runIndex] ?? DEMO_RUNS[0];
 
   const [tab, setTab] = useState<Tab>("grid");
@@ -74,13 +77,41 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
     setTab("grid");
   };
 
+  const reducedMotion = usePrefersReducedMotion();
+
+  // Tour beat position jumps: cut, don't churn. The grid pane fades out
+  // (~160ms), the instant seek happens while it is invisible, then it eases
+  // back in showing only the destination state - none of the mid-run color
+  // flashing a live fold would paint. Reduced motion seeks instantly.
+  const [warping, setWarping] = useState(false);
+  const warpTimer = useRef<number | null>(null);
+  const seekSmooth = (index: number) => {
+    if (index === position) return; // nothing changes - no blink
+    if (reducedMotion) {
+      seek(index);
+      return;
+    }
+    if (warpTimer.current !== null) window.clearTimeout(warpTimer.current);
+    setWarping(true);
+    warpTimer.current = window.setTimeout(() => {
+      warpTimer.current = null;
+      seek(index);
+      setWarping(false);
+    }, WARP_OUT_MS + 10);
+  };
+  useEffect(
+    () => () => {
+      if (warpTimer.current !== null) window.clearTimeout(warpTimer.current);
+    },
+    [],
+  );
+
   const drawerAgent = selectedAgent ?? lastAgent;
   const drawerOpen = selectedAgent !== null && state.agents[selectedAgent] !== undefined;
   const tourActive = tourMode === "tour";
 
   // Fade in from black on entry, completing the dip-to-black handoff from the
   // landing page (the demo mounts under a black cover that then lifts).
-  const reducedMotion = usePrefersReducedMotion();
   const [covered, setCovered] = useState(!reducedMotion);
   const [coverFade, setCoverFade] = useState(false);
   useEffect(() => {
@@ -230,11 +261,15 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
               once at load, behind the intro spotlight) so switching to the
               scorecard is an instant fade, not a stutter. */}
           <div className="relative min-h-0 flex-1">
+            {/* `warping` hides the pane for the instant of a tour seek (quick
+                fade out, slower ease back), so only the destination state is
+                ever visible. */}
             <div
               data-tour="grid"
-              className="absolute inset-0 transition-opacity duration-500 ease-out"
+              className="absolute inset-0 transition-opacity ease-out"
               style={{
-                opacity: tab === "grid" ? 1 : 0,
+                opacity: tab === "grid" && !warping ? 1 : 0,
+                transitionDuration: warping ? `${WARP_OUT_MS}ms` : "500ms",
                 pointerEvents: tab === "grid" ? "auto" : "none",
                 zIndex: tab === "grid" ? 2 : 1,
               }}
@@ -305,6 +340,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
         selectedAgent={selectedAgent}
         selectAgent={selectAgent}
         setTab={setTab}
+        seekSmooth={seekSmooth}
       />
 
       {/* Fade-in-from-black cover (portaled above the tour overlays). */}

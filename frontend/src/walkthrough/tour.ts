@@ -30,8 +30,9 @@ export type TourAction =
 /** Side-effect surface a beat can drive when it becomes active. */
 export interface TourCtx {
   seek: (index: number) => void;
-  /** Forward: a brief animated time-lapse to the index (the grid visibly
-   * resolves instead of snapping). Backward / reduced motion: instant. */
+  /** Jump the replay position behind a quick grid fade: only the start and
+   * destination states are ever visible, never the churn of the events in
+   * between. Reduced motion (or a no-op target) seeks instantly. */
   seekSmooth: (index: number) => void;
   pause: () => void;
   selectAgent: (id: number | null) => void;
@@ -278,8 +279,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.pause();
-        // Time-lapse the rest of the run so the grid resolves on screen
-        // instead of snapping to the finished state.
+        // Fade-jump to the finished run - the cut hides the churn in between.
         ctx.seekSmooth(end);
       },
     });
@@ -301,8 +301,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.pause();
-        // Time-lapse the rest of the run so the grid resolves on screen
-        // instead of snapping to the finished state.
+        // Fade-jump to the finished run - the cut hides the churn in between.
         ctx.seekSmooth(end);
       },
     });
@@ -324,8 +323,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.pause();
-        // Time-lapse the rest of the run so the grid resolves on screen
-        // instead of snapping to the finished state.
+        // Fade-jump to the finished run - the cut hides the churn in between.
         ctx.seekSmooth(end);
       },
     });

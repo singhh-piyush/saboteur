@@ -231,6 +231,23 @@ describe("agent status transitions", () => {
     expect(state.agents[0].status).toBe("healthy");
   });
 
+  it("faultCount keeps counting past the chaos-log render cap", () => {
+    const events = [ev({ agent_id: -1, event: "run_started", payload: { n_agents: 1 } })];
+    for (let i = 0; i < 250; i++) {
+      events.push(
+        ev({
+          event: "fault_injected",
+          step: 1,
+          fault: "api_error",
+          ts: `2026-06-10T12:00:00.${String(i).padStart(3, "0")}+00:00`,
+        }),
+      );
+    }
+    const state = foldEvents(events);
+    expect(state.chaosLog).toHaveLength(200); // rendered feed stays capped
+    expect(state.faultCount).toBe(250); // the header counter does not
+  });
+
   it("agent_done routes to succeeded or crashed on the verifier verdict", () => {
     const done = (success: boolean) =>
       foldEvents([
