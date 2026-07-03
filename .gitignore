@@ -8,13 +8,20 @@ CLAUDE.md
 .env
 
 # Run artifacts stay local (the SQLite index is rebuildable from the JSONL).
-# Only the golden offline demo run is tracked — it drives `saboteur replay`
-# on a fresh clone with no inference.
+# Tracked exceptions: the golden offline demo run (drives `saboteur replay`
+# on a fresh clone with no inference) and the two MI300X showcase runs
+# (Llama 3.1 8B / 70B hell_mode N=50 — the demo source data).
 runs/*
 !runs/.gitkeep
 !runs/hell_mode-20260629T231833-2b225c.jsonl
 !runs/hell_mode-20260629T231833-2b225c-control.jsonl
 !runs/hell_mode-20260629T231833-2b225c.scorecard.json
+!runs/hell_mode-20260703T005632-af6d6d.jsonl
+!runs/hell_mode-20260703T005632-af6d6d-control.jsonl
+!runs/hell_mode-20260703T005632-af6d6d.scorecard.json
+!runs/hell_mode-20260703T011108-89c802.jsonl
+!runs/hell_mode-20260703T011108-89c802-control.jsonl
+!runs/hell_mode-20260703T011108-89c802.scorecard.json
 
 # Python
 __pycache__/
