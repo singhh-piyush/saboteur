@@ -22,6 +22,11 @@ export type Placement = "top" | "bottom" | "left" | "right" | "center";
 
 const MARGIN = 12;
 const GAP = 14;
+/** Card widths: narrow docks in the left gutter (scorecard / face-off beats),
+ * wide gives the action-heavy close beat room for its button row. The width
+ * morphs between them (see the transition below) instead of snapping. */
+const CW_NARROW = 320;
+const CW_WIDE = 440;
 /** One easing, one duration for the whole card move (position + size together).
  * Ease-in-out: starts gently (no fast "shoot off"), glides, settles softly -
  * slow and elegant, and no reposition to catch in the middle any more. */
