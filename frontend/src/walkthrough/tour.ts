@@ -5,11 +5,12 @@
  * ordered list of beats. Swapping the runs rebinds everything automatically -
  * nothing here is hardcoded to a specific agent id, model, or number.
  *
- * The tour is built ONCE over ALL bundled runs. Each beat carries the index of
- * the run it narrates; entering a beat first ensures that run is active (a
- * no-op when it already is), so stepping forward or backward across the
- * face-off boundary always shows the right run. With two runs bundled, the
- * tour walks DEMO_RUNS[0] and ends by switching to DEMO_RUNS[1] in place.
+ * The tour is built ONCE over the active family's runs. Each beat carries the
+ * index of the run it narrates; entering a beat first ensures that run is
+ * active (a no-op when it already is), so stepping forward or backward across
+ * the face-off boundary always shows the right run. With two runs in the
+ * family, the tour walks the primary and ends by switching to the sibling in
+ * place.
  */
 
 import { agentLabel } from "../lib/format";
@@ -355,7 +356,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
       target: { kind: "region", name: "scorecard" },
       placement: "top",
       eyebrow: "Face-off",
-      title: "Same chaos, bigger model",
+      title: "Same chaos, different model",
       body: `Same task, same profile, same seed - now ${faceoff.label}. Survival ${surv} to ${asPct(sc2.survival_rate)}, deception caught ${dec} to ${asPct(sc2.deception_detection_rate)}. Resilience is a model property, and now you can measure it.`,
       onEnter: (ctx) => {
         ctx.switchRun(1);

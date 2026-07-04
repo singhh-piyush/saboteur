@@ -6,16 +6,19 @@
  */
 
 import { PauseIcon, PlayIcon, RestartIcon } from "../components/Icons";
-import { DEMO_RUNS } from "../demo";
+import type { DemoRun } from "../demo";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 const SPEEDS = [0.5, 1, 2, 4];
 
 interface PlaybarProps {
+  /** The active family's runs - the sibling switcher flips within these only
+   * (cross-family switching lives on the family selector). */
+  runs: DemoRun[];
   /** Restart the guided tour (shown only in free mode). */
   onReplayTour?: () => void;
   showReplayTour: boolean;
-  /** Bundled-run switcher (rendered only when more than one run is bundled). */
+  /** Sibling-run switcher (rendered only when the family bundles >1 run). */
   runIndex: number;
   onSwitchRun: (index: number) => void;
   /** True while the guided tour is active - the tour owns the run then, so the
@@ -24,6 +27,7 @@ interface PlaybarProps {
 }
 
 export function Playbar({
+  runs,
   onReplayTour,
   showReplayTour,
   runIndex,
@@ -37,22 +41,23 @@ export function Playbar({
     <div className="flex flex-wrap items-center gap-3 border-t border-line bg-panel px-3 py-2">
       <span className="font-display text-xs font-semibold tracking-widest text-win">REPLAY</span>
 
-      {/* Run/model switcher - switching remounts the replay with that run. */}
-      {DEMO_RUNS.length > 1 && (
+      {/* Sibling-run switcher - swaps the family's runs in place. */}
+      {runs.length > 1 && (
         <div className="flex gap-1">
-          {DEMO_RUNS.map((run, i) => (
+          {runs.map((run, i) => (
             <button
               key={run.id}
               type="button"
               disabled={switcherDisabled}
               onClick={() => onSwitchRun(i)}
+              title={run.label}
               className={`rounded-sm border px-2 py-0.5 text-xs font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 ${
                 runIndex === i
                   ? "border-accent/50 bg-accent/10 text-accent"
                   : `border-line text-ink-faint ${switcherDisabled ? "" : "hover:text-ink"}`
               }`}
             >
-              {run.label}
+              {run.short}
             </button>
           ))}
         </div>

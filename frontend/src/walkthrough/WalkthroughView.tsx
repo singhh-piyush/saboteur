@@ -20,9 +20,12 @@ import { RunBar } from "../components/RunBar";
 import { ScorecardView } from "../components/ScorecardView";
 import { TimelineDrawer } from "../components/TimelineDrawer";
 import { TooltipSuppression } from "../components/Tooltip";
+import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
-import { DEMO_RUNS, type DemoRun } from "../demo";
+import { DEMO_FAMILIES, type DemoRun } from "../demo";
+import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
+import { Reveal } from "./Reveal";
 import { usePrefersReducedMotion } from "./Spotlight";
 import { TourOverlay } from "./TourOverlay";
 import { buildTour } from "./tour";
@@ -35,22 +38,109 @@ const CARD = "rounded-lg border border-line bg-panel";
 /** Fade-out time for a tour position jump; the seek happens just after. */
 const WARP_OUT_MS = 160;
 
+/** Dip-to-black time for the demo -> family-selector handoff. */
+const DIP_MS = 320;
+
+type Stage =
+  | { kind: "select" }
+  | { kind: "reveal" | "demo"; family: number; nonce: number };
+
 export function WalkthroughView({ onExit }: { onExit: () => void }) {
-  // The provider owns which bundled run is playing and swaps runs IN PLACE
-  // (no keyed remount): the shell, tour overlay, and grid cells all stay
-  // mounted across a switch, so the tour's face-off beat and the free-mode
-  // switcher are seamless.
+  // Stage machine: family selector -> branded reveal -> demo. The provider +
+  // shell mount at "reveal", UNDER the opaque Reveal overlay, so the keyed
+  // remount and the first paint are never visible - the reveal fades out over
+  // a fully painted demo. Within a mounted demo the provider still swaps the
+  // family's sibling runs IN PLACE (no remount): the tour's face-off beat and
+  // the free-mode switcher stay seamless.
+  const [stage, setStage] = useState<Stage>({ kind: "select" });
+  const [dipping, setDipping] = useState(false);
+  const dipTimer = useRef<number | null>(null);
+  const nonceRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      if (dipTimer.current !== null) window.clearTimeout(dipTimer.current);
+    },
+    [],
+  );
+
+  // Every pick gets a fresh nonce -> fresh provider + fresh guided tour, even
+  // when re-picking the same family. Reduced motion skips the reveal.
+  const pickFamily = (index: number) => {
+    nonceRef.current += 1;
+    setStage({
+      kind: prefersReducedMotion() ? "demo" : "reveal",
+      family: index,
+      nonce: nonceRef.current,
+    });
+  };
+
+  // Demo -> selector: dip to black first (the selector is itself pure black,
+  // so lifting the dip is seamless). Reduced motion switches instantly.
+  const switchFamily = () => {
+    if (dipping) return;
+    if (prefersReducedMotion()) {
+      setStage({ kind: "select" });
+      return;
+    }
+    setDipping(true);
+    dipTimer.current = window.setTimeout(() => {
+      dipTimer.current = null;
+      setStage({ kind: "select" });
+      setDipping(false);
+    }, DIP_MS + 40);
+  };
+
+  if (stage.kind === "select") {
+    return <FamilySelect families={DEMO_FAMILIES} onSelect={pickFamily} onExit={onExit} />;
+  }
+
+  const family = DEMO_FAMILIES[stage.family] ?? DEMO_FAMILIES[0];
   return (
-    <WalkthroughProvider runs={DEMO_RUNS}>
-      <WalkthroughShell onExit={onExit} />
-    </WalkthroughProvider>
+    <>
+      <WalkthroughProvider key={stage.nonce} runs={family.runs}>
+        <WalkthroughShell
+          runs={family.runs}
+          onSwitchFamily={switchFamily}
+          onExit={onExit}
+          tourSuspended={stage.kind === "reveal"}
+        />
+      </WalkthroughProvider>
+      {stage.kind === "reveal" && (
+        <Reveal
+          family={family}
+          onDone={() => setStage({ kind: "demo", family: stage.family, nonce: stage.nonce })}
+        />
+      )}
+      {dipping &&
+        createPortal(
+          <div
+            aria-hidden
+            className="dip-cover pointer-events-none fixed inset-0 z-[210] bg-black"
+            style={{ animation: `dip-in ${DIP_MS}ms ease forwards` }}
+          />,
+          document.body,
+        )}
+    </>
   );
 }
 
-function WalkthroughShell({ onExit }: { onExit: () => void }) {
+function WalkthroughShell({
+  runs,
+  onSwitchFamily,
+  onExit,
+  tourSuspended = false,
+}: {
+  runs: DemoRun[];
+  onSwitchFamily: () => void;
+  onExit: () => void;
+  /** True while the reveal overlay covers the shell: the tour overlay stays
+   * dormant so the reveal's skip keys can never step or exit the tour. */
+  tourSuspended?: boolean;
+}) {
   const { state } = useRun();
   const { play, setSpeed, restart, seek, position, runIndex, switchRun } = useWalkthrough();
-  const run: DemoRun = DEMO_RUNS[runIndex] ?? DEMO_RUNS[0];
+  const run: DemoRun = runs[runIndex] ?? runs[0];
 
   const [tab, setTab] = useState<Tab>("grid");
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
@@ -60,9 +150,9 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
   const [tourMode, setTourMode] = useState<"tour" | "free">("tour");
   const [tourBeat, setTourBeat] = useState(0);
 
-  // Built once over ALL bundled runs; each beat carries its run binding, so
+  // Built once over the family's runs; each beat carries its run binding, so
   // the list stays stable across in-place run switches.
-  const beats = useMemo(() => buildTour(DEMO_RUNS), []);
+  const beats = useMemo(() => buildTour(runs), [runs]);
 
   const selectAgent = (id: number | null) => {
     if (id !== null) setLastAgent(id);
@@ -189,6 +279,13 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
           )}
           <button
             type="button"
+            onClick={onSwitchFamily}
+            className="rounded-sm border border-line px-3 py-1 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink"
+          >
+            Switch family
+          </button>
+          <button
+            type="button"
             onClick={onExit}
             className="rounded-sm border border-line px-3 py-1 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink"
           >
@@ -293,6 +390,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
 
           <div data-tour="playbar">
             <Playbar
+              runs={runs}
               onReplayTour={replayTour}
               showReplayTour={tourMode === "free"}
               runIndex={runIndex}
@@ -331,7 +429,7 @@ function WalkthroughShell({ onExit }: { onExit: () => void }) {
 
       <TourOverlay
         beats={beats}
-        active={tourMode === "tour"}
+        active={tourMode === "tour" && !tourSuspended}
         beatIndex={tourBeat}
         onSetBeat={setTourBeat}
         onExitTour={exitTour}

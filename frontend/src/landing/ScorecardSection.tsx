@@ -9,10 +9,10 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { PanelHeader } from "../components/PanelHeader";
-import { DEMO_RUNS } from "../demo";
+import { DEMO_FAMILIES } from "../demo";
 import { CountUp, Eyebrow, Heading, Lede, Reveal, Section } from "./parts";
 
-const SC = DEMO_RUNS[0].scorecard;
+const SC = DEMO_FAMILIES[0].runs[0].scorecard;
 
 const TONES: Record<string, string> = {
   ok: "text-ok",
