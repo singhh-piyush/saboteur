@@ -374,7 +374,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
       placement: "left",
       eyebrow: "Face-off",
       title: "Same chaos, different model",
-      body: `Same task, same profile, same seed - now ${faceoff.label}. Survival ${surv} to ${asPct(sc2.survival_rate)}, deception caught ${dec} to ${asPct(sc2.deception_detection_rate)}. Resilience is a model property, and now you can measure it.`,
+      body: `Same task, same profile, same seed - now ${faceoff.label}. Toggle the two models in the face-off card above the scorecard: survival ${surv} to ${asPct(sc2.survival_rate)}, deception caught ${dec} to ${asPct(sc2.deception_detection_rate)}, and every metric that moved is highlighted with its delta. Resilience is a model property, and now you can measure it.`,
       compare: {
         models: [
           { label: primary.label, short: primary.short, scorecard },

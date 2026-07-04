@@ -16,7 +16,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Callout } from "./Callout";
-import { FaceoffCompare } from "./FaceoffCompare";
 import { Spotlight, useSpotlightRect } from "./Spotlight";
 import type { Beat, TourCtx, TourTarget } from "./tour";
 import { useWalkthrough } from "./WalkthroughProvider";
@@ -47,11 +46,11 @@ interface TourOverlayProps {
 }
 
 const BTN_GHOST =
-  "rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
+  "whitespace-nowrap rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
 const BTN_PRIMARY =
-  "rounded-sm border border-accent/60 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20";
+  "whitespace-nowrap rounded-sm border border-accent/60 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20";
 const BTN_RED =
-  "rounded-sm border border-crit/70 bg-crit/15 px-2.5 py-1 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/25";
+  "whitespace-nowrap rounded-sm border border-crit/70 bg-crit/15 px-2.5 py-1 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/25";
 
 /** The id-th agent cell in the grid (ids are contiguous so DOM index === id). */
 function agentCell(id: number): HTMLElement | null {
@@ -74,7 +73,7 @@ export function TourOverlay({
   otherFamilyLabel,
   onViewOtherFamily,
 }: TourOverlayProps) {
-  const { seek, pause, switchRun, runIndex } = useWalkthrough();
+  const { seek, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
 
@@ -173,7 +172,7 @@ export function TourOverlay({
       {/* Snap (no glide) when landing on a fresh agent cell so the hole never
           sweeps across the grid to reach it; region targets keep the glide. */}
       <Spotlight rect={rect} snap={target.kind === "agent"} />
-      <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`}>
+      <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-accent" />
@@ -184,11 +183,7 @@ export function TourOverlay({
 
           <h3 className="text-lg font-bold leading-tight text-ink">{beat.title}</h3>
 
-          {beat.compare && !awaiting ? (
-            <FaceoffCompare data={beat.compare} focus={runIndex} onFocus={switchRun} />
-          ) : (
-            <p className="text-sm leading-relaxed text-ink-dim">{bodyText}</p>
-          )}
+          <p className="text-sm leading-relaxed text-ink-dim">{bodyText}</p>
 
           {(beat.actions || (isLast && onViewOtherFamily && otherFamilyLabel)) && (
             <div className="flex flex-wrap gap-2 pt-0.5">

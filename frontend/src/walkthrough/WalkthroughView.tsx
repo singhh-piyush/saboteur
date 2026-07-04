@@ -23,6 +23,7 @@ import { TooltipSuppression } from "../components/Tooltip";
 import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
 import { DEMO_FAMILIES, type DemoRun } from "../demo";
+import { FaceoffCompare } from "./FaceoffCompare";
 import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
 import { Reveal } from "./Reveal";
@@ -227,8 +228,13 @@ function WalkthroughShell({
   // scorecard is fully visible beside it on wide screens. On narrow screens the
   // callout flips to a bottom bar, so reserve room beneath the scorecard there
   // (lg+ needs none) - nothing is hidden under the docked card at any width.
-  const activeBeatId = tourActive ? (beats[tourBeat]?.id ?? null) : null;
+  const activeBeat = tourActive ? (beats[tourBeat] ?? null) : null;
+  const activeBeatId = activeBeat?.id ?? null;
   const scorecardDock = activeBeatId === "scorecard" || activeBeatId === "faceoff";
+  // The face-off beat surfaces the model-comparison card at the top of the
+  // scorecard pane (its own card above the main chart), where the viewer can
+  // freely toggle models and watch the moved metrics highlight.
+  const faceoffData = activeBeat?.compare ?? null;
 
   // Fade in from black on entry, completing the dip-to-black handoff from the
   // landing page (the demo mounts under a black cover that then lifts).
@@ -406,9 +412,7 @@ function WalkthroughShell({
             </div>
             <div
               data-tour="scorecard"
-              className={`absolute inset-0 transition-opacity duration-500 ease-out ${
-                scorecardDock ? "max-lg:[&>*]:pb-[46vh]" : ""
-              }`}
+              className="absolute inset-0 flex flex-col transition-opacity duration-500 ease-out"
               style={{
                 opacity: tab === "scorecard" ? 1 : 0,
                 pointerEvents: tab === "scorecard" ? "auto" : "none",
@@ -416,7 +420,18 @@ function WalkthroughShell({
               }}
               aria-hidden={tab !== "scorecard"}
             >
-              <ScorecardView />
+              {faceoffData && (
+                <div
+                  data-tour="faceoff"
+                  className="shrink-0 border-b border-line p-3"
+                  style={reducedMotion ? undefined : { animation: "card-in 0.3s ease-out" }}
+                >
+                  <FaceoffCompare data={faceoffData} focus={runIndex} onFocus={switchRun} />
+                </div>
+              )}
+              <div className={`min-h-0 flex-1 ${scorecardDock ? "max-lg:[&>*]:pb-[46vh]" : ""}`}>
+                <ScorecardView />
+              </div>
             </div>
           </div>
 

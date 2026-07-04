@@ -36,6 +36,9 @@ interface CalloutProps {
   /** Changes per beat so position + content recompute even when the target rect
    * is the same element (e.g. successive timeline beats). */
   anchorKey: string;
+  /** Roomier card for action-heavy beats (e.g. the closing beat's button row),
+   * so the controls sit on one line instead of wrapping into a cramped stack. */
+  wide?: boolean;
   children: ReactNode;
 }
 
@@ -102,7 +105,7 @@ function computePos(
   return { left, top };
 }
 
-export function Callout({ rect, placement, anchorKey, children }: CalloutProps) {
+export function Callout({ rect, placement, anchorKey, wide = false, children }: CalloutProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -178,7 +181,7 @@ export function Callout({ rect, placement, anchorKey, children }: CalloutProps) 
       ref={cardRef}
       role="dialog"
       aria-modal="false"
-      className="fixed z-[120] w-[320px] max-w-[88vw] overflow-hidden rounded-lg border border-line-strong bg-raised shadow-[0_16px_48px_-8px_rgb(0_0_0/70%)]"
+      className={`fixed z-[120] ${wide ? "w-[440px]" : "w-[320px]"} max-w-[88vw] overflow-hidden rounded-lg border border-line-strong bg-raised shadow-[0_16px_48px_-8px_rgb(0_0_0/70%)]`}
       style={{
         left: pos?.left ?? -9999,
         top: pos?.top ?? -9999,
