@@ -27,8 +27,9 @@ const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const BLACK_MS = 450; // dramatic beat; longer starts to read as "it broke"
 const WORDMARK_AT = 750; // into the card: logo has settled, SABOTEUR bursts in
 const CARD_MS = 3200; // the full title page: settle, glitch, clean hold
-const FADE_MS = 760; // fade out over the painted demo (long enough to cover the
-// tour's first-beat cold-start, which is armed when this fade begins)
+const FADE_MS = 1050; // fade out over the painted demo - a longer, softer
+// dissolve into the demo (also covers the tour's first-beat cold-start, which
+// is armed when this fade begins)
 
 export function Reveal({
   family,
@@ -133,7 +134,7 @@ export function Reveal({
           {/* Mounted from the start; the glitch-in burst fires on the class
               flip, exactly when the wordmark is revealed. */}
           <span
-            className={`${showWordmark && !leaving ? "glitch-in " : ""}font-brand text-5xl font-extrabold leading-none tracking-[0.16em] text-ink sm:text-6xl md:text-7xl`}
+            className={`${showWordmark && !leaving ? "glitch-in " : ""}font-brand text-5xl font-extrabold leading-none tracking-[0.16em] -mr-[0.16em] text-ink sm:text-6xl md:text-7xl`}
             data-text="SABOTEUR"
             style={{
               opacity: showWordmark && !leaving ? 1 : 0,

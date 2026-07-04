@@ -337,7 +337,6 @@ body::before {
    Opaque slice backgrounds cut INTO the word; intro overlay is pure black. */
 .glitch-in {
   color: var(--color-ink);
-  text-shadow: 0 0 24px color-mix(in oklch, var(--color-accent) 35%, transparent);
   animation:
     glitch-once-jolt 1.2s step-end 1,
     glitch-once-flicker 1.2s steps(1, end) 1;

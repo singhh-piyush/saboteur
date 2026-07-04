@@ -142,7 +142,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
         {/* glitch-in is applied only once this phase is visible - the one-shot
             entry animation starts on class change, not on (hidden) mount. */}
         <span
-          className={`${showWordmark ? "glitch-in " : ""}font-brand text-7xl font-extrabold leading-none tracking-[0.16em] text-ink sm:text-8xl md:text-9xl`}
+          className={`${showWordmark ? "glitch-in " : ""}font-brand text-6xl font-extrabold leading-none tracking-[0.16em] text-ink sm:text-7xl md:text-8xl`}
           data-text="SABOTEUR"
         >
           SABOTEUR
