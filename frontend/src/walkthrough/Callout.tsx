@@ -59,15 +59,17 @@ export function Callout({ rect, placement, anchorKey, children }: CalloutProps) 
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
         let place = placement;
-        // Flip toward the side with room.
-        if (place === "bottom" && rect.bottom + GAP + ch > vh - MARGIN && rect.top - GAP - ch > MARGIN)
-          place = "top";
-        else if (place === "top" && rect.top - GAP - ch < MARGIN && rect.bottom + GAP + ch < vh - MARGIN)
-          place = "bottom";
-        else if (place === "right" && rect.right + GAP + cw > vw - MARGIN && rect.left - GAP - cw > MARGIN)
-          place = "left";
-        else if (place === "left" && rect.left - GAP - cw < MARGIN && rect.right + GAP + cw < vw - MARGIN)
-          place = "right";
+        const roomLeft = rect.left - GAP - cw >= MARGIN;
+        const roomRight = rect.right + GAP + cw <= vw - MARGIN;
+        const roomBelow = rect.bottom + GAP + ch <= vh - MARGIN;
+        // Flip toward the side with room. For a side placement with no room on
+        // EITHER flank (a wide target on a narrow viewport, e.g. the scorecard
+        // on mobile), drop to bottom (or top) so the card never lands on top of
+        // the target - the scorecard stays unobscured at any width.
+        if (place === "bottom" && !roomBelow && rect.top - GAP - ch > MARGIN) place = "top";
+        else if (place === "top" && rect.top - GAP - ch < MARGIN && roomBelow) place = "bottom";
+        else if (place === "right" && !roomRight) place = roomLeft ? "left" : roomBelow ? "bottom" : "top";
+        else if (place === "left" && !roomLeft) place = roomRight ? "right" : roomBelow ? "bottom" : "top";
 
         switch (place) {
           case "top":

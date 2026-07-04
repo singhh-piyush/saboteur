@@ -242,6 +242,23 @@ body::before {
   }
 }
 
+/* Face-off metric pulse - a brief highlight when the compared model toggles,
+   so the numbers that moved catch the eye. Auto-neutered by the reduced-motion
+   block below. */
+@keyframes metric-pulse {
+  0% {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.metric-pulse {
+  animation: metric-pulse 0.42s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
 /* ------------------------------------------------------------------ */
 /* Scroll reveal - per-element fade + rise as it enters the viewport.  */
 /* JS (useReveal) toggles `.is-visible`; the stagger comes from the    */

@@ -14,6 +14,7 @@
  */
 
 import { agentLabel } from "../lib/format";
+import type { Scorecard } from "../lib/api";
 import type { DemoRun } from "../demo";
 import type { TelemetryEvent } from "../types/telemetry";
 
@@ -42,6 +43,19 @@ export interface TourCtx {
   switchRun: (index: number) => void;
 }
 
+/** One model's identity + frozen scorecard for the face-off comparison. */
+export interface FaceoffModel {
+  label: string;
+  short: string;
+  scorecard: Scorecard;
+}
+
+/** The two models a face-off beat contrasts (primary vs sibling). Every number
+ * the comparison shows derives from these scorecards - nothing is hardcoded. */
+export interface FaceoffData {
+  models: [FaceoffModel, FaceoffModel];
+}
+
 export interface Beat {
   id: string;
   /** Which bundled run this beat narrates; entering the beat activates it. */
@@ -62,6 +76,9 @@ export interface Beat {
   actions?: TourAction[];
   /** Label for the last beat's primary footer button (default "Finish"). */
   finishLabel?: string;
+  /** When set, the beat renders the interactive face-off comparison (metric
+   * deltas + model toggle + chart popup) instead of a plain body paragraph. */
+  compare?: FaceoffData;
   onEnter: (ctx: TourCtx) => void;
 }
 
@@ -334,7 +351,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
     id: "scorecard",
     run: 0,
     target: { kind: "region", name: "scorecard" },
-    placement: "top",
+    placement: "left",
     eyebrow: "Resilience scorecard",
     title: "Every number is earned",
     body: `When the cohort finishes, the scorecard is a pure function of the event log: survival ${surv}, deception caught ${dec}, mean time to recovery ${mttr} steps, plus the recovery and failure-mode breakdowns.`,
@@ -354,10 +371,16 @@ export function buildTour(runs: DemoRun[]): Beat[] {
       id: "faceoff",
       run: 1,
       target: { kind: "region", name: "scorecard" },
-      placement: "top",
+      placement: "left",
       eyebrow: "Face-off",
       title: "Same chaos, different model",
       body: `Same task, same profile, same seed - now ${faceoff.label}. Survival ${surv} to ${asPct(sc2.survival_rate)}, deception caught ${dec} to ${asPct(sc2.deception_detection_rate)}. Resilience is a model property, and now you can measure it.`,
+      compare: {
+        models: [
+          { label: primary.label, short: primary.short, scorecard },
+          { label: faceoff.label, short: faceoff.short, scorecard: sc2 },
+        ],
+      },
       onEnter: (ctx) => {
         ctx.switchRun(1);
         ctx.selectAgent(null);

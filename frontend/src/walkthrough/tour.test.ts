@@ -86,6 +86,15 @@ describe.each(DEMO_FAMILIES.map((family) => [family.id, family] as const))(
       expect(faceoff.body).toContain(pct(family.runs[1].scorecard.deception_detection_rate));
     });
 
+    it("face-off carries a compare payload wired to both runs' scorecards", () => {
+      const faceoff = beats.find((b) => b.id === "faceoff")!;
+      expect(faceoff.compare?.models).toHaveLength(2);
+      expect(faceoff.compare?.models[0].scorecard).toBe(family.runs[0].scorecard);
+      expect(faceoff.compare?.models[1].scorecard).toBe(family.runs[1].scorecard);
+      expect(faceoff.compare?.models[0].short).toBe(family.runs[0].short);
+      expect(faceoff.compare?.models[1].short).toBe(family.runs[1].short);
+    });
+
     it("entering a beat activates its bound run", () => {
       const switched: number[] = [];
       const ctx = {

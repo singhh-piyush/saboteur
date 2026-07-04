@@ -54,6 +54,9 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
   // the free-mode switcher stay seamless.
   const [stage, setStage] = useState<Stage>({ kind: "select" });
   const [dipping, setDipping] = useState(false);
+  // Armed when the reveal begins its fade-out: the tour comes up UNDER the still
+  // opaque black so there is no dead pause before step 1. Reset on every pick.
+  const [tourArmed, setTourArmed] = useState(false);
   const dipTimer = useRef<number | null>(null);
   const nonceRef = useRef(0);
 
@@ -68,6 +71,7 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
   // when re-picking the same family. Reduced motion skips the reveal.
   const pickFamily = (index: number) => {
     nonceRef.current += 1;
+    setTourArmed(false);
     setStage({
       kind: prefersReducedMotion() ? "demo" : "reveal",
       family: index,
@@ -75,40 +79,53 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
     });
   };
 
-  // Demo -> selector: dip to black first (the selector is itself pure black,
-  // so lifting the dip is seamless). Reduced motion switches instantly.
-  const switchFamily = () => {
+  // Dip to black, run `after` at the darkest point, then lift. The selector and
+  // the reveal are both pure black, so a handoff through the dip is seamless.
+  // Reduced motion runs `after` immediately (no fade).
+  const runDip = (after: () => void) => {
     if (dipping) return;
     if (prefersReducedMotion()) {
-      setStage({ kind: "select" });
+      after();
       return;
     }
     setDipping(true);
     dipTimer.current = window.setTimeout(() => {
       dipTimer.current = null;
-      setStage({ kind: "select" });
+      after();
       setDipping(false);
     }, DIP_MS + 40);
   };
+
+  const switchFamily = () => runDip(() => setStage({ kind: "select" }));
+  const exitToLanding = () => runDip(onExit);
 
   if (stage.kind === "select") {
     return <FamilySelect families={DEMO_FAMILIES} onSelect={pickFamily} onExit={onExit} />;
   }
 
   const family = DEMO_FAMILIES[stage.family] ?? DEMO_FAMILIES[0];
+  // The other bundled family (two families total) - the last tour beat offers to
+  // route to its run through the reveal sequence.
+  const otherFamilyIndex = stage.family === 0 ? 1 : 0;
+  const otherFamily = DEMO_FAMILIES[otherFamilyIndex];
   return (
     <>
       <WalkthroughProvider key={stage.nonce} runs={family.runs}>
         <WalkthroughShell
           runs={family.runs}
           onSwitchFamily={switchFamily}
-          onExit={onExit}
-          tourSuspended={stage.kind === "reveal"}
+          onExit={exitToLanding}
+          otherFamilyLabel={otherFamily?.name}
+          onViewOtherFamily={
+            otherFamily ? () => runDip(() => pickFamily(otherFamilyIndex)) : undefined
+          }
+          tourSuspended={stage.kind === "reveal" && !tourArmed}
         />
       </WalkthroughProvider>
       {stage.kind === "reveal" && (
         <Reveal
           family={family}
+          onLeaveStart={() => setTourArmed(true)}
           onDone={() => setStage({ kind: "demo", family: stage.family, nonce: stage.nonce })}
         />
       )}
@@ -129,11 +146,17 @@ function WalkthroughShell({
   runs,
   onSwitchFamily,
   onExit,
+  otherFamilyLabel,
+  onViewOtherFamily,
   tourSuspended = false,
 }: {
   runs: DemoRun[];
   onSwitchFamily: () => void;
   onExit: () => void;
+  /** The other bundled family's name + a handler that routes to its run (via
+   * the reveal); surfaced as an extra action on the last tour beat. */
+  otherFamilyLabel?: string;
+  onViewOtherFamily?: () => void;
   /** True while the reveal overlay covers the shell: the tour overlay stays
    * dormant so the reveal's skip keys can never step or exit the tour. */
   tourSuspended?: boolean;
@@ -199,6 +222,13 @@ function WalkthroughShell({
   const drawerAgent = selectedAgent ?? lastAgent;
   const drawerOpen = selectedAgent !== null && state.agents[selectedAgent] !== undefined;
   const tourActive = tourMode === "tour";
+
+  // While the scorecard / face-off beats dock their coachmark to the left, the
+  // scorecard is fully visible beside it on wide screens. On narrow screens the
+  // callout flips to a bottom bar, so reserve room beneath the scorecard there
+  // (lg+ needs none) - nothing is hidden under the docked card at any width.
+  const activeBeatId = tourActive ? (beats[tourBeat]?.id ?? null) : null;
+  const scorecardDock = activeBeatId === "scorecard" || activeBeatId === "faceoff";
 
   // Fade in from black on entry, completing the dip-to-black handoff from the
   // landing page (the demo mounts under a black cover that then lifts).
@@ -376,7 +406,9 @@ function WalkthroughShell({
             </div>
             <div
               data-tour="scorecard"
-              className="absolute inset-0 transition-opacity duration-500 ease-out"
+              className={`absolute inset-0 transition-opacity duration-500 ease-out ${
+                scorecardDock ? "max-lg:[&>*]:pb-[46vh]" : ""
+              }`}
               style={{
                 opacity: tab === "scorecard" ? 1 : 0,
                 pointerEvents: tab === "scorecard" ? "auto" : "none",
@@ -435,6 +467,8 @@ function WalkthroughShell({
         onExitTour={exitTour}
         onFinishTour={finishTour}
         onExitToLanding={onExit}
+        otherFamilyLabel={otherFamilyLabel}
+        onViewOtherFamily={onViewOtherFamily}
         selectedAgent={selectedAgent}
         selectAgent={selectAgent}
         setTab={setTab}

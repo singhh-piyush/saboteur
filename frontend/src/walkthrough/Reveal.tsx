@@ -27,13 +27,26 @@ const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const BLACK_MS = 450; // dramatic beat; longer starts to read as "it broke"
 const WORDMARK_AT = 750; // into the card: logo has settled, SABOTEUR bursts in
 const CARD_MS = 3200; // the full title page: settle, glitch, clean hold
-const FADE_MS = 600; // fade out over the painted demo
+const FADE_MS = 760; // fade out over the painted demo (long enough to cover the
+// tour's first-beat cold-start, which is armed when this fade begins)
 
-export function Reveal({ family, onDone }: { family: DemoFamily; onDone: () => void }) {
+export function Reveal({
+  family,
+  onDone,
+  onLeaveStart,
+}: {
+  family: DemoFamily;
+  onDone: () => void;
+  /** Fired once when the fade-out begins, so the demo can arm the guided tour
+   * UNDER the still-opaque overlay - the coachmark measures + fades in behind
+   * the fading black, leaving no dead pause before step 1. */
+  onLeaveStart?: () => void;
+}) {
   const [showCard, setShowCard] = useState(false);
   const [showWordmark, setShowWordmark] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const doneRef = useRef(false);
+  const leaveStartedRef = useRef(false);
 
   // One-shot completion - timers and a manual skip can never fire onDone twice.
   const finish = () => {
@@ -71,9 +84,14 @@ export function Reveal({ family, onDone }: { family: DemoFamily; onDone: () => v
   }, []);
 
   // Complete after the fade-out transition (deterministic timer, not
-  // transitionend - the fading children emit those too).
+  // transitionend - the fading children emit those too). Arm the tour at the
+  // START of the fade so it comes up behind the still-opaque black.
   useEffect(() => {
     if (!leaving) return;
+    if (!leaveStartedRef.current) {
+      leaveStartedRef.current = true;
+      onLeaveStart?.();
+    }
     const t = window.setTimeout(finish, FADE_MS + 60);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,7 +133,7 @@ export function Reveal({ family, onDone }: { family: DemoFamily; onDone: () => v
           {/* Mounted from the start; the glitch-in burst fires on the class
               flip, exactly when the wordmark is revealed. */}
           <span
-            className={`${showWordmark && !leaving ? "glitch-in " : ""}font-brand text-6xl font-extrabold leading-none tracking-[0.16em] text-ink sm:text-7xl md:text-8xl`}
+            className={`${showWordmark && !leaving ? "glitch-in " : ""}font-brand text-5xl font-extrabold leading-none tracking-[0.16em] text-ink sm:text-6xl md:text-7xl`}
             data-text="SABOTEUR"
             style={{
               opacity: showWordmark && !leaving ? 1 : 0,

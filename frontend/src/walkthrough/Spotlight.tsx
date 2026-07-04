@@ -9,7 +9,7 @@
  * clip or mis-anchor the fixed positioning.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const PAD = 8;
@@ -59,6 +59,22 @@ export function useSpotlightRect(resolve: () => HTMLElement | null, key: string)
   const [rect, setRect] = useState<DOMRect | null>(null);
   const resolveRef = useRef(resolve);
   resolveRef.current = resolve;
+
+  // Commit the target's rect SYNCHRONOUSLY on a beat/phase change, before paint.
+  // Static targets (agent cells) are at their final position immediately, so the
+  // hole lands on the correct element on the first frame - no multi-frame settle
+  // delay and no glide from a stale target. The rAF loop below then only refines
+  // targets that are still animating in (e.g. the timeline drawer).
+  useLayoutEffect(() => {
+    const el = resolveRef.current();
+    if (!el) {
+      setRect((prev) => (prev === null ? prev : null));
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    if (r.width > 1 || r.height > 1) setRect((prev) => (closeRect(prev, r) ? prev : r));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   useEffect(() => {
     let stopped = false;
@@ -113,16 +129,16 @@ export function useSpotlightRect(resolve: () => HTMLElement | null, key: string)
   return rect;
 }
 
-export function Spotlight({ rect }: { rect: DOMRect | null }) {
+export function Spotlight({ rect, snap = false }: { rect: DOMRect | null; snap?: boolean }) {
   const reduced = usePrefersReducedMotion();
 
-  // No target (intro/close beat) - dim and blur the whole screen.
+  // No target (intro/close beat) - dim the whole screen.
   if (rect === null) {
     return createPortal(
       <div
         aria-hidden
         className="fixed inset-0 z-[90]"
-        style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(2px)", pointerEvents: "none" }}
+        style={{ background: "rgba(0,0,0,0.6)", pointerEvents: "none" }}
       />,
       document.body,
     );
@@ -135,56 +151,32 @@ export function Spotlight({ rect }: { rect: DOMRect | null }) {
   const w = Math.min(rect.width + PAD * 2, vw - x);
   const h = Math.min(rect.height + PAD * 2, vh - y);
 
-  // A single non-self-intersecting polygon that wraps the viewport with a
-  // rectangular notch over the hole - robust across browsers (no fill-rule).
-  const cut = [
-    `0px 0px`,
-    `0px ${vh}px`,
-    `${x}px ${vh}px`,
-    `${x}px ${y}px`,
-    `${x + w}px ${y}px`,
-    `${x + w}px ${y + h}px`,
-    `${x}px ${y + h}px`,
-    `${x}px ${vh}px`,
-    `${vw}px ${vh}px`,
-    `${vw}px 0px`,
-  ].join(", ");
-
-  const holeTransition = reduced
-    ? "none"
-    : `left ${MOVE_MS}ms ${EASE}, top ${MOVE_MS}ms ${EASE}, width ${MOVE_MS}ms ${EASE}, height ${MOVE_MS}ms ${EASE}`;
-  const blurTransition = reduced ? "none" : `clip-path ${MOVE_MS}ms ${EASE}`;
+  // A single element carries the whole effect: its huge spread shadow dims
+  // everything outside the hole, and it glides between targets with ONE easing
+  // (no second clip-path-animated layer to desync mid-move). `snap` disables the
+  // glide when jumping onto a fresh agent cell, so the hole never sweeps across
+  // the grid to reach it.
+  const holeTransition =
+    reduced || snap
+      ? "none"
+      : `left ${MOVE_MS}ms ${EASE}, top ${MOVE_MS}ms ${EASE}, width ${MOVE_MS}ms ${EASE}, height ${MOVE_MS}ms ${EASE}`;
 
   return createPortal(
-    <>
-      {/* Blur everything but the hole; the cutout morphs smoothly between beats. */}
-      <div
-        aria-hidden
-        className="fixed inset-0 z-[90]"
-        style={{
-          backdropFilter: "blur(2px)",
-          clipPath: `polygon(${cut})`,
-          pointerEvents: "none",
-          transition: blurTransition,
-        }}
-      />
-      {/* Dim the screen via the hole's huge spread shadow; ring the hole accent. */}
-      <div
-        aria-hidden
-        className="fixed z-[91]"
-        style={{
-          left: x,
-          top: y,
-          width: w,
-          height: h,
-          borderRadius: RADIUS,
-          boxShadow:
-            "0 0 0 9999px rgba(0,0,0,0.6), inset 0 0 0 1px color-mix(in oklch, var(--color-accent) 45%, transparent)",
-          pointerEvents: "none",
-          transition: holeTransition,
-        }}
-      />
-    </>,
+    <div
+      aria-hidden
+      className="fixed z-[91]"
+      style={{
+        left: x,
+        top: y,
+        width: w,
+        height: h,
+        borderRadius: RADIUS,
+        boxShadow:
+          "0 0 0 9999px rgba(0,0,0,0.6), inset 0 0 0 1px color-mix(in oklch, var(--color-accent) 45%, transparent)",
+        pointerEvents: "none",
+        transition: holeTransition,
+      }}
+    />,
     document.body,
   );
 }

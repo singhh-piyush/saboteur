@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Callout } from "./Callout";
+import { FaceoffCompare } from "./FaceoffCompare";
 import { Spotlight, useSpotlightRect } from "./Spotlight";
 import type { Beat, TourCtx, TourTarget } from "./tour";
 import { useWalkthrough } from "./WalkthroughProvider";
@@ -38,6 +39,11 @@ interface TourOverlayProps {
   /** Shell-provided fade-through seek: hides the grid pane for the instant of
    * the jump so only the destination state is visible (no mid-run churn). */
   seekSmooth: (index: number) => void;
+  /** The OTHER family's display name; when set, the last beat offers a button
+   * that routes to that family's reveal + run. */
+  otherFamilyLabel?: string;
+  /** Route to the other family (dip to black -> reveal -> run). */
+  onViewOtherFamily?: () => void;
 }
 
 const BTN_GHOST =
@@ -63,13 +69,20 @@ export function TourOverlay({
   selectAgent,
   setTab,
   seekSmooth,
+  otherFamilyLabel,
+  onViewOtherFamily,
 }: TourOverlayProps) {
-  const { seek, pause, switchRun } = useWalkthrough();
+  const { seek, pause, switchRun, runIndex } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
 
-  // Whether an interactive beat's agent has been clicked open yet.
-  const [revealed, setRevealed] = useState(false);
+  // Which beat's interactive agent has been clicked open. Derived (not an
+  // effect-reset flag) so `revealed` is false the instant a new beat begins -
+  // no stale render where the target briefly resolves to the previous beat's
+  // timeline/agent before switching to this beat's cell (issue: coachmark
+  // catching the wrong agent).
+  const [revealedBeat, setRevealedBeat] = useState<number | null>(null);
+  const revealed = revealedBeat === beatIndex;
 
   // Latest side-effect surface, captured in a ref so the per-beat effect runs
   // exactly once per beat (not on every playback tick that re-memoizes seek).
@@ -82,12 +95,14 @@ export function TourOverlay({
   // reveal; and (for interactive beats) scroll the target cell into view.
   useEffect(() => {
     if (!active || !beat) return;
-    setRevealed(false);
     beat.onEnter(ctxRef.current);
     if (beat.interactive) {
       const id = beat.interactive.agent;
+      // Instant scroll (the grid is behind the dim, so it is invisible): the
+      // cell reaches its final position before the spotlight measures it, so
+      // the hole never chases a smooth-scrolling target.
       const raf = requestAnimationFrame(() =>
-        agentCell(id)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+        agentCell(id)?.scrollIntoView({ block: "center", behavior: "auto" }),
       );
       return () => cancelAnimationFrame(raf);
     }
@@ -99,8 +114,8 @@ export function TourOverlay({
   // trace"). Uses the real selection, so it is genuine product interaction.
   useEffect(() => {
     if (!active || !beat?.interactive) return;
-    if (selectedAgent === beat.interactive.agent) setRevealed(true);
-  }, [active, beat, selectedAgent]);
+    if (selectedAgent === beat.interactive.agent) setRevealedBeat(beatIndex);
+  }, [active, beat, beatIndex, selectedAgent]);
 
   const next = useCallback(() => {
     if (beatIndex >= total - 1) onFinishTour();
@@ -153,7 +168,9 @@ export function TourOverlay({
 
   return (
     <>
-      <Spotlight rect={rect} />
+      {/* Snap (no glide) when landing on a fresh agent cell so the hole never
+          sweeps across the grid to reach it; region targets keep the glide. */}
+      <Spotlight rect={rect} snap={target.kind === "agent"} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
@@ -164,11 +181,16 @@ export function TourOverlay({
           </div>
 
           <h3 className="text-lg font-bold leading-tight text-ink">{beat.title}</h3>
-          <p className="text-sm leading-relaxed text-ink-dim">{bodyText}</p>
 
-          {beat.actions && (
+          {beat.compare && !awaiting ? (
+            <FaceoffCompare data={beat.compare} focus={runIndex} onFocus={switchRun} />
+          ) : (
+            <p className="text-sm leading-relaxed text-ink-dim">{bodyText}</p>
+          )}
+
+          {(beat.actions || (isLast && onViewOtherFamily && otherFamilyLabel)) && (
             <div className="flex flex-wrap gap-2 pt-0.5">
-              {beat.actions.map((a) =>
+              {beat.actions?.map((a) =>
                 a.kind === "link" ? (
                   <a
                     key={a.label}
@@ -189,6 +211,11 @@ export function TourOverlay({
                     {a.label}
                   </button>
                 ),
+              )}
+              {isLast && onViewOtherFamily && otherFamilyLabel && (
+                <button type="button" onClick={onViewOtherFamily} className={BTN_GHOST}>
+                  View the {otherFamilyLabel} run
+                </button>
               )}
             </div>
           )}
