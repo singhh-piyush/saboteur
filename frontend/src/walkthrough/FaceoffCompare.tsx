@@ -113,7 +113,10 @@ export function FaceoffCompare({
         </button>
       </div>
 
-      {/* Metric rows - re-keyed on focus so the moved numbers pulse. */}
+      {/* Metric rows - re-keyed on focus so, on a model switch, every moved
+          number highlights: the whole block settles (metric-pulse) and each row
+          flashes a coloured ring (green improved / red regressed) via
+          metric-flash, alongside its arrow + delta. */}
       <div key={focus} className="metric-pulse flex flex-col gap-2.5">
         {METRICS.map((spec) => {
           const focusV = raw(focusModel, spec.key);
@@ -122,12 +125,19 @@ export function FaceoffCompare({
           const delta = deltaLabel(focusV, otherV, spec.kind);
           const up = focusV !== null && otherV !== null && focusV >= otherV;
           const toneCls = better === null ? "text-ink-dim" : better ? "text-win" : "text-crit";
+          const pulseColor =
+            better === null
+              ? "var(--color-accent)"
+              : better
+                ? "var(--color-win)"
+                : "var(--color-crit)";
           return (
             <div
               key={spec.key}
-              className={`rounded-md border px-3 py-2 ${
+              className={`metric-flash rounded-md border px-3 py-2 ${
                 spec.headline ? "border-line-strong bg-panel" : "border-line bg-panel/60"
               }`}
+              style={{ ["--pulse-color" as string]: pulseColor }}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
@@ -156,10 +166,11 @@ export function FaceoffCompare({
         })}
       </div>
 
-      {/* Chart popup - small grouped bars (survival + deception, one bar per
-          model). Opens above the panel so it never covers the scorecard. */}
+      {/* Chart - small grouped bars (survival + deception, one bar per model).
+          Docked in-flow within the (left-docked) card so it never covers the
+          scorecard and the card grows to it in one smooth motion. */}
       {chartOpen && (
-        <div className="absolute bottom-full left-0 right-0 mb-2 rounded-lg border border-line-strong bg-raised p-3 shadow-[0_16px_48px_-8px_rgb(0_0_0/70%)]">
+        <div className="rounded-md border border-line bg-panel/60 p-3">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
               Survival vs deception (%)

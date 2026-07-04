@@ -242,6 +242,26 @@ body::before {
   }
 }
 
+/* Coachmark content cross-fade - the incoming beat's text fades in while the
+   outgoing text fades out (as an overlay), so the switch is barely noticeable.
+   Auto-neutered by the reduced-motion block below. */
+@keyframes callout-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes callout-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 /* Face-off metric pulse - a brief highlight when the compared model toggles,
    so the numbers that moved catch the eye. Auto-neutered by the reduced-motion
    block below. */
@@ -257,6 +277,26 @@ body::before {
 }
 .metric-pulse {
   animation: metric-pulse 0.42s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+/* Per-metric highlight when the compared model switches: a coloured ring
+   (green = improved, red = regressed) flashes around the row that moved, then
+   fades - draws the eye to the changed number. `--pulse-color` is set inline. */
+@keyframes metric-flash {
+  0% {
+    box-shadow: 0 0 0 2px var(--pulse-color);
+    background-color: color-mix(in oklch, var(--pulse-color) 22%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 2px var(--pulse-color);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+    background-color: transparent;
+  }
+}
+.metric-flash {
+  animation: metric-flash 0.9s ease-out 1;
 }
 
 /* ------------------------------------------------------------------ */

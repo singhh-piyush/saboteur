@@ -14,9 +14,11 @@ import { createPortal } from "react-dom";
 
 const PAD = 8;
 const RADIUS = 10;
-// Slower, eased glide between targets - smooth "gradient" motion, not a snap.
+// Slow, eased glide between targets - moves in step with the coachmark card
+// (same easing + duration) so the spotlight and explainer travel together,
+// elegantly. Ease-in-out starts gently, no fast shoot-off.
 const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
-const MOVE_MS = 600;
+const MOVE_MS = 820;
 
 export function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -132,13 +134,14 @@ export function useSpotlightRect(resolve: () => HTMLElement | null, key: string)
 export function Spotlight({ rect, snap = false }: { rect: DOMRect | null; snap?: boolean }) {
   const reduced = usePrefersReducedMotion();
 
-  // No target (intro/close beat) - dim the whole screen.
+  // No target (intro/close beat) - dim AND block the whole screen: during the
+  // tour the dimmed UI must be inert (pointerEvents: auto captures the clicks).
   if (rect === null) {
     return createPortal(
       <div
         aria-hidden
         className="fixed inset-0 z-[90]"
-        style={{ background: "rgba(0,0,0,0.6)", pointerEvents: "none" }}
+        style={{ background: "rgba(0,0,0,0.6)", pointerEvents: "auto" }}
       />,
       document.body,
     );
@@ -151,32 +154,61 @@ export function Spotlight({ rect, snap = false }: { rect: DOMRect | null; snap?:
   const w = Math.min(rect.width + PAD * 2, vw - x);
   const h = Math.min(rect.height + PAD * 2, vh - y);
 
-  // A single element carries the whole effect: its huge spread shadow dims
-  // everything outside the hole, and it glides between targets with ONE easing
-  // (no second clip-path-animated layer to desync mid-move). `snap` disables the
-  // glide when jumping onto a fresh agent cell, so the hole never sweeps across
-  // the grid to reach it.
+  // A viewport-wrapping polygon with a rectangular notch over the hole. This
+  // shapes the click-blocker's hit area: it captures pointer events everywhere
+  // EXCEPT the hole (the notch is clipped away, so clicks there reach the
+  // spotlighted target - e.g. the agent cell on an interactive beat).
+  const cut = [
+    `0 0`,
+    `0 ${vh}px`,
+    `${x}px ${vh}px`,
+    `${x}px ${y}px`,
+    `${x + w}px ${y}px`,
+    `${x + w}px ${y + h}px`,
+    `${x}px ${y + h}px`,
+    `${x}px ${vh}px`,
+    `${vw}px ${vh}px`,
+    `${vw}px 0`,
+  ].join(", ");
+
+  // The visible dim is a single box-shadow-hole element with ONE easing (no
+  // second clip-path-animated layer to desync mid-move). `snap` disables the
+  // glide when jumping onto a fresh agent cell so the hole never sweeps across
+  // the grid. The blocker is invisible, so animating its clip-path costs nothing
+  // visually - it just tracks the hole.
   const holeTransition =
     reduced || snap
       ? "none"
       : `left ${MOVE_MS}ms ${EASE}, top ${MOVE_MS}ms ${EASE}, width ${MOVE_MS}ms ${EASE}, height ${MOVE_MS}ms ${EASE}`;
+  const blockTransition = reduced || snap ? "none" : `clip-path ${MOVE_MS}ms ${EASE}`;
 
   return createPortal(
-    <div
-      aria-hidden
-      className="fixed z-[91]"
-      style={{
-        left: x,
-        top: y,
-        width: w,
-        height: h,
-        borderRadius: RADIUS,
-        boxShadow:
-          "0 0 0 9999px rgba(0,0,0,0.6), inset 0 0 0 1px color-mix(in oklch, var(--color-accent) 45%, transparent)",
-        pointerEvents: "none",
-        transition: holeTransition,
-      }}
-    />,
+    <>
+      {/* Click-blocker: inert everywhere but the hole, so greyed-out UI can't be
+          clicked during the tour while the spotlighted target stays live. */}
+      <div
+        aria-hidden
+        className="fixed inset-0 z-[90]"
+        style={{ clipPath: `polygon(${cut})`, pointerEvents: "auto", transition: blockTransition }}
+      />
+      {/* Visible dim via the hole's spread shadow (pass-through: pointer events
+          in the hole reach the target beneath). */}
+      <div
+        aria-hidden
+        className="fixed z-[91]"
+        style={{
+          left: x,
+          top: y,
+          width: w,
+          height: h,
+          borderRadius: RADIUS,
+          boxShadow:
+            "0 0 0 9999px rgba(0,0,0,0.6), inset 0 0 0 1px color-mix(in oklch, var(--color-accent) 45%, transparent)",
+          pointerEvents: "none",
+          transition: holeTransition,
+        }}
+      />
+    </>,
     document.body,
   );
 }

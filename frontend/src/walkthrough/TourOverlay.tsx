@@ -50,6 +50,8 @@ const BTN_GHOST =
   "rounded-sm border border-line px-2.5 py-1 text-xs font-medium text-ink-dim transition-colors duration-150 hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
 const BTN_PRIMARY =
   "rounded-sm border border-accent/60 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20";
+const BTN_RED =
+  "rounded-sm border border-crit/70 bg-crit/15 px-2.5 py-1 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/25";
 
 /** The id-th agent cell in the grid (ids are contiguous so DOM index === id). */
 function agentCell(id: number): HTMLElement | null {
@@ -213,7 +215,7 @@ export function TourOverlay({
                 ),
               )}
               {isLast && onViewOtherFamily && otherFamilyLabel && (
-                <button type="button" onClick={onViewOtherFamily} className={BTN_GHOST}>
+                <button type="button" onClick={onViewOtherFamily} className={BTN_RED}>
                   View the {otherFamilyLabel} run
                 </button>
               )}
