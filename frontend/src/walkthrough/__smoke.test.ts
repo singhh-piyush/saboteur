@@ -37,7 +37,8 @@ describe("Reveal smoke render", () => {
     createElement(Reveal, { family: DEMO_FAMILIES[1], onDone: () => {} }),
   );
 
-  it("renders the wordmark and the skip hint", () => {
+  it("renders the single title page: family logo, tested-under line, wordmark, skip hint", () => {
+    expect(html).toContain("tested under");
     expect(html).toContain("SABOTEUR");
     expect(html).toContain("click anywhere to skip");
   });
