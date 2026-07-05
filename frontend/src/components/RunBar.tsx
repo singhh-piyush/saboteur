@@ -15,8 +15,14 @@ const COUNT_TIP: Record<string, string> = {
  * Run context bar at the top of the main card (live page only).
  * Holds everything that used to crowd the app header: run identity,
  * live survival ticker, per-state counts, and STOP RUN.
+ *
+ * `staticRun` renders the read-only variant used by the walkthrough demo: no
+ * STOP RUN control (it fires a network `cancelRun`, meaningless for a bundled
+ * replay) and a single, non-wrapping row so the bar's height never changes as
+ * counts resolve or the run finishes - otherwise the finished-flip dropped the
+ * STOP button and shoved the cohort grid up between tour beats.
  */
-export function RunBar() {
+export function RunBar({ staticRun = false }: { staticRun?: boolean } = {}) {
   const { state, activeRunId } = useRun();
   const counts = runCounts(state);
 
@@ -27,7 +33,11 @@ export function RunBar() {
   const survival = hasVerdict ? (counts.succeeded / counts.total) * 100 : null;
 
   return (
-    <div className="animate-feed-in flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-line px-3 py-2">
+    <div
+      className={`animate-feed-in flex items-center gap-x-4 border-b border-line px-3 py-2 ${
+        staticRun ? "flex-nowrap overflow-hidden" : "flex-wrap gap-y-1.5"
+      }`}
+    >
       {/* Run identity */}
       <div className="flex min-w-0 items-baseline gap-2">
         {state.profile && (
@@ -77,8 +87,8 @@ export function RunBar() {
         </div>
       )}
 
-      {/* Stop */}
-      {!state.finished && activeRunId && (
+      {/* Stop (live only - a bundled replay has no run to cancel) */}
+      {!staticRun && !state.finished && activeRunId && (
         <button
           type="button"
           onClick={() => {

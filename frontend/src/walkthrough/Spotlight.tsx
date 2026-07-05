@@ -35,6 +35,36 @@ export function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
+/**
+ * Bring `el` into view by scrolling ONLY its nearest genuinely-scrollable
+ * ancestor (an `overflow-y: auto|scroll` container that actually overflows) -
+ * i.e. the cohort grid's own scroll pane for an agent cell. We do NOT use the
+ * native `el.scrollIntoView()`: that walks the whole ancestor chain and will
+ * bump the scrollTop of an `overflow: hidden` container too (the browser still
+ * scrolls hidden overflow programmatically), which shoved the entire main card
+ * - RunBar, tab nav, grid - up out of view when the spotlight measured the
+ * full-height grid pane. Stopping at the first real scroller keeps `main`
+ * fixed, so region targets (grid/chaoslog/scorecard/...) never shift anything.
+ */
+function scrollWithinContainer(el: HTMLElement): void {
+  let parent = el.parentElement;
+  while (parent) {
+    const oy = getComputedStyle(parent).overflowY;
+    if ((oy === "auto" || oy === "scroll") && parent.scrollHeight > parent.clientHeight) {
+      const er = el.getBoundingClientRect();
+      const cr = parent.getBoundingClientRect();
+      const PAD_V = 8;
+      if (er.top < cr.top + PAD_V) {
+        parent.scrollTop -= cr.top + PAD_V - er.top;
+      } else if (er.bottom > cr.bottom - PAD_V) {
+        parent.scrollTop += er.bottom - (cr.bottom - PAD_V);
+      }
+      return;
+    }
+    parent = parent.parentElement;
+  }
+}
+
 function closeRect(a: DOMRect | null, b: DOMRect | null): boolean {
   if (a === null || b === null) return a === b;
   return (
@@ -63,10 +93,12 @@ export function useSpotlightRect(resolve: () => HTMLElement | null, key: string)
   resolveRef.current = resolve;
 
   // Commit the target's rect SYNCHRONOUSLY on a beat/phase change, before paint.
-  // First scroll the target into view (a no-op for anything already visible, so
-  // safe for region targets) so an agent cell in the scrollable grid is at its
-  // FINAL on-screen position before we measure - the hole then glides straight
-  // to it instead of diving toward an off-screen rect and snapping back. The rAF
+  // First bring an agent cell into view WITHIN THE GRID'S OWN SCROLL PANE (a
+  // no-op for region targets, whose nearest scroller is the grid or nothing) so
+  // it is at its FINAL on-screen position before we measure - the hole then
+  // glides straight to it instead of diving toward an off-screen rect and
+  // snapping back. Crucially this never scrolls the `main` card (see
+  // scrollWithinContainer), so region beats can't shove the cohort up. The rAF
   // loop below only refines targets still animating in (e.g. the drawer).
   useLayoutEffect(() => {
     const el = resolveRef.current();
@@ -74,7 +106,7 @@ export function useSpotlightRect(resolve: () => HTMLElement | null, key: string)
       setRect((prev) => (prev === null ? prev : null));
       return;
     }
-    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
+    scrollWithinContainer(el);
     const r = el.getBoundingClientRect();
     if (r.width > 1 || r.height > 1) setRect((prev) => (closeRect(prev, r) ? prev : r));
     // eslint-disable-next-line react-hooks/exhaustive-deps
