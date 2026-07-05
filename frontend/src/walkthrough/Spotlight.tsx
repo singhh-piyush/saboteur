@@ -63,16 +63,18 @@ export function useSpotlightRect(resolve: () => HTMLElement | null, key: string)
   resolveRef.current = resolve;
 
   // Commit the target's rect SYNCHRONOUSLY on a beat/phase change, before paint.
-  // Static targets (agent cells) are at their final position immediately, so the
-  // hole lands on the correct element on the first frame - no multi-frame settle
-  // delay and no glide from a stale target. The rAF loop below then only refines
-  // targets that are still animating in (e.g. the timeline drawer).
+  // First scroll the target into view (a no-op for anything already visible, so
+  // safe for region targets) so an agent cell in the scrollable grid is at its
+  // FINAL on-screen position before we measure - the hole then glides straight
+  // to it instead of diving toward an off-screen rect and snapping back. The rAF
+  // loop below only refines targets still animating in (e.g. the drawer).
   useLayoutEffect(() => {
     const el = resolveRef.current();
     if (!el) {
       setRect((prev) => (prev === null ? prev : null));
       return;
     }
+    el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
     const r = el.getBoundingClientRect();
     if (r.width > 1 || r.height > 1) setRect((prev) => (closeRect(prev, r) ? prev : r));
     // eslint-disable-next-line react-hooks/exhaustive-deps

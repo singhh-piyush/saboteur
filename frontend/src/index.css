@@ -289,26 +289,6 @@ body::before {
   animation: metric-shift 0.75s cubic-bezier(0.4, 0, 0.2, 1) 1;
 }
 
-/* Stat grow-in - when the face-off delta sub-line appears on a scorecard tile
-   (entering the face-off beat), grow its height smoothly (0fr -> 1fr) so the
-   tile expands into place instead of the card snapping to a new size. The
-   animated fr unit drives a continuous reflow, so the tiles grid follows
-   frame-by-frame. Requires the element to be `display: grid` with an
-   overflow-hidden child. Neutered by the reduced-motion block below. */
-@keyframes stat-grow {
-  from {
-    grid-template-rows: 0fr;
-    opacity: 0;
-  }
-  to {
-    grid-template-rows: 1fr;
-    opacity: 1;
-  }
-}
-.stat-grow {
-  display: grid;
-  animation: stat-grow 0.42s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
 
 /* Grid morph - during a tour position jump the cells ease from their current
    state to the target state instead of being hidden behind a cover. Lengthen

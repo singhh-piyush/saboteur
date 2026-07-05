@@ -99,21 +99,12 @@ export function TourOverlay({
   const ctxRef = useRef<TourCtx>({ seek, seekSmooth, pause, selectAgent, setTab, switchRun });
   ctxRef.current = { seek, seekSmooth, pause, selectAgent, setTab, switchRun };
 
-  // Run the beat's entrance side effects when the active beat changes; reset the
-  // reveal; and (for interactive beats) scroll the target cell into view.
+  // Run the beat's entrance side effects when the active beat changes. The
+  // target cell is scrolled into view by useSpotlightRect (synchronously, before
+  // it measures), so the spotlight glides straight to the final on-screen rect.
   useEffect(() => {
     if (!active || !beat) return;
     beat.onEnter(ctxRef.current);
-    if (beat.interactive) {
-      const id = beat.interactive.agent;
-      // Instant scroll (the grid is behind the dim, so it is invisible): the
-      // cell reaches its final position before the spotlight measures it, so
-      // the hole never chases a smooth-scrolling target.
-      const raf = requestAnimationFrame(() =>
-        agentCell(id)?.scrollIntoView({ block: "center", behavior: "auto" }),
-      );
-      return () => cancelAnimationFrame(raf);
-    }
     // beat is derived from beatIndex; re-run only when the beat changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, beatIndex]);
@@ -176,9 +167,11 @@ export function TourOverlay({
 
   return (
     <>
-      {/* Snap (no glide) when landing on a fresh agent cell so the hole never
-          sweeps across the grid to reach it; region targets keep the glide. */}
-      <Spotlight rect={rect} snap={target.kind === "agent"} />
+      {/* The spotlight glides between every target (regions AND agent cells) so
+          the highlight morphs from the previous beat to this one. The correct
+          target resolves synchronously (the `revealed` derivation), so there is
+          no stale-cell catch to snap past - only a clean, eased move. */}
+      <Spotlight rect={rect} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -371,6 +371,31 @@ function Tile({
 }) {
   const shiftTone = shift ? (shift.tone === "win" ? "text-win" : "text-crit") : "";
   const pulseColor = shift?.tone === "win" ? "var(--color-win)" : "var(--color-crit)";
+
+  // Presence-manage the delta sub-line so it BOTH grows in (on the face-off
+  // beat) and collapses out (on leave) smoothly, instead of snapping the tile
+  // size. `expanded` drives grid-template-rows 0fr<->1fr; `renderShift` keeps
+  // the row mounted through the collapse, showing the last delta content.
+  const hasShift = !!shift;
+  const [renderShift, setRenderShift] = useState(hasShift);
+  // Starts collapsed so the delta line always grows in (the rAF below flips it
+  // open); on leave it flips back to false and collapses out.
+  const [expanded, setExpanded] = useState(false);
+  const lastShift = useRef<Shift | undefined>(shift);
+  if (shift) lastShift.current = shift;
+  useEffect(() => {
+    if (hasShift) {
+      setRenderShift(true);
+      const r = requestAnimationFrame(() => setExpanded(true));
+      return () => cancelAnimationFrame(r);
+    }
+    setExpanded(false);
+    if (!renderShift) return;
+    const t = window.setTimeout(() => setRenderShift(false), 460);
+    return () => window.clearTimeout(t);
+  }, [hasShift, renderShift]);
+  const shiftContent = shift ?? lastShift.current;
+
   return (
     <div className="relative overflow-hidden rounded-md border border-line bg-panel px-3 py-2.5">
       {/* Subtle highlight overlay - replays via key on each model switch. */}
@@ -396,20 +421,23 @@ function Tile({
       <div className={`font-display mt-1 text-3xl font-bold ${TONES[tone]}`}>
         {value}
       </div>
-      {shift ? (
-        // Grow the delta line in smoothly so the tile expands into its new size
-        // (rather than snapping) when the face-off beat starts.
-        <div className="stat-grow">
+      {renderShift && shiftContent ? (
+        // Grow the delta line in AND collapse it out smoothly (grid-template-rows
+        // 0fr<->1fr drives a continuous reflow) so the tile eases between sizes.
+        <div
+          className="grid transition-[grid-template-rows,opacity] duration-[420ms] ease-out"
+          style={{ gridTemplateRows: expanded ? "1fr" : "0fr", opacity: expanded ? 1 : 0 }}
+        >
           <div className="min-h-0 overflow-hidden">
             <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold">
               <span className="text-ink-faint">
-                {shift.fromLabel ? `${shift.fromLabel} ` : ""}
-                {shift.fromText}
+                {shiftContent.fromLabel ? `${shiftContent.fromLabel} ` : ""}
+                {shiftContent.fromText}
               </span>
               <span className="text-ink-faint" aria-hidden>{"→"}</span>
-              <span className="text-ink-dim">{shift.toText}</span>
-              <span className={`ml-0.5 ${shiftTone}`}>
-                <span aria-hidden>{shift.arrow}</span> {shift.deltaText}
+              <span className="text-ink-dim">{shiftContent.toText}</span>
+              <span className={`ml-0.5 ${shiftTone || (shiftContent.tone === "win" ? "text-win" : "text-crit")}`}>
+                <span aria-hidden>{shiftContent.arrow}</span> {shiftContent.deltaText}
               </span>
             </div>
           </div>
