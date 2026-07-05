@@ -7,14 +7,14 @@ const MAX_STEPS = 15; // CLAUDE.md invariant #5 (display only)
 interface Props {
   selectedAgent: number | null;
   onSelect: (id: number | null) => void;
-  /** Forwarded to each cell: false suppresses the per-cell state-flash (the
-   * walkthrough sets this false during a tour seek). Default true. */
-  flash?: boolean;
+  /** Forwarded to each cell: true crossfades state changes and suppresses the
+   * flash (the walkthrough sets this true during a tour seek). Default false. */
+  morphing?: boolean;
 }
 
 const GRID_STYLE = { gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" };
 
-export function CohortGrid({ selectedAgent, onSelect, flash = true }: Props) {
+export function CohortGrid({ selectedAgent, onSelect, morphing = false }: Props) {
   const { state, expectedAgents } = useRun();
   const agents = agentList(state);
 
@@ -73,7 +73,7 @@ export function CohortGrid({ selectedAgent, onSelect, flash = true }: Props) {
           maxSteps={MAX_STEPS}
           selected={selectedAgent === agent.id}
           onSelect={(id) => onSelect(selectedAgent === id ? null : id)}
-          flash={flash}
+          morphing={morphing}
         />
       ))}
     </div>

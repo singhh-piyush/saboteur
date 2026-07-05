@@ -76,10 +76,7 @@ export function FamilySelect({
         }}
       >
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-            Recorded runs
-          </p>
-          <h1 className="mt-3 font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
             Pick a model family
           </h1>
           {sc && (

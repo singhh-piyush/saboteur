@@ -423,7 +423,7 @@ function WalkthroughShell({
               }}
               aria-hidden={tab !== "grid"}
             >
-              <CohortGrid selectedAgent={selectedAgent} onSelect={selectAgent} flash={!morphing} />
+              <CohortGrid selectedAgent={selectedAgent} onSelect={selectAgent} morphing={morphing} />
             </div>
             <div
               data-tour="scorecard"

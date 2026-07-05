@@ -299,6 +299,22 @@ body::before {
   transition-duration: 450ms;
 }
 
+/* Crossfade ghost - a fading copy of a cell's PREVIOUS content, laid over the
+   new content during a tour seek so the card dissolves from its old state to the
+   new one (icon/word/step/pill) instead of snapping. The border/bg colour morphs
+   underneath via the .agent-cell transition above. Neutered by reduced-motion. */
+@keyframes cell-ghost {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.cell-ghost {
+  animation: cell-ghost 450ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* ------------------------------------------------------------------ */
 /* Scroll reveal - per-element fade + rise as it enters the viewport.  */
 /* JS (useReveal) toggles `.is-visible`; the stagger comes from the    */
