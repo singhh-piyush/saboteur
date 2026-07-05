@@ -23,7 +23,7 @@ import { TooltipSuppression } from "../components/Tooltip";
 import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
 import { DEMO_FAMILIES, type DemoRun } from "../demo";
-import { FaceoffCompare } from "./FaceoffCompare";
+import { FaceoffCard } from "./FaceoffCompare";
 import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
 import { Reveal } from "./Reveal";
@@ -36,8 +36,11 @@ type Tab = "grid" | "scorecard";
 
 const CARD = "rounded-lg border border-line bg-panel";
 
-/** Fade-out time for a tour position jump; the seek happens just after. */
-const WARP_OUT_MS = 160;
+/** Blur-through timings for a tour position jump: the grid briefly blurs + dims
+ * (never to black) while the seek happens behind it, then eases back in. */
+const WARP_OUT_MS = 220;
+const WARP_IN_MS = 420;
+const WARP_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 /** Dip-to-black time for the demo -> family-selector handoff. */
 const DIP_MS = 320;
@@ -193,10 +196,10 @@ function WalkthroughShell({
 
   const reducedMotion = usePrefersReducedMotion();
 
-  // Tour beat position jumps: cut, don't churn. The grid pane fades out
-  // (~160ms), the instant seek happens while it is invisible, then it eases
-  // back in showing only the destination state - none of the mid-run color
-  // flashing a live fold would paint. Reduced motion seeks instantly.
+  // Tour beat position jumps: blur through, don't churn. The grid briefly blurs
+  // and dims to a panel tint (never black), the instant seek happens behind the
+  // blur, then it eases back in showing only the destination state - none of the
+  // mid-run color flashing a live fold would paint. Reduced motion seeks instantly.
   const [warping, setWarping] = useState(false);
   const warpTimer = useRef<number | null>(null);
   const seekSmooth = (index: number) => {
@@ -231,9 +234,10 @@ function WalkthroughShell({
   const activeBeat = tourActive ? (beats[tourBeat] ?? null) : null;
   const activeBeatId = activeBeat?.id ?? null;
   const scorecardDock = activeBeatId === "scorecard" || activeBeatId === "faceoff";
-  // The face-off beat surfaces the model-comparison card at the top of the
-  // scorecard pane (its own card above the main chart), where the viewer can
-  // freely toggle models and watch the moved metrics highlight.
+  // The face-off beat surfaces the model-comparison as its own floating card
+  // (FaceoffCard) that pops in over the top of the dashboard - like the
+  // coachmark cards - where the viewer can freely toggle models and watch the
+  // moved metrics highlight. Null on every other beat drives its exit.
   const faceoffData = activeBeat?.compare ?? null;
 
   // Fade in from black on entry, completing the dip-to-black handoff from the
@@ -394,25 +398,48 @@ function WalkthroughShell({
               once at load, behind the intro spotlight) so switching to the
               scorecard is an instant fade, not a stutter. */}
           <div className="relative min-h-0 flex-1">
-            {/* `warping` hides the pane for the instant of a tour seek (quick
-                fade out, slower ease back), so only the destination state is
-                ever visible. */}
+            {/* During a tour seek (`warping`) the grid blurs + dims to a panel
+                tint (never black) - a quick blur out, a slower ease back - so
+                the destination state resolves under a soft veil, not a hard
+                flash. Tab switching still cross-fades via the pane opacity. */}
             <div
               data-tour="grid"
-              className="absolute inset-0 transition-opacity ease-out"
+              className="absolute inset-0 transition-opacity duration-500 ease-out"
               style={{
-                opacity: tab === "grid" && !warping ? 1 : 0,
-                transitionDuration: warping ? `${WARP_OUT_MS}ms` : "500ms",
+                opacity: tab === "grid" ? 1 : 0,
                 pointerEvents: tab === "grid" ? "auto" : "none",
                 zIndex: tab === "grid" ? 2 : 1,
               }}
               aria-hidden={tab !== "grid"}
             >
-              <CohortGrid selectedAgent={selectedAgent} onSelect={selectAgent} />
+              <div
+                className="h-full w-full"
+                style={{
+                  transition: reducedMotion
+                    ? undefined
+                    : `filter ${warping ? WARP_OUT_MS : WARP_IN_MS}ms ${WARP_EASE}, opacity ${warping ? WARP_OUT_MS : WARP_IN_MS}ms ${WARP_EASE}`,
+                  filter: warping ? "blur(6px)" : "blur(0px)",
+                  opacity: warping ? 0.4 : 1,
+                }}
+              >
+                <CohortGrid selectedAgent={selectedAgent} onSelect={selectAgent} />
+              </div>
+              {/* Panel-tinted veil (matches the card, never black) that fades in
+                  with the blur so the seek reads as a soft dim, not a black cut. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-panel"
+                style={{
+                  transition: reducedMotion
+                    ? undefined
+                    : `opacity ${warping ? WARP_OUT_MS : WARP_IN_MS}ms ${WARP_EASE}`,
+                  opacity: warping ? 0.45 : 0,
+                }}
+              />
             </div>
             <div
               data-tour="scorecard"
-              className="absolute inset-0 flex flex-col transition-opacity duration-500 ease-out"
+              className="absolute inset-0 transition-opacity duration-500 ease-out"
               style={{
                 opacity: tab === "scorecard" ? 1 : 0,
                 pointerEvents: tab === "scorecard" ? "auto" : "none",
@@ -420,16 +447,7 @@ function WalkthroughShell({
               }}
               aria-hidden={tab !== "scorecard"}
             >
-              {faceoffData && (
-                <div
-                  data-tour="faceoff"
-                  className="shrink-0 border-b border-line p-3"
-                  style={reducedMotion ? undefined : { animation: "card-in 0.3s ease-out" }}
-                >
-                  <FaceoffCompare data={faceoffData} focus={runIndex} onFocus={switchRun} />
-                </div>
-              )}
-              <div className={`min-h-0 flex-1 ${scorecardDock ? "max-lg:[&>*]:pb-[46vh]" : ""}`}>
+              <div className={`h-full ${scorecardDock ? "max-lg:[&>*]:pb-[46vh]" : ""}`}>
                 <ScorecardView />
               </div>
             </div>
@@ -488,6 +506,15 @@ function WalkthroughShell({
         selectAgent={selectAgent}
         setTab={setTab}
         seekSmooth={seekSmooth}
+      />
+
+      {/* Floating model face-off card - pops in on the face-off beat, eases out
+          when it leaves (its own top card, like the coachmarks). */}
+      <FaceoffCard
+        open={faceoffData !== null}
+        data={faceoffData}
+        focus={runIndex}
+        onFocus={switchRun}
       />
 
       {/* Fade-in-from-black cover (portaled above the tour overlays). */}

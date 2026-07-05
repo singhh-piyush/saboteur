@@ -116,9 +116,30 @@ export class ApiError extends Error {
 let OFFLINE = false;
 const OFFLINE_RUNS = new Map<string, { scorecard: Scorecard; events: TelemetryEvent[] }>();
 
-/** Toggle offline mode. Set true by the walkthrough on mount, false on unmount. */
-export function setOffline(value: boolean): void {
-  OFFLINE = value;
+// Offline mode is reference-counted by owner token (one per mounted walkthrough
+// provider). A keyed remount (switching model family) mounts the new provider
+// BEFORE the old one's deferred teardown runs; with a naive boolean + global
+// clear, that stale teardown wiped the new provider's just-registered runs and
+// flipped offline off, so the end-of-tour scorecard escaped to the network and
+// 404'd. Counting owners keeps offline on (and the runs map intact) as long as
+// any provider is mounted - the map is cleared only when the LAST owner leaves.
+const OFFLINE_OWNERS = new Set<symbol>();
+
+/** Acquire offline mode for an owner token (idempotent per token, so a provider
+ * may call it from both render and its mount effect). */
+export function acquireOffline(token: symbol): void {
+  OFFLINE_OWNERS.add(token);
+  OFFLINE = true;
+}
+
+/** Release an owner's hold on offline mode. Only when no owners remain does
+ * offline turn off and the registered runs get cleared. */
+export function releaseOffline(token: symbol): void {
+  OFFLINE_OWNERS.delete(token);
+  if (OFFLINE_OWNERS.size === 0) {
+    OFFLINE = false;
+    OFFLINE_RUNS.clear();
+  }
 }
 
 /** Register a run's bundled scorecard + events so the reused views resolve it
@@ -129,10 +150,6 @@ export function registerOfflineRun(
   events: TelemetryEvent[],
 ): void {
   OFFLINE_RUNS.set(id, { scorecard, events });
-}
-
-export function clearOfflineRuns(): void {
-  OFFLINE_RUNS.clear();
 }
 
 /** Full RunListEntry matching the backend RunListEntry model. */

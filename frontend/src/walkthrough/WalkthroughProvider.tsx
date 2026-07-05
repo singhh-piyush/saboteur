@@ -34,7 +34,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { clearOfflineRuns, registerOfflineRun, setOffline } from "../lib/api";
+import { acquireOffline, registerOfflineRun, releaseOffline } from "../lib/api";
 import { ReplayDriver } from "../lib/replay";
 import { foldEvents, reduce } from "../state/reducer";
 import { RunContext, type RunContextValue } from "../state/RunContext";
@@ -90,6 +90,11 @@ export function WalkthroughProvider({
   const runIndexRef = useRef(0);
   const activeRun = runs[runIndex] ?? runs[0];
 
+  // Stable per-provider token for reference-counted offline ownership. A family
+  // switch remounts this provider (keyed); ref-counting keeps offline mode + the
+  // runs map alive across the swap so the new family's scorecard still resolves.
+  const offlineToken = useRef(Symbol("walkthrough-offline"));
+
   // Seed the very first paint with a populated grid (rather than an empty
   // "NO ACTIVE COHORT" frame) by folding events up to the intro index. The
   // tour's first beat seeks to the same index, so nothing visibly jumps.
@@ -135,7 +140,7 @@ export function WalkthroughProvider({
   // from memory - no error flash.
   const driverRef = useRef<ReplayDriver | null>(null);
   if (driverRef.current === null) {
-    setOffline(true);
+    acquireOffline(offlineToken.current);
     for (const run of runs) registerOfflineRun(run.id, run.scorecard, run.events);
     driverRef.current = makeDriver(runs[0], INITIAL_SPEED);
   }
@@ -151,15 +156,19 @@ export function WalkthroughProvider({
       window.clearTimeout(offlineTeardown.current);
       offlineTeardown.current = null;
     }
-    setOffline(true);
+    acquireOffline(offlineToken.current);
     for (const run of runs) registerOfflineRun(run.id, run.scorecard, run.events);
     driverRef.current?.seek(initialFold);
     return () => {
       driverRef.current?.dispose();
+      // Defer the release one tick and cancel it on re-setup, so StrictMode's
+      // unmount/remount cycle never opens a window where a child's refetch (they
+      // re-run before this effect does) sees offline released. releaseOffline is
+      // reference-counted, so a concurrent family remount (new token already
+      // acquired) keeps the set non-empty and the runs map intact.
       offlineTeardown.current = window.setTimeout(() => {
         offlineTeardown.current = null;
-        clearOfflineRuns();
-        setOffline(false);
+        releaseOffline(offlineToken.current);
       }, 0);
     };
     // Once per mount: the bundled runs never change at runtime.

@@ -14,7 +14,16 @@
  * so the same component serves both families (only the runs differ).
  */
 
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { usePrefersReducedMotion } from "./Spotlight";
 import type { FaceoffData } from "./tour";
+
+/** Enter / exit timings for the floating face-off card (see FaceoffCard). */
+const FACEOFF_IN_MS = 360;
+const FACEOFF_OUT_MS = 240;
+const FACEOFF_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 interface MetricSpec {
   key: "survival_rate" | "deception_detection_rate" | "mttr_steps";
@@ -160,4 +169,75 @@ function isBetter(focusV: number | null, otherV: number | null, higherBetter: bo
   if (focusV === null || otherV === null || focusV === otherV) return null;
   const higher = focusV > otherV;
   return higherBetter ? higher : !higher;
+}
+
+/**
+ * FaceoffCard - floats the comparison above the dashboard as its own card that
+ * pops in on the face-off beat and eases out when the beat leaves, mirroring the
+ * coachmark tour cards (portaled, fixed, above the spotlight dim so its toggle
+ * stays clickable). Presence-managed: it stays mounted through the exit
+ * animation, retaining the last data so the closing frame still has content.
+ */
+export function FaceoffCard({
+  open,
+  data,
+  focus,
+  onFocus,
+}: {
+  open: boolean;
+  data: FaceoffData | null;
+  focus: number;
+  onFocus: (index: number) => void;
+}) {
+  const reduced = usePrefersReducedMotion();
+  const [render, setRender] = useState(open);
+  const [phase, setPhase] = useState<"in" | "out">("out");
+  // Keep the last non-null data so the exit animation still has content to show
+  // after the beat (and its `compare` payload) has gone.
+  const lastData = useRef<FaceoffData | null>(data);
+  if (data) lastData.current = data;
+
+  useEffect(() => {
+    if (open) {
+      setRender(true);
+      // Mount at the pre-enter state, then flip to "in" next frame so the
+      // transition actually plays (no first-frame snap).
+      const r = requestAnimationFrame(() => setPhase("in"));
+      return () => cancelAnimationFrame(r);
+    }
+    setPhase("out");
+    if (!render) return;
+    if (reduced) {
+      setRender(false);
+      return;
+    }
+    const t = window.setTimeout(() => setRender(false), FACEOFF_OUT_MS + 20);
+    return () => window.clearTimeout(t);
+  }, [open, reduced, render]);
+
+  if (!render) return null;
+  const content = data ?? lastData.current;
+  if (!content) return null;
+
+  const shown = phase === "in";
+  const dur = shown ? FACEOFF_IN_MS : FACEOFF_OUT_MS;
+
+  return createPortal(
+    <div
+      className="fixed left-1/2 top-[4.75rem] z-[115] w-[min(92vw,44rem)]"
+      style={{
+        transition: reduced
+          ? undefined
+          : `transform ${dur}ms ${FACEOFF_EASE}, opacity ${dur}ms ${FACEOFF_EASE}`,
+        transform: shown
+          ? "translateX(-50%) translateY(0) scale(1)"
+          : "translateX(-50%) translateY(-14px) scale(0.98)",
+        opacity: shown ? 1 : 0,
+        pointerEvents: shown ? "auto" : "none",
+      }}
+    >
+      <FaceoffCompare data={content} focus={focus} onFocus={onFocus} />
+    </div>,
+    document.body,
+  );
 }
