@@ -397,16 +397,22 @@ function Tile({
         {value}
       </div>
       {shift ? (
-        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold">
-          <span className="text-ink-faint">
-            {shift.fromLabel ? `${shift.fromLabel} ` : ""}
-            {shift.fromText}
-          </span>
-          <span className="text-ink-faint" aria-hidden>{"→"}</span>
-          <span className="text-ink-dim">{shift.toText}</span>
-          <span className={`ml-0.5 ${shiftTone}`}>
-            <span aria-hidden>{shift.arrow}</span> {shift.deltaText}
-          </span>
+        // Grow the delta line in smoothly so the tile expands into its new size
+        // (rather than snapping) when the face-off beat starts.
+        <div className="stat-grow">
+          <div className="min-h-0 overflow-hidden">
+            <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold">
+              <span className="text-ink-faint">
+                {shift.fromLabel ? `${shift.fromLabel} ` : ""}
+                {shift.fromText}
+              </span>
+              <span className="text-ink-faint" aria-hidden>{"→"}</span>
+              <span className="text-ink-dim">{shift.toText}</span>
+              <span className={`ml-0.5 ${shiftTone}`}>
+                <span aria-hidden>{shift.arrow}</span> {shift.deltaText}
+              </span>
+            </div>
+          </div>
         </div>
       ) : hint ? (
         <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-ink-faint">

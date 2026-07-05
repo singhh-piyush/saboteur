@@ -423,7 +423,7 @@ function WalkthroughShell({
               }}
               aria-hidden={tab !== "grid"}
             >
-              <CohortGrid selectedAgent={selectedAgent} onSelect={selectAgent} />
+              <CohortGrid selectedAgent={selectedAgent} onSelect={selectAgent} flash={!morphing} />
             </div>
             <div
               data-tour="scorecard"
@@ -494,28 +494,12 @@ function WalkthroughShell({
         selectAgent={selectAgent}
         setTab={setTab}
         seekSmooth={seekSmooth}
+        sideBySideOpen={sideBySideOpen}
+        onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
       />
 
-      {/* Face-off beat: a subtle floating pill (above the dim) reveals the
-          side-by-side comparison of both models' scorecards. */}
-      {faceoffData !== null &&
-        createPortal(
-          <button
-            type="button"
-            onClick={() => setSideBySideOpen((o) => !o)}
-            aria-pressed={sideBySideOpen}
-            className={`fixed left-1/2 top-[4.75rem] z-[116] -translate-x-1/2 rounded-full border px-3.5 py-1.5 text-xs font-semibold shadow-[0_8px_24px_-10px_rgb(0_0_0/70%)] backdrop-blur-sm transition-colors duration-150 ${
-              sideBySideOpen
-                ? "border-accent/60 bg-accent/15 text-accent"
-                : "border-line-strong bg-raised/90 text-ink-dim hover:border-accent/50 hover:text-ink"
-            }`}
-            style={reducedMotion ? undefined : { animation: "pop-in 0.32s ease-out" }}
-          >
-            <span aria-hidden className="mr-1.5">⇄</span>
-            {sideBySideOpen ? "Hide comparison" : "Compare side by side"}
-          </button>,
-          document.body,
-        )}
+      {/* Face-off beat: the side-by-side comparison of both models' scorecards,
+          toggled from the coachmark's "Compare side by side" action. */}
       <SideBySide
         open={sideBySideOpen && faceoffData !== null}
         data={faceoffData}

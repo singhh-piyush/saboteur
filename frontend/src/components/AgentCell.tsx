@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Activity, Circle, CircleDashed, Flag, RefreshCw, X } from "lucide-react";
 
 import type { AgentState } from "../state/reducer";
@@ -39,12 +39,28 @@ interface Props {
   maxSteps: number;
   selected: boolean;
   onSelect: (id: number) => void;
+  /** When false, the one-shot state-flash is suppressed AND the seq change that
+   * caused it is consumed, so it never fires late once flashing is re-enabled.
+   * The walkthrough sets this false during a tour seek (many cells change at
+   * once) so the morph settles cleanly with no ring-flash burst. Default true. */
+  flash?: boolean;
 }
 
 /** Memoized: only re-renders when its OWN derived state changes. */
-export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, selected, onSelect }: Props) {
+export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, selected, onSelect, flash = true }: Props) {
   const color = STATUS_COLOR[agent.status];
   const pending = agent.status === "pending";
+
+  // Flash only when seq advanced SINCE the last committed frame AND flashing is
+  // enabled. `lastFlashSeq` records the seq every commit (even while suppressed),
+  // so a seek that jumps seq while `flash` is false is consumed - re-enabling
+  // flash afterwards can't replay it (the source of the late flash on beat
+  // settle). Live incremental play still flashes once per step.
+  const lastFlashSeq = useRef(agent.seq);
+  const doFlash = flash && agent.seq > 0 && agent.seq !== lastFlashSeq.current;
+  useEffect(() => {
+    lastFlashSeq.current = agent.seq;
+  }, [agent.seq]);
   const progress =
     agent.status === "succeeded" || agent.status === "done"
       ? 1
@@ -77,8 +93,8 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
             opacity: pending ? 0.55 : 1,
           } as React.CSSProperties}
         >
-          {/* One-shot flash on state change */}
-          {agent.seq > 0 && (
+          {/* One-shot flash on a genuine (non-seek) state change */}
+          {doFlash && (
             <span
               key={agent.seq}
               aria-hidden

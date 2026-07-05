@@ -43,6 +43,11 @@ interface TourOverlayProps {
   otherFamilyLabel?: string;
   /** Route to the other family (dip to black -> reveal -> run). */
   onViewOtherFamily?: () => void;
+  /** Whether the side-by-side comparison overlay is open (face-off beat). */
+  sideBySideOpen?: boolean;
+  /** Toggle the side-by-side comparison; rendered as a coachmark action on the
+   * face-off beat (the beat that carries a `compare` payload). */
+  onToggleSideBySide?: () => void;
 }
 
 const BTN_GHOST =
@@ -72,6 +77,8 @@ export function TourOverlay({
   seekSmooth,
   otherFamilyLabel,
   onViewOtherFamily,
+  sideBySideOpen,
+  onToggleSideBySide,
 }: TourOverlayProps) {
   const { seek, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
@@ -185,8 +192,21 @@ export function TourOverlay({
 
           <p className="text-sm leading-relaxed text-ink-dim">{bodyText}</p>
 
-          {(beat.actions || (isLast && onViewOtherFamily && otherFamilyLabel)) && (
+          {(beat.actions ||
+            (beat.compare && onToggleSideBySide) ||
+            (isLast && onViewOtherFamily && otherFamilyLabel)) && (
             <div className="flex flex-wrap gap-2 pt-0.5">
+              {beat.compare && onToggleSideBySide && (
+                <button
+                  type="button"
+                  onClick={onToggleSideBySide}
+                  aria-pressed={sideBySideOpen}
+                  className={sideBySideOpen ? BTN_PRIMARY : BTN_GHOST}
+                >
+                  <span aria-hidden className="mr-1">⇄</span>
+                  {sideBySideOpen ? "Hide comparison" : "Compare side by side"}
+                </button>
+              )}
               {beat.actions?.map((a) =>
                 a.kind === "link" ? (
                   <a
