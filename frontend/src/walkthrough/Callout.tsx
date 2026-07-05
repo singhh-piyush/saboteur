@@ -114,6 +114,7 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
   const cardRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [width, setWidth] = useState<number | null>(null);
   const [height, setHeight] = useState<number | null>(null);
   const [entered, setEntered] = useState(false);
   const reduced = usePrefersReducedMotion();
@@ -145,12 +146,17 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
   // when the content itself changes size mid-beat (e.g. the face-off toggles its
   // chart or swaps models), so the card grows/shrinks in one smooth motion.
   useLayoutEffect(() => {
-    const card = cardRef.current;
     const inner = innerRef.current;
-    if (!card || !inner) return;
+    if (!inner) return;
     const compute = () => {
-      const cw = card.offsetWidth;
+      // Pin the inner wrapper to the target width FIRST, then measure its height
+      // at that width. Both width and height are then committed as numeric state
+      // and the outer card transitions to them together - so widening for the
+      // action-heavy close beat morphs (reflow + grow) instead of snapping.
+      const cw = Math.min(wide ? CW_WIDE : CW_NARROW, window.innerWidth - MARGIN * 2);
+      inner.style.width = `${cw}px`;
       const ch = inner.offsetHeight;
+      setWidth(cw);
       setHeight(ch);
       setPos(computePos(rect, placement, cw, ch));
     };
@@ -162,8 +168,8 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
       ro.disconnect();
       window.removeEventListener("resize", compute);
     };
-    // Re-place when the target moves/changes or the content swaps.
-  }, [rect, placement, shown.key]);
+    // Re-place when the target moves/changes, the content swaps, or the width mode flips.
+  }, [rect, placement, shown.key, wide]);
 
   // Smooth first appearance: once positioned, fade in on the next frame (no glide
   // in from the corner); `entered` also gates the left/top/height glide so the
@@ -178,7 +184,7 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
   const move = reduced
     ? undefined
     : entered
-      ? `left ${MOVE_MS}ms ${EASE}, top ${MOVE_MS}ms ${EASE}, height ${MOVE_MS}ms ${EASE}, opacity 360ms ease-out`
+      ? `left ${MOVE_MS}ms ${EASE}, top ${MOVE_MS}ms ${EASE}, width ${MOVE_MS}ms ${EASE}, height ${MOVE_MS}ms ${EASE}, opacity 360ms ease-out`
       : "opacity 360ms ease-out";
 
   return createPortal(
@@ -186,10 +192,11 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
       ref={cardRef}
       role="dialog"
       aria-modal="false"
-      className={`fixed z-[120] ${wide ? "w-[440px]" : "w-[320px]"} max-w-[88vw] overflow-hidden rounded-lg border border-line-strong bg-raised shadow-[0_16px_48px_-8px_rgb(0_0_0/70%)]`}
+      className="fixed z-[120] overflow-hidden rounded-lg border border-line-strong bg-raised shadow-[0_16px_48px_-8px_rgb(0_0_0/70%)]"
       style={{
         left: pos?.left ?? -9999,
         top: pos?.top ?? -9999,
+        width: width === null ? CW_NARROW : width,
         height: reduced || height === null ? undefined : height,
         opacity: entered ? 1 : 0,
         transition: move,
