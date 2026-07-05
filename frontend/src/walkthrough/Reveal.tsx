@@ -107,10 +107,17 @@ export function Reveal({
       className="fixed inset-0 z-[200] flex cursor-pointer items-center justify-center overflow-hidden bg-black px-6 text-center"
       style={{ opacity: leaving ? 0 : 1, transition: `opacity ${FADE_MS}ms ${EASE}` }}
     >
-      {/* The one title page: "[family logo] / TESTED UNDER / SABOTEUR". */}
+      {/* The one title page: "[family logo] / TESTED UNDER / SABOTEUR". On leave
+          the content fades out WITH the black bg (only when `leaving`, so the
+          entry still lets the children's own animations play), so the logo and
+          wordmark dissolve into the demo instead of snapping out. */}
       <div
         className="flex flex-col items-center gap-9"
-        style={{ opacity: cardVisible ? 1 : 0, pointerEvents: "none" }}
+        style={{
+          opacity: cardVisible ? 1 : 0,
+          pointerEvents: "none",
+          transition: leaving ? `opacity ${FADE_MS}ms ${EASE}` : undefined,
+        }}
       >
         <div
           style={{

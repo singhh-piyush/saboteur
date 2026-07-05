@@ -17,6 +17,7 @@ import {
   fetchScorecard,
   type Scorecard,
 } from "../lib/api";
+import { deltaInfo, fmtMetric, type MetricKind } from "../lib/compare";
 import { num, pct } from "../lib/format";
 import { PanelHeader } from "./PanelHeader";
 import { Tooltip as HoverTip } from "./Tooltip";
@@ -30,7 +31,16 @@ interface ScorecardData {
   series: SurvivalPoint[];
 }
 
-export function ScorecardView() {
+interface ScorecardViewProps {
+  /** When set (walkthrough face-off beat), each of the three headline tiles
+   * that moved versus this baseline scorecard shows an arrow + delta sub-line
+   * and a subtle highlight pulse. Undefined in the live console (no change). */
+  baseline?: Scorecard | null;
+  /** Short label of the baseline model, e.g. "8B" (the "from" side). */
+  baselineLabel?: string;
+}
+
+export function ScorecardView({ baseline = null, baselineLabel }: ScorecardViewProps = {}) {
   const { state, activeRunId } = useRun();
   const [data, setData] = useState<ScorecardData | null>(null);
   const [note, setNote] = useState<string>("");
@@ -93,6 +103,32 @@ export function ScorecardView() {
   }
 
   const { scorecard: sc, controlSurvival, series } = data;
+
+  // Guided highlight (walkthrough face-off): when a baseline model is supplied
+  // and this scorecard is a DIFFERENT run, annotate the moved headline metrics
+  // with an arrow + delta + subtle pulse. animKey = run_id so the pulse replays
+  // on each model switch. No baseline (live console) => every shift is undefined.
+  const compareOn = baseline !== null && baseline.run_id !== sc.run_id;
+  const makeShift = (
+    current: number | null,
+    base: number | null,
+    higherBetter: boolean,
+    kind: MetricKind,
+  ): Shift | undefined => {
+    if (!compareOn || baseline === null) return undefined;
+    const d = deltaInfo(current, base, higherBetter, kind);
+    if (!d || !d.changed) return undefined;
+    return {
+      fromText: fmtMetric(base, kind),
+      toText: fmtMetric(current, kind),
+      arrow: d.arrow,
+      deltaText: d.deltaText,
+      tone: d.tone,
+      fromLabel: baselineLabel,
+      animKey: sc.run_id,
+    };
+  };
+
   const recoveryData = Object.entries(sc.recovery_breakdown).map(
     ([kind, count]) => ({ kind, count }),
   );
@@ -115,6 +151,7 @@ export function ScorecardView() {
                   : "crit"
           }
           tooltip="% of agents the oracle judged successful under fault injection (null without an oracle)"
+          shift={makeShift(sc.survival_rate, baseline?.survival_rate ?? null, true, "pct")}
         />
         <Tile
           label="survival - control"
@@ -138,6 +175,12 @@ export function ScorecardView() {
                 : "crit"
           }
           tooltip="% of lied-to agents that resisted the silent_lie decoy (reference oracle only)"
+          shift={makeShift(
+            sc.deception_detection_rate,
+            baseline?.deception_detection_rate ?? null,
+            true,
+            "pct",
+          )}
         />
         <Tile
           label="crash rate"
@@ -150,6 +193,7 @@ export function ScorecardView() {
           value={sc.mttr_steps === null ? "-" : num(sc.mttr_steps, 2)}
           tone="plain"
           tooltip="Mean time to recovery - avg steps from a fault to the next productive action"
+          shift={makeShift(sc.mttr_steps, baseline?.mttr_steps ?? null, false, "steps")}
         />
         <Tile
           label="waste factor"
@@ -297,21 +341,47 @@ function reasonLabel(reason: string | null): string | undefined {
   return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
 }
 
+/** Guided-highlight annotation for a moved metric (walkthrough face-off). */
+interface Shift {
+  fromText: string;
+  toText: string;
+  arrow: "▲" | "▼";
+  deltaText: string;
+  tone: "win" | "crit";
+  /** Short label of the baseline model (the "from" side), if known. */
+  fromLabel?: string;
+  /** Changes on model switch so the pulse overlay replays. */
+  animKey: string;
+}
+
 function Tile({
   label,
   value,
   tone,
   tooltip,
   hint,
+  shift,
 }: {
   label: string;
   value: string;
   tone: keyof typeof TONES;
   tooltip?: string;
   hint?: string;
+  shift?: Shift;
 }) {
+  const shiftTone = shift ? (shift.tone === "win" ? "text-win" : "text-crit") : "";
+  const pulseColor = shift?.tone === "win" ? "var(--color-win)" : "var(--color-crit)";
   return (
-    <div className="rounded-md border border-line bg-panel px-3 py-2.5">
+    <div className="relative overflow-hidden rounded-md border border-line bg-panel px-3 py-2.5">
+      {/* Subtle highlight overlay - replays via key on each model switch. */}
+      {shift ? (
+        <span
+          key={shift.animKey}
+          aria-hidden
+          className="metric-shift pointer-events-none absolute inset-0 rounded-md"
+          style={{ ["--pulse-color" as string]: pulseColor }}
+        />
+      ) : null}
       {tooltip ? (
         <HoverTip label={tooltip} side="bottom">
           <div className="inline-block cursor-default border-b border-dashed border-ink-faint/40 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim transition-colors duration-150 hover:text-ink">
@@ -326,7 +396,19 @@ function Tile({
       <div className={`font-display mt-1 text-3xl font-bold ${TONES[tone]}`}>
         {value}
       </div>
-      {hint ? (
+      {shift ? (
+        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold">
+          <span className="text-ink-faint">
+            {shift.fromLabel ? `${shift.fromLabel} ` : ""}
+            {shift.fromText}
+          </span>
+          <span className="text-ink-faint" aria-hidden>{"→"}</span>
+          <span className="text-ink-dim">{shift.toText}</span>
+          <span className={`ml-0.5 ${shiftTone}`}>
+            <span aria-hidden>{shift.arrow}</span> {shift.deltaText}
+          </span>
+        </div>
+      ) : hint ? (
         <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.1em] text-ink-faint">
           {hint}
         </div>

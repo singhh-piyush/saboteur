@@ -262,41 +262,44 @@ body::before {
   }
 }
 
-/* Face-off metric pulse - a brief highlight when the compared model toggles,
-   so the numbers that moved catch the eye. Auto-neutered by the reduced-motion
-   block below. */
-@keyframes metric-pulse {
+/* Metric shift - the SUBTLE guided highlight when the face-off switches models
+   or the side-by-side opens: a soft tinted wash + faint 1px inset ring on the
+   metric that moved, easing in then fully out (no hard expanding ring). Tuned
+   to the hover-wash feel. `--pulse-color` (win/crit) is set inline. Overlay
+   spans inset-0 over the tile/row and is keyed so it replays on each switch.
+   Auto-neutered by the reduced-motion block below. */
+@keyframes metric-shift {
   0% {
-    opacity: 0.35;
-    transform: translateY(2px);
+    opacity: 0;
+    box-shadow: inset 0 0 0 1px transparent;
+    background-color: transparent;
+  }
+  35% {
+    opacity: 1;
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--pulse-color) 45%, transparent);
+    background-color: color-mix(in oklch, var(--pulse-color) 12%, transparent);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
-  }
-}
-.metric-pulse {
-  animation: metric-pulse 0.42s cubic-bezier(0.22, 1, 0.36, 1) 1;
-}
-
-/* Per-metric highlight when the compared model switches: a coloured ring
-   (green = improved, red = regressed) flashes around the row that moved, then
-   fades - draws the eye to the changed number. `--pulse-color` is set inline. */
-@keyframes metric-flash {
-  0% {
-    box-shadow: 0 0 0 2px var(--pulse-color);
-    background-color: color-mix(in oklch, var(--pulse-color) 22%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 2px var(--pulse-color);
-  }
-  100% {
-    box-shadow: 0 0 0 2px transparent;
+    box-shadow: inset 0 0 0 1px transparent;
     background-color: transparent;
   }
 }
-.metric-flash {
-  animation: metric-flash 0.9s ease-out 1;
+.metric-shift {
+  animation: metric-shift 0.75s cubic-bezier(0.4, 0, 0.2, 1) 1;
+}
+
+/* Grid morph - during a tour position jump the cells ease from their current
+   state to the target state instead of being hidden behind a cover. Lengthen
+   the colour transition, and suppress the mass state-flash burst (the real
+   source of the "sudden switching" churn) so the change reads as one smooth
+   settle, not a strobe of rings. */
+.grid-morphing .agent-cell {
+  transition-duration: 450ms;
+}
+.grid-morphing .animate-state-flash {
+  animation: none;
+  opacity: 0;
 }
 
 /* ------------------------------------------------------------------ */
