@@ -47,7 +47,7 @@ services:
       # ---- Harness knobs ----
       N_AGENTS: ${N_AGENTS:-8}
       MAX_STEPS: ${MAX_STEPS:-15}
-      AGENT_TIMEOUT_S: ${AGENT_TIMEOUT_S:-180}
+      AGENT_TIMEOUT_S: ${AGENT_TIMEOUT_S:-300}
       TEMPERATURE: ${TEMPERATURE:-0.3}
       MODEL_SEED: ${MODEL_SEED:-42}
       TOOL_CHOICE: ${TOOL_CHOICE:-required}
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   # =====================================================================
-  # CLOUD: vLLM/MI300X or Fireworks — swap upstream_base_url here.
+  # CLOUD: vLLM/MI300X — swap upstream_base_url here.
   # ---------------------------------------------------------------------
   # Post-deadline, point inference at the cloud GPU. These are RUNTIME env
   # only (no rebuild). Set them in your shell or in compose.env:

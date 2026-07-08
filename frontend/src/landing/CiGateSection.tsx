@@ -39,6 +39,9 @@ export function CiGateSection() {
           <Panel className="flex h-full flex-col justify-center gap-2.5 p-5">
             <CheckRow ok label="resilience / hell_mode @ 0.70" detail="survival 0.88 - pass" />
             <CheckRow ok={false} label="resilience / hell_mode @ 0.95" detail="survival 0.88 - below threshold" />
+            <p className="text-[11px] text-ink-faint">
+              Real numbers from the bundled mock model's hell_mode run.
+            </p>
           </Panel>
         </Reveal>
       </div>

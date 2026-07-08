@@ -79,9 +79,41 @@ Useful commands:
 
 ```bash
 saboteur profiles          # list the chaos profiles
+saboteur targets           # list registered agents under test
 saboteur compare A B       # per-metric delta between two runs
 saboteur run --help        # all the knobs
 ```
+
+## Docker
+
+The same offline mock cohort runs in a container, so nothing but Docker is
+needed to try it:
+
+```bash
+docker build -t saboteur .
+docker run --rm -v "$PWD/runs:/app/runs" saboteur \
+  run --target reference --profile hell_mode --control --mock
+```
+
+For the full console (API + dashboard + proxy in one container), inference
+stays on the host, so the only host process is llama-server, and it must bind
+0.0.0.0 so the container can reach it:
+
+```bash
+llama-server -m /path/to/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
+  --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
+
+make up                        # build and start, waits for /health
+make run                       # POST a reference cohort (PROFILE=hell_mode make run)
+make logs                      # follow container logs
+make down                      # stop; runs/ persists on the host
+```
+
+`runs/` is bind-mounted, so history survives restarts. The SQLite run index
+is just a cache and rebuilds itself from the JSONL logs on startup.
+
+To point the container at a remote vLLM endpoint instead of local llama.cpp,
+edit `compose.env` and bring it up again. No rebuild.
 
 ## Using a real model
 
@@ -110,11 +142,13 @@ bash scripts/run_local.sh
 
 Open http://localhost:8000. From the UI you can launch runs, watch the live
 grid, inspect any agent's step-by-step trace, read scorecards, build custom
-chaos profiles, and manage past runs.
+chaos profiles, and manage past runs. The dashboard also ships a guided
+walkthrough built from four real 50-agent hell_mode runs captured on an AMD
+MI300X, so there is something to watch before you launch anything.
 
 Paths worth knowing: the chaos proxy lives at `/v1` (the standard OpenAI base
-path), run management at `/proxy/*`, the REST API at `/runs`, `/profiles` and
-`/targets`, and live telemetry at `/ws/{run_id}`.
+path), run management at `/proxy/*`, the REST API at `/runs`, `/profiles`,
+`/targets` and `/faults`, and live telemetry at `/ws/{run_id}`.
 
 ## Testing your own agent
 
@@ -148,6 +182,18 @@ You can also register your agent as a target (a command Saboteur runs as a
 subprocess) and let it launch the whole cohort for you, including a success
 oracle that decides pass or fail. A working 40-line example using the raw
 OpenAI SDK lives in `examples/byo_min_agent/`.
+
+Agents that talk to tools over MCP get the same treatment. `saboteur-mcp` is
+a stdio shim: point your MCP client at it instead of your real server, tell
+it the real server's command after `--`, and it relays the JSON-RPC while
+injecting the tool-layer faults into `tools/call` results:
+
+```bash
+saboteur-mcp --run <run_id> --agent 0 --profile hell_mode -- python real_server.py
+```
+
+Telemetry is posted to the dashboard, so MCP runs land on the same grid. No
+client code changes.
 
 ## The scorecard
 
@@ -226,34 +272,12 @@ saboteur run --target reference --mock --profile hell_mode \
 # exit 0 = pass, 1 = threshold breached, 2 = misconfigured gate
 ```
 
-## Docker
-
-The whole console runs in one container. Inference stays on the host, so the
-only host process is llama-server, and it must bind 0.0.0.0 so the container
-can reach it:
-
-```bash
-llama-server -m /path/to/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf \
-  --host 0.0.0.0 --port 8080 -c 32768 -np 8 --jinja
-
-make up                        # build and start, waits for /health
-make run                       # POST a reference cohort (PROFILE=hell_mode make run)
-make logs                      # follow container logs
-make down                      # stop; runs/ persists on the host
-```
-
-`runs/` is bind-mounted, so history survives restarts. The SQLite run index
-is just a cache and rebuilds itself from the JSONL logs on startup.
-
-To point the container at a remote vLLM endpoint instead of local llama.cpp,
-edit `compose.env` and bring it up again. No rebuild.
-
 ## Tests
 
 ```bash
 make test                      # backend (pytest)
 make lint                      # ruff + mypy
-cd frontend && npx vitest run  # dashboard reducer tests
+cd frontend && npx vitest run  # dashboard tests
 ```
 
 The test suite covers the things that matter most here: fault sequences are
