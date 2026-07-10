@@ -1,15 +1,3 @@
-"""Chaos profile routes.
-
-- ``GET    /profiles``          — list available profiles with fault summaries.
-- ``POST   /profiles/validate`` — dry-run validate a draft against the schema.
-- ``POST   /profiles``          — save a draft as ``profiles/{name}.yaml``.
-- ``DELETE /profiles/{name}``   — delete a custom profile.
-
-The built-in profiles (the control baseline + CI demo set) are protected: they
-cannot be overwritten or deleted, so the Profile Builder can never break the
-control cohort or the GitHub Action demo. ``_PROFILES_DIR`` is the test seam
-(``monkeypatch.setattr(profiles_mod, "_PROFILES_DIR", tmp_path)``).
-"""
 
 from __future__ import annotations
 
@@ -26,11 +14,8 @@ router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 _PROFILES_DIR = Path("profiles")
 
-# A profile name becomes a filename — keep it to safe chars (no path traversal).
 _NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
-# The shipped profiles: the control baseline + CI demo set. Never overwritable
-# or deletable from the builder (protects the control cohort and the Action).
 BUILTIN_PROFILES = frozenset(
     {"calm_seas", "flaky_friday", "rate_limit_storm", "hell_mode", "liars_den"}
 )
@@ -49,9 +34,6 @@ class ProfileInfo(BaseModel):
 
 
 class ProfileDraft(BaseModel):
-    """A profile under construction in the builder. ``faults`` stay loose dicts;
-    :class:`ChaosProfile` is the single validator (no field duplication)."""
-
     name: str
     seed: int = 0
     description: str = ""
@@ -81,9 +63,6 @@ def _info(profile: ChaosProfile) -> ProfileInfo:
 
 
 def _validate(draft: ProfileDraft) -> tuple[ChaosProfile | None, list[ValidationItem]]:
-    """Validate a draft against :class:`ChaosProfile`. Returns (profile, [])
-    on success or (None, errors) with per-field loc/msg, matching the format
-    :func:`load_profile` produces."""
     try:
         profile = ChaosProfile.model_validate(draft.model_dump())
         return profile, []
@@ -108,7 +87,6 @@ def list_profiles() -> list[ProfileInfo]:
 
 @router.get("/{name}", response_model=ChaosProfile)
 def get_profile(name: str) -> ChaosProfile:
-    """The full profile (every fault field), for loading into the builder."""
     if not _NAME_RE.match(name):
         raise HTTPException(400, f"invalid profile name {name!r}")
     path = _PROFILES_DIR / f"{name}.yaml"
@@ -119,18 +97,12 @@ def get_profile(name: str) -> ChaosProfile:
 
 @router.post("/validate", response_model=ValidationResult)
 def validate_profile(draft: ProfileDraft) -> ValidationResult:
-    """Dry-run validate a draft against the schema. Never writes to disk."""
     _, errors = _validate(draft)
     return ValidationResult(valid=not errors, errors=errors)
 
 
 @router.post("", response_model=ProfileInfo, status_code=201)
 def save_profile(draft: ProfileDraft) -> ProfileInfo:
-    """Save a draft as ``profiles/{name}.yaml`` (409 on a built-in name).
-
-    Custom names overwrite freely; built-ins are protected. Returns the saved
-    profile's summary; ``GET /profiles`` reads disk so it appears immediately.
-    """
     if not _NAME_RE.match(draft.name):
         raise HTTPException(
             400, f"profile name {draft.name!r} must match [A-Za-z0-9_-]+"
@@ -150,8 +122,6 @@ def save_profile(draft: ProfileDraft) -> ProfileInfo:
         "name": profile.name,
         "seed": profile.seed,
         "description": profile.description,
-        # exclude_defaults keeps the YAML tight: only type + probability (both
-        # required) and any param the author actually changed are written.
         "faults": [
             f.model_dump(exclude_defaults=True, mode="json") for f in profile.faults
         ],
@@ -163,7 +133,6 @@ def save_profile(draft: ProfileDraft) -> ProfileInfo:
 
 @router.delete("/{name}", status_code=204)
 def delete_profile(name: str) -> None:
-    """Delete a custom profile (400 on a built-in, 404 if missing)."""
     if name in BUILTIN_PROFILES:
         raise HTTPException(400, f"'{name}' is a built-in profile and cannot be deleted")
     if not _NAME_RE.match(name):

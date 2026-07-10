@@ -1,29 +1,3 @@
-"""The wire fault pipeline: inject the 8-fault taxonomy on one chat request.
-
-This is the *injection mechanism* the proxy adds; every fault *decision* and
-*parameter draw* comes from the chaos core's interceptors (reused, not forked).
-For one request, under the session lock, we mirror ``ChaosEngine._invoke``'s
-discipline — draw every applicable decision in profile order first, then act in
-kind order — but the actions speak HTTP (sleep + 504, 500/503, 429, truncate the
-response, perturb a request tool-result, drop messages, strip a tool) instead of
-raising / sleeping synchronously.
-
-Mapping (CLAUDE.md fault taxonomy):
-- ``latency``      → ``await asyncio.sleep`` before forwarding.
-- ``api_error``    → 500/503, do not forward.
-- ``rate_limit``   → 429 + ``Retry-After`` (rolling call-count budget).
-- ``timeout``      → sleep the deadline, then 504.
-- ``malformed``    → truncate the upstream response body.
-- ``silent_lie``   → perturb the last number in the last tool-result *message*
-  of the request (the deception probe; streaming-agnostic).
-- ``context_drop`` → drop the last K messages from the forwarded request.
-- ``tool_vanish``  → strip a tool from the request's ``tools`` array, sticky for
-  the rest of the session.
-
-Transparency contract: the original request/response bytes are forwarded
-unchanged unless a fault actually mutated them, so calm_seas — and any request
-where no fault fires — is content-identical to hitting the upstream directly.
-"""
 
 from __future__ import annotations
 
@@ -51,12 +25,8 @@ from saboteur.chaos.interceptors import (
 from . import forward
 from .session import ProxyRun, ProxySession
 
-# emit callback factory: name → (fault, detail) sink. Loosely typed (the
-# interceptors' EmitFn signature) to keep call sites readable.
 EmitFactory = Callable[[str | None], Callable[[FaultType, dict[str, Any]], None]]
 
-# The synthetic "tool name" the transport/response/context faults key on (their
-# rate-limit budget window and ``applies_to`` filter run against this).
 WIRE_NAME = "chat.completions"
 _UPSTREAM_SUBPATH = "chat/completions"
 
@@ -69,7 +39,6 @@ async def inject_chat_completion(
     parsed: dict[str, Any],
     headers: Mapping[str, str],
 ) -> Response:
-    """Run the fault pipeline for one chat-completions request → a Response."""
     async with session.lock:
         return await _inject(run, session, raw_body=raw_body, parsed=parsed, headers=headers)
 
@@ -86,8 +55,6 @@ async def _inject(
     step = session.next_step()
     run.emit_step_start(agent_id, step)
 
-    # Tool signature for recovery diffing — captured BEFORE any mutation (a
-    # context_drop may delete the very message we read it from).
     messages: list[Any] = parsed.get("messages") or []
     tool_name, tool_args = _last_assistant_toolcall(messages)
 
@@ -100,7 +67,6 @@ async def _inject(
 
         return emit
 
-    # --- draw all decisions first (profile order), one per applicable spec ---
     decisions: list[tuple[Interceptor, str, bool]] = []
     for ic in session.tool_interceptors:
         name = _wire_name(ic, parsed)
@@ -114,32 +80,26 @@ async def _inject(
 
     mutated = False
 
-    # --- request-side, non-corrupting mutations (apply regardless) ---
-    # (a) sticky vanish: strip any already-vanished tools every request.
     if session.vanish is not None:
         already = [n for n in _tool_names(parsed) if session.vanish.is_vanished(n)]
         if already and _strip_tools(parsed, set(already)):
             mutated = True
-    # (b) context_drop.
     for cic, did_fire in ctx_decisions:
         if did_fire and cic.spec.drop_last_k:
             dropped = _drop_messages(parsed, cic.spec.drop_last_k)
             if dropped:
                 mutated = True
                 make_emit(None)(cic.fault, {"dropped_steps": dropped})
-    # (c) tool_vanish (fresh).
     for ic, name, did_fire in decisions:
         if did_fire and isinstance(ic, ToolVanishInterceptor):
             ic.vanish(name, make_emit(name))  # marks + emits, no raise
             if _strip_tools(parsed, {name}):
                 mutated = True
 
-    # --- transport: latency (before any early return) ---
     for ic, _name, did_fire in decisions:
         if did_fire and isinstance(ic, LatencyInterceptor):
             await asyncio.sleep(ic.draw_delay(make_emit(WIRE_NAME)))
 
-    # --- raising: first fired wins (api_error / rate_limit / timeout) ---
     early: Response | None = None
     for ic, _name, did_fire in decisions:
         if not did_fire:
@@ -168,12 +128,10 @@ async def _inject(
             )
             break
 
-    # --- forward (unless we already short-circuited) ---
     if early is not None:
         response: Response = early
         errored = True
     else:
-        # silent_lie is "corrupting" — only acts when we actually forward.
         for ic, name, did_fire in decisions:
             if did_fire and isinstance(ic, SilentLieInterceptor):
                 if _lie_request_tool_result(parsed, ic, make_emit):
@@ -191,11 +149,7 @@ async def _inject(
         body = json.dumps(parsed).encode("utf-8") if mutated else raw_body
 
         if stream and malformed is None:
-            # Tee the passthrough to pick up a trailing `usage` chunk (present
-            # when the client sends stream_options.include_usage). Bytes are
-            # yielded unchanged — the transparency contract holds. Streaming
-            # WITHOUT include_usage carries no usage data, so waste_factor
-            # under-counts those tokens.
+            # scan terminal sse chunk for token usage if client requested stream options
             response = StreamingResponse(
                 _stream_count_usage(
                     session,
@@ -218,7 +172,6 @@ async def _inject(
                 _accumulate_tokens(session, content)
             response = Response(content=content, status_code=status, media_type=media)
 
-    # --- finalize the step: record, tool_call, recovery ---
     faulted = bool(fired)
     record = StepRecord(
         step=step,
@@ -252,7 +205,6 @@ async def _inject(
 async def passthrough_chat(
     raw_body: bytes, headers: Mapping[str, str], *, stream: bool
 ) -> Response:
-    """Forward a chat request verbatim (no run header → transparent proxy)."""
     if stream:
         return StreamingResponse(
             forward.stream_passthrough(_UPSTREAM_SUBPATH, headers, raw_body),
@@ -268,18 +220,12 @@ async def passthrough_chat(
     )
 
 
-# ---------------------------------------------------------------------------
-# Wire helpers
-# ---------------------------------------------------------------------------
-
-
 def _wire_name(ic: Interceptor, parsed: dict[str, Any]) -> str | None:
-    """The name an interceptor decides against this request (None = N/A)."""
     if ic.fault is FaultType.SILENT_LIE:
         idx, name = _last_tool_result(parsed.get("messages") or [])
         if idx is None:
-            return None  # nothing to lie about this request
-        return name or ""  # "" = a tool-result with an unknown tool name
+            return None
+        return name or ""
     if ic.fault is FaultType.TOOL_VANISH:
         assert isinstance(ic, ToolVanishInterceptor)
         for name in _tool_names(parsed):
@@ -315,7 +261,6 @@ def _strip_tools(parsed: dict[str, Any], remove: set[str]) -> bool:
 
 
 def _drop_messages(parsed: dict[str, Any], k: int) -> int:
-    """Drop the last ``k`` messages, never the leading system message."""
     messages = parsed.get("messages")
     if not isinstance(messages, list) or not messages:
         return 0
@@ -400,12 +345,7 @@ def _add_usage(session: ProxySession, usage: Any) -> None:
 async def _stream_count_usage(
     session: ProxySession, upstream: AsyncIterator[bytes]
 ) -> AsyncIterator[bytes]:
-    """Yield SSE chunks unchanged while scanning for the final `usage` chunk.
-
-    Per the OpenAI streaming spec, with ``stream_options.include_usage`` every
-    chunk carries ``"usage": null`` except one terminal chunk with the totals —
-    so accumulating every non-null usage never double-counts.
-    """
+    # compile non-null usage from terminal sse chunk to avoid double counting
     tail = b""
     async for chunk in upstream:
         yield chunk

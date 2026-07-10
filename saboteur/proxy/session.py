@@ -1,20 +1,3 @@
-"""Per-session and per-run state for the wire proxy.
-
-A **session** is one (run_id, agent_id): it owns a seeded ``ChaosRandom`` +
-the profile's interceptors (built via the shared ``build_interceptors``), a
-request-step counter, a ``StepRecord`` history (fed to the *existing* pure
-recovery/outcome classifiers), and an ``asyncio.Lock`` that serialises that
-session's requests so the rate-limit budget and RNG draw order stay
-deterministic (invariant #1). All session state is instance-local — one
-session's faults never touch another (invariant #2).
-
-A **run** is a cohort of sessions under one profile. It owns the TelemetryBus +
-JSONL writer + registry registrations, accumulates the event stream it emits
-(so scoring needs no separate collector), emits ``run_started`` / ``agent_done``
-/ ``run_finished``, and at finish scores itself (behavioral tier; survival /
-deception are null + ``no_oracle`` — there is no reference ground truth for a
-BYO agent) and persists the scorecard.
-"""
 
 from __future__ import annotations
 
@@ -52,39 +35,25 @@ def _now() -> datetime:
 
 @dataclass
 class AgentTerminal:
-    """Per-agent terminal facts the BYO spawner feeds into :meth:`ProxyRun.finish`.
-
-    The pure-proxy path (a BYO agent driving the wire directly, no spawner)
-    never builds these — ``finish(terminals=None)`` keeps its original behavior.
-    The spawner builds one per subprocess: the exit/timeout state plus, if the
-    target carried an oracle, the frozen success verdict (judged once at
-    completion, invariant #4). It is defined here (not in the harness spawner)
-    so ``finish`` can type its parameter without a harness→proxy→harness import
-    cycle — ``spawn`` imports this; this module never imports ``spawn``.
-    """
-
     agent_id: int
-    raised: bool = False  # subprocess exited non-zero (→ hard_exception)
-    timed_out: bool = False  # wall-clock kill (→ timeout)
+    raised: bool = False
+    timed_out: bool = False
     exit_code: int | None = None
-    success: bool | None = None  # oracle verdict (None = no oracle ran)
+    success: bool | None = None
     oracle: str | None = None
     deception_aware: bool = False
     oracle_detail: str | None = None
     final_output: str | None = None
-    tokens_used: int | None = None  # overrides session.tokens if set
-    detail: str | None = None  # stderr tail / spawn error, for diagnostics
+    tokens_used: int | None = None
+    detail: str | None = None
 
 
 class ProxySession:
-    """One BYO agent's wire session: deterministic faults + request history."""
 
     def __init__(self, run_id: str, agent_id: int, profile: ChaosProfile) -> None:
         self.run_id = run_id
         self.agent_id = agent_id
         rng = seeded_rng(profile.seed, agent_id)
-        # Reuse the exact same interceptor set the tool path builds; only the
-        # *action* differs (HTTP response vs. raise/sleep).
         self.tool_interceptors: list[Interceptor]
         self.context_interceptors: list[ContextDropInterceptor]
         self.tool_interceptors, self.context_interceptors = build_interceptors(
@@ -105,7 +74,6 @@ class ProxySession:
 
 
 class ProxyRun:
-    """A cohort of proxy sessions under one profile + its telemetry plumbing."""
 
     def __init__(
         self,
@@ -131,8 +99,6 @@ class ProxyRun:
             else float(get_settings().proxy_idle_timeout_s)
         )
         self.capture_all = capture_all
-        # Headerless attribution state (capture-all mode only): the next id to
-        # hand out on a conversation start, and the most recently started agent.
         self._capture_next = 0
         self._capture_current: int | None = None
         self.sessions: dict[int, ProxySession] = {}
@@ -142,7 +108,6 @@ class ProxyRun:
         self._finish_lock = asyncio.Lock()
         self._watchdog: asyncio.Task[None] | None = None
 
-    # -- session access -------------------------------------------------
 
     def session(self, agent_id: int) -> ProxySession:
         sess = self.sessions.get(agent_id)
@@ -152,19 +117,6 @@ class ProxyRun:
         return sess
 
     def capture_agent_id(self, parsed: dict[str, Any]) -> int:
-        """Attribute a headerless request to an agent id (capture-all mode).
-
-        Heuristic: a request whose ``messages`` carry no assistant turn is a
-        conversation start → allocate the next agent id (capped at
-        ``n_agents - 1``, then the last id is reused); any other request
-        belongs to the most recently started conversation. Sound for the
-        common case (one agent process at a time, or sequential cohorts);
-        agents that interleave conversations concurrently should send the
-        ``X-Saboteur-Agent-Id`` header for exact attribution — headers always
-        win over this heuristic (see router.chat_completions).
-
-        Runs on the event loop between awaits, so allocation is atomic.
-        """
         messages = parsed.get("messages") or []
         is_start = not any(
             isinstance(m, dict) and m.get("role") == "assistant" for m in messages
@@ -177,7 +129,6 @@ class ProxyRun:
     def touch(self) -> None:
         self.last_activity = time.monotonic()
 
-    # -- emission (telemetry must never crash a request — invariant #3) --
 
     def emit(self, event: TelemetryEvent) -> None:
         try:
@@ -266,7 +217,6 @@ class ProxyRun:
             build.recovery_event(self.run_id, agent_id, step, kind, after_fault)
         )
 
-    # -- lifecycle ------------------------------------------------------
 
     def start_watchdog(self) -> None:
         self._watchdog = asyncio.create_task(self._idle_watch())
@@ -284,35 +234,19 @@ class ProxyRun:
         except asyncio.CancelledError:
             raise
         except Exception:
-            # The watchdog must never crash the app.
             return
 
     async def finish(
         self, *, terminals: dict[int, AgentTerminal] | None = None
     ) -> None:
-        """Emit terminals, score, persist, and tear down. Idempotent.
-
-        ``terminals=None`` (the pure-proxy path: a BYO agent driving the wire
-        directly, or a dashboard STOP) keeps the original behavior — one
-        ``agent_done`` per *observed* session with ``success=None``.
-
-        The BYO spawner passes one :class:`AgentTerminal` per launched
-        subprocess. We then emit ``agent_done`` for every agent id in
-        ``range(n_agents)`` (so a subprocess that crashed before its first
-        request still gets a card), folding in the exit/timeout state and the
-        frozen oracle verdict.
-        """
         async with self._finish_lock:
             if self._finished:
                 return
             self._finished = True
 
-        # Stop absorbing headerless traffic the moment teardown begins.
         if manager.capture_run is self:
             manager.clear_capture(self)
 
-        # Which agents get a terminal: every observed session in the pure path;
-        # the full cohort (∪ terminals ∪ sessions) when the spawner drove it.
         if terminals is None:
             agent_ids = sorted(self.sessions.keys())
         else:
@@ -322,7 +256,7 @@ class ProxyRun:
 
         outcome_counts: dict[str, int] = {}
         for agent_id in agent_ids:
-            sess = self.session(agent_id)  # lazily creates an empty session
+            sess = self.session(agent_id)
             term = (terminals or {}).get(agent_id)
             raised = term.raised if term else False
             timed_out = term.timed_out if term else False
@@ -349,7 +283,6 @@ class ProxyRun:
                 "deception_aware": term.deception_aware if term else False,
             }
             if term is not None:
-                # Spawner extras (frozen for a later re-judge / inspection).
                 payload.update(
                     oracle_detail=term.oracle_detail,
                     final_output=term.final_output,
@@ -362,8 +295,6 @@ class ProxyRun:
 
         self.emit(build.run_finished_event(self.run_id, self.n_agents, outcome_counts))
 
-        # Behavioral-tier scorecard (no control cohort → waste/latency null;
-        # no oracle → survival/deception null + no_oracle). Pure over events.
         try:
             scorecard = score(
                 self.events,
@@ -379,15 +310,12 @@ class ProxyRun:
         except Exception:
             pass
 
-        # Tear down: close the bus, drain the writer, drop registrations.
         self._bus.close()
         try:
             await asyncio.wait_for(self._writer_task, timeout=10.0)
         except (asyncio.TimeoutError, Exception):
             self._writer_task.cancel()
         ws_registry.unregister(self.run_id)
-        # Imported lazily: saboteur.api.state pulls in the api package, which
-        # imports this proxy — a top-level import would be circular.
         from saboteur.api.state import RunStatus, run_registry
 
         state = run_registry.get(self.run_id)
@@ -399,11 +327,9 @@ class ProxyRun:
 
 
 class ProxyRunManager:
-    """Module-singleton registry of active proxy runs, keyed by run_id."""
 
     def __init__(self) -> None:
         self._runs: dict[str, ProxyRun] = {}
-        # At most one capture-all run: the sink for headerless /v1 traffic.
         self._capture_run: ProxyRun | None = None
 
     def get(self, run_id: str) -> ProxyRun | None:
@@ -426,13 +352,6 @@ class ProxyRunManager:
         runs_dir: Path = _DEFAULT_RUNS_DIR,
         capture_all: bool = False,
     ) -> ProxyRun:
-        """Set up a run's bus/writer/registrations and emit ``run_started``.
-
-        ``capture_all=True`` makes this run the sink for headerless /v1
-        traffic (at most one at a time — starting a new capture run finishes
-        the previous one). Must be awaited from the event loop (binds the bus
-        to it).
-        """
         if capture_all and self._capture_run is not None:
             await self._capture_run.finish()
         bus = TelemetryBus()
@@ -440,16 +359,10 @@ class ProxyRunManager:
         ws_registry.register(run_id, bus)
         writer = JsonlWriter(bus, run_id, runs_dir=runs_dir)
         writer_task = asyncio.create_task(writer.run())
-        # Let the writer subscribe before the first emit so run_started lands in
-        # the JSONL (replay parity, invariant #3).
         await asyncio.sleep(0)
 
-        # Lazy import: avoids a circular import via the api package (see finish()).
         from saboteur.api.state import RunState, RunStatus, run_registry
 
-        # The BYO spawner path (POST /runs) pre-adds a RunState before this runs
-        # so GET /runs / the WS "wait for bus" path never sees a gap; don't
-        # clobber it. The plain proxy path (POST /proxy/runs) adds it here.
         if run_registry.get(run_id) is None:
             run_registry.add(
                 RunState(

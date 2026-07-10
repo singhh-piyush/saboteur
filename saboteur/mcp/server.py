@@ -1,26 +1,3 @@
-"""The Saboteur MCP shim — a stdio JSON-RPC relay that sabotages tool results.
-
-An MCP client (Claude Desktop, Cursor, smolagents-via-MCP, …) launches this as a
-``command``; it launches the user's *real* MCP server, relays the JSON-RPC
-between them, and injects the five tool-layer faults on ``tools/call`` results +
-``tools/list`` (see :mod:`saboteur.mcp.inject`). Telemetry is POSTed to the
-dashboard so the run renders on the existing grid with **no client code change**.
-
-Config (CLI flags win over env):
-  ``--run`` / ``SABOTEUR_RUN_ID``       attribution + telemetry target (required
-                                        for telemetry; absent ⇒ faults still apply
-                                        but no events are posted).
-  ``--agent`` / ``SABOTEUR_AGENT_ID``   session id (seeds RNG; default 0).
-  ``--profile`` / ``SABOTEUR_PROFILE``  profile name or path (absent ⇒ a
-                                        transparent passthrough, no faults).
-  ``--seed`` / ``SABOTEUR_SEED``        override the profile seed.
-  ``--ingest`` / ``SABOTEUR_INGEST_URL``dashboard base URL (default :8000).
-  upstream command: everything after ``--``, or ``SABOTEUR_UPSTREAM``.
-
-Example (one session under hell_mode, wrapping a real server)::
-
-    saboteur-mcp --run hell-… --agent 0 --profile hell_mode -- python real_server.py
-"""
 
 from __future__ import annotations
 
@@ -52,7 +29,6 @@ class ShimConfig:
 
 
 def _resolve_profile(value: str, seed: int | None) -> ChaosProfile:
-    """A profile name (→ ``profiles/<name>.yaml``) or a path to a YAML file."""
     path = Path(value)
     if not (path.suffix or path.exists() or "/" in value):
         path = _PROFILES_DIR / f"{value}.yaml"
@@ -63,8 +39,6 @@ def _resolve_profile(value: str, seed: int | None) -> ChaosProfile:
 
 
 def parse_args(argv: list[str], env: dict[str, str]) -> ShimConfig:
-    """Parse flags + env into a config. Upstream cmd = args after ``--``."""
-    # Split argv on the first "--": left = our flags, right = upstream argv.
     flags = argv
     upstream_from_argv: list[str] = []
     if "--" in argv:
@@ -104,7 +78,6 @@ def parse_args(argv: list[str], env: dict[str, str]) -> ShimConfig:
 
 
 async def _stdio_streams() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    """Wrap this process's stdin/stdout as asyncio streams (the client pipe)."""
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()
     await loop.connect_read_pipe(
@@ -199,10 +172,10 @@ async def _dispatch(
             await forward_to_client(resp)
 
         elif is_request:
-            await forward_to_client(await upstream.request(msg))  # transparent
+            await forward_to_client(await upstream.request(msg))
         else:
-            await upstream.notify(msg)  # transparent notification
-    except Exception as exc:  # never crash the relay; report per JSON-RPC
+            await upstream.notify(msg)
+    except Exception as exc:
         if is_request:
             await forward_to_client(
                 jsonrpc.error_response(jid, -32000, f"saboteur shim error: {exc}")

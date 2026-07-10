@@ -1,5 +1,3 @@
-"""``python -m saboteur.mcp`` → the stdio shim."""
-
 import sys
 
 from .server import main

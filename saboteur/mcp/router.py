@@ -1,18 +1,3 @@
-"""Dashboard-side routes for the MCP shim (mounted on the dashboard app).
-
-- ``POST /mcp/runs`` — register an MCP run (profile + n_agents) → ``{run_id, seed}``.
-  Reuses :func:`saboteur.proxy.session.ProxyRunManager.create`, so the run flows
-  into the same grid / scorecard / replay / SQLite index as every other run, with
-  no new run-management code.
-- ``POST /mcp/runs/{id}/events`` — the **ingest bridge**: an out-of-process shim
-  POSTs each ``TelemetryEvent`` here; we re-emit it on the in-process bus (→ JSONL
-  + WebSocket + grid). We also rebuild a shadow ``StepRecord`` history per agent
-  from the ``tool_call`` events so the run's ``finish()`` classifies terminal
-  outcomes + scores exactly as the wire-proxy path does (the shim stays a pure
-  emitter; the dashboard remains the authority for terminals + scoring).
-- ``POST /mcp/runs/{id}/finish`` — emit terminals, score, tear down.
-- ``GET /mcp/health``.
-"""
 
 from __future__ import annotations
 
@@ -52,7 +37,6 @@ def mcp_health() -> dict[str, str]:
 
 @router.post("/mcp/runs", response_model=McpRunResponse, status_code=202)
 async def start_mcp_run(req: McpRunRequest) -> McpRunResponse:
-    """Register an MCP run so shim traffic bearing its id renders on the grid."""
     profile_path = _PROFILES_DIR / f"{req.profile}.yaml"
     if not profile_path.exists():
         raise HTTPException(404, f"profile '{req.profile}' not found")
@@ -68,14 +52,10 @@ async def start_mcp_run(req: McpRunRequest) -> McpRunResponse:
 
 @router.post("/mcp/runs/{run_id}/events", status_code=202)
 async def ingest_event(run_id: str, event: TelemetryEvent) -> dict[str, bool]:
-    """Re-emit a shim-posted event on the run's bus + rebuild shadow history."""
     run = manager.get(run_id)
     if run is None:
         raise HTTPException(404, f"mcp run '{run_id}' not found")
     run.touch()
-    # Rebuild the per-agent StepRecord history (the shim owns the real session;
-    # this shadow lets finish() classify outcomes + score). High-water by step so
-    # a re-posted (duplicate) event never double-appends.
     if event.agent_id >= 0 and event.event == "tool_call" and event.step is not None:
         sess = run.session(event.agent_id)
         if event.step > sess.step:

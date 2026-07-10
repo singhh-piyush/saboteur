@@ -1,11 +1,3 @@
-"""Shared run-lifecycle state for the API layer.
-
-``RunRegistry`` tracks every run started via ``POST /runs`` so that
-``GET /runs/{run_id}`` and ``GET /runs/{run_id}/scorecard`` can look up
-status without touching the filesystem.  All mutations happen on the event
-loop (no threads write to RunState), so no locking is needed.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

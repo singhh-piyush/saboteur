@@ -1,16 +1,3 @@
-"""POST /replay — re-stream a recorded JSONL run over a fresh WS channel.
-
-The caller passes the server-side path to a ``.jsonl`` file and an optional
-speed multiplier.  The endpoint:
-
-1. Reads the file, generates a fresh ``replay-{stamp}-{hex6}`` run_id.
-2. Registers a ``TelemetryBus`` for that run_id so ``/ws/{run_id}`` works.
-3. Launches a background task that emits events at the scaled wall-clock
-   cadence (``speed=0`` → instant; ``speed=1.0`` → real-time).
-4. Returns ``{run_id}`` immediately — callers connect to ``/ws/{run_id}``.
-
-Powers ``scripts/replay.py`` and the offline demo fallback.
-"""
 
 from __future__ import annotations
 
@@ -30,13 +17,13 @@ router = APIRouter(prefix="/replay", tags=["replay"])
 
 _RUNS_DIR = Path("runs")
 
-# Cap per-event delay so a single long gap never stalls the WS client.
+# cap per-event delay to avoid stalling client on long gaps
 _MAX_DELAY_S = 5.0
 
 
 class ReplayRequest(BaseModel):
     jsonl_path: str
-    speed: float = 1.0  # >0 scales wall-clock gaps; 0 = instant
+    speed: float = 1.0
 
 
 class ReplayResponse(BaseModel):
@@ -45,7 +32,6 @@ class ReplayResponse(BaseModel):
 
 @router.post("", response_model=ReplayResponse, status_code=202)
 async def start_replay(req: ReplayRequest) -> ReplayResponse:
-    """Start replaying a JSONL file; return the run_id for WS subscription."""
     path = Path(req.jsonl_path)
     if path.suffix != ".jsonl":
         raise HTTPException(422, "only .jsonl files are supported")

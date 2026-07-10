@@ -1,18 +1,3 @@
-"""FastAPI routes for the wire proxy (mounted on the dashboard app).
-
-- ``POST /proxy/runs`` — start a proxy run (profile + n_agents, optionally
-  ``capture_all``) → ``{run_id}``.
-- ``POST /proxy/runs/{run_id}/finish`` — emit terminals, score, tear down.
-- ``POST /v1/chat/completions`` — the OpenAI endpoint a BYO agent points at.
-  Attribution: the ``X-Saboteur-Run-Id`` / ``X-Saboteur-Agent-Id`` headers win
-  when present; a headerless request is absorbed by the active capture-all run
-  (if one exists — the "one env var, zero code change" mode); otherwise the
-  proxy is a transparent passthrough. An unknown run id header also passes
-  through untouched (the client explicitly targeted a run — never re-capture).
-- ``GET /proxy/capture`` — the active capture-all run id (or null).
-- ``GET /v1/models`` — passthrough to the upstream.
-- ``GET /proxy/health``.
-"""
 
 from __future__ import annotations
 
@@ -39,8 +24,7 @@ class ProxyRunRequest(BaseModel):
     profile: str
     n_agents: int | None = Field(default=None, ge=1)
     seed_override: int | None = None
-    # Absorb headerless /v1 traffic into this run (at most one active;
-    # starting a new capture-all run finishes the previous one).
+    # absorb headerless traffic into this run
     capture_all: bool = False
 
 
@@ -55,7 +39,6 @@ def proxy_health() -> dict[str, str]:
 
 @router.post("/proxy/runs", response_model=ProxyRunResponse, status_code=202)
 async def start_proxy_run(req: ProxyRunRequest) -> ProxyRunResponse:
-    """Register a proxy run so BYO-agent traffic bearing its id gets sabotaged."""
     profile_path = _PROFILES_DIR / f"{req.profile}.yaml"
     if not profile_path.exists():
         raise HTTPException(404, f"profile '{req.profile}' not found")
@@ -73,7 +56,6 @@ async def start_proxy_run(req: ProxyRunRequest) -> ProxyRunResponse:
 
 @router.get("/proxy/capture")
 def capture_status() -> dict[str, str | None]:
-    """The run currently absorbing headerless /v1 traffic (or null)."""
     run = manager.capture_run
     return {"run_id": run.run_id if run else None}
 
@@ -89,7 +71,6 @@ async def finish_proxy_run(run_id: str) -> dict[str, str]:
 
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request) -> Response:
-    """OpenAI Chat Completions — injects faults when attributed to a proxy run."""
     raw = await request.body()
     try:
         parsed = json.loads(raw) if raw else {}
@@ -99,9 +80,7 @@ async def chat_completions(request: Request) -> Response:
     run_id = request.headers.get("x-saboteur-run-id")
     run = manager.get(run_id) if run_id else None
 
-    # Headerless request + an active capture-all run → absorb it ("one env
-    # var, zero code change"). Headers always win; an unknown run id header
-    # stays a passthrough (the client explicitly targeted a run).
+    # absorb headerless request into capture-all run; headed requests win
     capture = manager.capture_run
     if run is None and run_id is None and capture is not None and isinstance(parsed, dict):
         session = capture.session(capture.capture_agent_id(parsed))
@@ -109,7 +88,6 @@ async def chat_completions(request: Request) -> Response:
             capture, session, raw_body=raw, parsed=parsed, headers=request.headers
         )
 
-    # No / unknown run id, or an unparseable body → transparent passthrough.
     if run is None or not isinstance(parsed, dict):
         stream = isinstance(parsed, dict) and bool(parsed.get("stream"))
         return await inject.passthrough_chat(raw, request.headers, stream=stream)
@@ -127,7 +105,6 @@ async def chat_completions(request: Request) -> Response:
 
 @router.get("/v1/models")
 async def models(request: Request) -> Response:
-    """Passthrough the model list (some SDKs probe this on startup)."""
     status, up_headers, content = await forward.forward_nonstream(
         "models", request.headers, b"", method="GET"
     )

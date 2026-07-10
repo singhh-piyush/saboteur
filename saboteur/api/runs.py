@@ -1,24 +1,3 @@
-"""Run management routes.
-
-POST   /runs                       — start a cohort run in the background; returns {run_id}
-GET    /runs                       — list all runs: id, profile, n_agents, status,
-                                     started_at, finished_at, survival_pct (if scored)
-GET    /runs/{id}                  — status + per-agent summary
-GET    /runs/{id}/scorecard        — Scorecard JSON (425 until finished; 404 if missing)
-GET    /runs/{id}/events           — paginated JSONL event history (?after_ts= &limit=)
-GET    /runs/{id}/download/jsonl   — download runs/{id}.jsonl
-GET    /runs/{id}/download/scorecard — download runs/{id}.scorecard.json
-DELETE /runs/{id}                  — delete files; 409 if run is RUNNING or PENDING
-DELETE /runs?status=finished       — bulk delete finished runs; returns {"deleted": N}
-
-Deletion is safe under concurrency: the run registry is the authoritative source
-of liveness. We never delete files whose run_id is RUNNING or PENDING in the
-registry, even if that process is not the one that created the files (archived
-runs from previous server lives have no registry entry and are always deletable).
-
-The ``_agent_factory`` module-level variable is the test seam: patch it with a
-FakeAgent factory to exercise the full lifecycle without a live LLM.
-"""
 
 from __future__ import annotations
 
@@ -48,17 +27,10 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 _RUNS_DIR = Path("runs")
 _PROFILES_DIR = Path("profiles")
 
-# The SQLite index. A module ref so tests can point it at a temp-path Database.
 _db = db
 
 
 def startup_index() -> None:
-    """Rebuild the index from disk on app startup (invariant #3 rebuild path).
-
-    Called from the FastAPI lifespan. Never raises — a corrupt log or a missing
-    runs dir must not block the app; the index simply self-heals on the next
-    read via :func:`saboteur.storage.db.reconcile_runs`.
-    """
     from saboteur.storage.db import backfill
 
     try:
@@ -66,16 +38,11 @@ def startup_index() -> None:
     except Exception:
         pass
 
-# Override in tests: monkeypatch.setattr(runs_mod, "_agent_factory", fake)
 _agent_factory: AgentFactory = build_agent
-# Test seams for the BYO path: the target store and the cohort spawner.
 _target_store = target_store
 _byo_runner = run_byo_cohort
 
 
-# ---------------------------------------------------------------------------
-# Request / response models
-# ---------------------------------------------------------------------------
 
 
 class RunRequest(BaseModel):
@@ -83,7 +50,7 @@ class RunRequest(BaseModel):
     n_agents: int | None = None
     seed_override: int | None = None
     with_control: bool = True
-    target: str = "reference"  # "reference" = the built-in smolagents agent
+    target: str = "reference"
 
 
 class RunResponse(BaseModel):
@@ -91,7 +58,7 @@ class RunResponse(BaseModel):
 
 
 class AgentSummary(BaseModel):
-    status: str  # running | recovering | crashed | succeeded | failed | unknown
+    status: str
     step: int | None
     faults: int
     recoveries: int
@@ -112,21 +79,18 @@ class RunStatusResponse(BaseModel):
     agents: dict[str, AgentSummary]
 
 
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 
 class RunListEntry(BaseModel):
     run_id: str
-    target: str  # "reference" or a BYO command-target name
+    target: str
     profile: str
     n_agents: int
-    status: str  # pending | running | finished | failed | archived
+    status: str
     started_at: datetime | None
     finished_at: datetime | None
     has_scorecard: bool
-    survival_pct: float | None  # None until scored
+    survival_pct: float | None
 
 
 def _to_dt(iso: str | None) -> datetime | None:
@@ -139,13 +103,12 @@ def _to_dt(iso: str | None) -> datetime | None:
 
 
 def _entry_from_row(row: RunRow) -> RunListEntry:
-    """A list entry for a run known only on disk (no live registry state)."""
     return RunListEntry(
         run_id=row.run_id,
         target=row.target or "reference",
         profile=row.profile or "",
         n_agents=row.n_agents,
-        status="archived",  # historical: not live in this process's registry
+        status="archived",
         started_at=_to_dt(row.started_at),
         finished_at=_to_dt(row.finished_at),
         has_scorecard=row.has_scorecard,
@@ -162,7 +125,6 @@ def _matches(
     date_from: str | None,
     date_to: str | None,
 ) -> bool:
-    """Apply the GET /runs filters to a (possibly registry-overlaid) entry."""
     if target is not None and entry.target != target:
         return False
     if profile is not None and entry.profile != profile:
@@ -188,21 +150,12 @@ def list_runs(
     date_from: str | None = Query(None, description="ISO date (YYYY-MM-DD), inclusive"),
     date_to: str | None = Query(None, description="ISO date (YYYY-MM-DD), inclusive"),
 ) -> list[RunListEntry]:
-    """All known runs, served from the index and overlaid with live state.
-
-    The SQLite index (rebuilt from ``runs/*.jsonl``) supplies every historical
-    run as ``archived``; the in-process registry overlays the live status of
-    runs started this server life. Filterable by ``target`` / ``profile`` /
-    ``status`` / date range (``date_from`` / ``date_to`` against started_at).
-    Control cohorts are folded into their parent run, never listed.
-    """
-    reconcile_runs(_db, _RUNS_DIR)  # self-heal the index from disk
+    reconcile_runs(_db, _RUNS_DIR)
 
     entries: dict[str, RunListEntry] = {
         row.run_id: _entry_from_row(row) for row in _db.runs_all()
     }
 
-    # Overlay live registry state (authoritative for liveness this process).
     for state in run_registry.all():
         if state.run_id.endswith("-control"):
             continue
@@ -232,7 +185,6 @@ def list_runs(
             date_to=date_to,
         )
     ]
-    # run_ids embed a UTC stamp; reverse-lexicographic ≈ newest first.
     return sorted(selected, key=lambda e: e.run_id, reverse=True)
 
 
@@ -252,8 +204,6 @@ class RunComparison(BaseModel):
     regressions: list[str]
 
 
-# (metric name, higher_is_better, regression threshold). A metric "regresses"
-# when b moves in the worse direction past the threshold vs. a.
 _COMPARE_METRICS: list[tuple[str, bool, float]] = [
     ("survival_rate", True, 0.05),
     ("deception_detection_rate", True, 0.05),
@@ -265,7 +215,6 @@ _COMPARE_METRICS: list[tuple[str, bool, float]] = [
 
 
 def _summary_or_404(run_id: str) -> dict:
-    """Load a run's scorecard summary from the index (404/409 otherwise)."""
     row = _db.run_get(run_id)
     if row is None:
         raise HTTPException(404, f"run '{run_id}' not found")
@@ -279,13 +228,6 @@ def _summary_or_404(run_id: str) -> dict:
 
 @router.get("/compare", response_model=RunComparison)
 def compare_runs(a: str, b: str) -> RunComparison:
-    """Per-metric delta (b − a) between two runs, flagging regressions.
-
-    Reads both scorecards from the index (refreshed from disk first). For each
-    metric a regression is when ``b`` is worse than ``a`` by more than the
-    metric's threshold (direction depends on the metric). Metrics that are
-    ``null`` in either run yield a ``null`` delta and never regress.
-    """
     reconcile_runs(_db, _RUNS_DIR)
     sca = _summary_or_404(a)
     scb = _summary_or_404(b)
@@ -318,13 +260,6 @@ def compare_runs(a: str, b: str) -> RunComparison:
 
 @router.post("", response_model=RunResponse, status_code=202)
 async def start_run(req: RunRequest) -> RunResponse:
-    """Launch a cohort run in the background.
-
-    ``target == "reference"`` (default) runs Saboteur's own smolagents cohort
-    via :func:`orchestrate` (control + chaos) — unchanged. Any other target is
-    a registered BYO ``command``: spawned as subprocesses through the wire proxy
-    via :func:`run_byo_cohort` (chaos cohort only — no control in v1).
-    """
     profile_path = _PROFILES_DIR / f"{req.profile}.yaml"
     if not profile_path.exists():
         raise HTTPException(404, f"profile '{req.profile}' not found")
@@ -371,7 +306,6 @@ async def start_run(req: RunRequest) -> RunResponse:
 
 
 async def _start_byo_run(req: RunRequest, n: int) -> RunResponse:
-    """Background-launch a BYO command target as a cohort through the proxy."""
     from saboteur.chaos.profile import load_profile
 
     target = _target_store.get(req.target)
@@ -385,8 +319,7 @@ async def _start_byo_run(req: RunRequest, n: int) -> RunResponse:
         profile = profile.model_copy(update={"seed": req.seed_override})
 
     run_id = make_run_id(req.target)
-    # Pre-register so GET /runs and the WS "wait for bus" path see no gap before
-    # the spawner's manager.create runs (which won't clobber this — see session).
+    # pre-register to avoid websocket race
     state = RunState(
         run_id=run_id,
         profile=req.profile,
@@ -413,8 +346,6 @@ async def _start_byo_run(req: RunRequest, n: int) -> RunResponse:
 
 @router.post("/{run_id}/cancel", status_code=200)
 async def cancel_run(run_id: str) -> dict:
-    """Stop an active run (cohort task cancel, or proxy-run finish + score)."""
-    # Proxy runs have no background task — STOP means "finish + score them".
     from saboteur.proxy.session import manager as proxy_manager
 
     proxy_run = proxy_manager.get(run_id)
@@ -432,7 +363,6 @@ async def cancel_run(run_id: str) -> dict:
 
 @router.get("/{run_id}/download/jsonl")
 def download_jsonl(run_id: str) -> FileResponse:
-    """Download the raw JSONL event log for *run_id*."""
     path = _RUNS_DIR / f"{run_id}.jsonl"
     if not path.exists():
         raise HTTPException(404, f"JSONL log for run '{run_id}' not found")
@@ -445,7 +375,6 @@ def download_jsonl(run_id: str) -> FileResponse:
 
 @router.get("/{run_id}/download/scorecard")
 def download_scorecard(run_id: str) -> FileResponse:
-    """Download the scorecard JSON for *run_id*."""
     path = _RUNS_DIR / f"{run_id}.scorecard.json"
     if not path.exists():
         raise HTTPException(404, f"Scorecard for run '{run_id}' not found")
@@ -458,7 +387,6 @@ def download_scorecard(run_id: str) -> FileResponse:
 
 @router.get("/{run_id}", response_model=RunStatusResponse)
 def get_run(run_id: str) -> RunStatusResponse:
-    """Run status + per-agent summary (from JSONL), enriched from the index."""
     state = run_registry.get(run_id) or _archived_state(run_id)
     if state is None:
         raise HTTPException(404, f"run '{run_id}' not found")
@@ -471,7 +399,6 @@ def get_run(run_id: str) -> RunStatusResponse:
         except Exception:
             pass
 
-    # Enrichment from the index: target attribution + frozen survival_rate.
     row = _db.run_get(run_id)
     target = row.target if row and row.target else derive_target(run_id, state.profile)
     survival_rate = row.survival_rate if row else None
@@ -494,11 +421,9 @@ def get_run(run_id: str) -> RunStatusResponse:
 
 @router.get("/{run_id}/scorecard", response_model=Scorecard)
 def get_scorecard(run_id: str) -> Scorecard:
-    """Return the persisted Scorecard (404 until the run finishes)."""
     path = _RUNS_DIR / f"{run_id}.scorecard.json"
     state = run_registry.get(run_id)
     if state is None:
-        # Archived run from a previous server life: serve straight from disk.
         if path.exists():
             return Scorecard.model_validate_json(path.read_text(encoding="utf-8"))
         raise HTTPException(404, f"run '{run_id}' not found")
@@ -515,14 +440,8 @@ def get_events(
     after_ts: str | None = None,
     limit: int = 200,
 ) -> list[dict]:
-    """Paginated event history from JSONL.
-
-    Use ``after_ts`` (ISO-8601) as a cursor to page forward.
-    """
     state = run_registry.get(run_id)
     log = _RUNS_DIR / f"{run_id}.jsonl"
-    # Archived runs (and -control cohorts) have no registry entry but their
-    # JSONL is on disk and stays replayable across server restarts.
     if state is None and not log.exists():
         raise HTTPException(404, f"run '{run_id}' not found")
     if not log.exists():
@@ -542,12 +461,6 @@ def get_events(
 
 @router.delete("/{run_id}", status_code=204)
 def delete_run(run_id: str) -> None:
-    """Delete all artifacts for *run_id*.
-
-    Returns 409 if the run is currently RUNNING or PENDING (refuse to delete
-    files that belong to an active run — check the registry, not file existence).
-    Returns 404 if no artifacts exist and the run is not in the registry.
-    """
     state = run_registry.get(run_id)
 
     if state is not None and state.status in (RunStatus.RUNNING, RunStatus.PENDING):
@@ -571,20 +484,13 @@ def delete_run(run_id: str) -> None:
             path.unlink(missing_ok=True)
         except Exception:
             pass
-    _db.run_delete(run_id)  # drop the index row too (disk is the source of truth)
+    _db.run_delete(run_id)
 
 
 @router.delete("", status_code=200)
 def bulk_delete_runs(
     status: str = Query(..., description="Must be 'finished'"),
 ) -> dict:
-    """Bulk delete finished runs.
-
-    Only ``status=finished`` is accepted (422 otherwise).  Skips any run that
-    is currently RUNNING or PENDING in the registry — active runs are never
-    touched.  Returns ``{"deleted": N}`` where N is the number of run IDs
-    whose files were removed.
-    """
     if status != "finished":
         raise HTTPException(
             422,
@@ -595,8 +501,6 @@ def bulk_delete_runs(
     if not _RUNS_DIR.is_dir():
         return {"deleted": 0}
 
-    # Collect all non-control run IDs that have a JSONL file — plus any run
-    # left with only a scorecard (its JSONL was removed out-of-band).
     run_ids: set[str] = {
         log.stem
         for log in _RUNS_DIR.glob("*.jsonl")
@@ -614,7 +518,6 @@ def bulk_delete_runs(
             RunStatus.RUNNING,
             RunStatus.PENDING,
         ):
-            # Active run — skip silently.
             continue
 
         jsonl = _RUNS_DIR / f"{run_id}.jsonl"
@@ -627,20 +530,16 @@ def bulk_delete_runs(
                 path.unlink(missing_ok=True)
             except Exception:
                 pass
-        _db.run_delete(run_id)  # drop the index row too
+        _db.run_delete(run_id)
 
         deleted += 1
 
     return {"deleted": deleted}
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _archived_state(run_id: str) -> RunState | None:
-    """Synthesize a RunState for a run whose artifacts survive on disk."""
     scorecard = _RUNS_DIR / f"{run_id}.scorecard.json"
     log = _RUNS_DIR / f"{run_id}.jsonl"
     if not scorecard.exists() and not log.exists():
@@ -679,8 +578,6 @@ def _agent_summaries(events: list[TelemetryEvent]) -> dict[str, AgentSummary]:
 
         if done is not None:
             verdict = done.payload.get("success")
-            # None ⇒ the run finished but no oracle judged it (BYO without an
-            # oracle); don't call that a failure.
             status = (
                 "unknown"
                 if verdict is None

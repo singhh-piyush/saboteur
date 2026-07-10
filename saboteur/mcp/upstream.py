@@ -1,12 +1,3 @@
-"""The shim's client to the user's real MCP server.
-
-``UpstreamClient`` launches the wrapped MCP server (``command + args``) as an
-``asyncio`` subprocess over stdio and relays JSON-RPC to it. The shim serializes
-client traffic (one request at a time over the single stdio pipe), so a simple
-write-then-read-until-matching-id loop is sufficient — no out-of-order plumbing.
-Any server→client message without an ``id`` (a notification / log) is surfaced to
-the caller via ``on_unsolicited`` so the shim can forward it transparently.
-"""
 
 from __future__ import annotations
 
@@ -18,7 +9,6 @@ from .jsonrpc import Message, read_message, write_message
 
 
 class UpstreamClient:
-    """A thin stdio JSON-RPC client to one wrapped MCP server subprocess."""
 
     def __init__(
         self,
@@ -40,7 +30,7 @@ class UpstreamClient:
             *self.command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=sys.stderr,  # let the wrapped server log straight to our stderr
+            stderr=sys.stderr,
             env=self.env,
             cwd=self.cwd,
         )
@@ -56,11 +46,7 @@ class UpstreamClient:
         return self._proc.stdout
 
     async def request(self, message: Message) -> Message:
-        """Send a request and return its matching response.
-
-        Forwards any intervening id-less messages to ``on_unsolicited``. Raises
-        ``ConnectionError`` if the upstream closes before responding.
-        """
+        # match response by json-rpc id, forwarding unsolicited notifications
         want = message.get("id")
         async with self._lock:
             write_message(self._stdin, message)
@@ -71,12 +57,10 @@ class UpstreamClient:
                     raise ConnectionError("upstream MCP server closed the connection")
                 if reply.get("id") == want and ("result" in reply or "error" in reply):
                     return reply
-                # A server-initiated notification / log: surface it, keep reading.
                 if self._on_unsolicited is not None:
                     await self._on_unsolicited(reply)
 
     async def notify(self, message: Message) -> None:
-        """Send a notification (no response expected)."""
         async with self._lock:
             write_message(self._stdin, message)
             await self._stdin.drain()
@@ -105,7 +89,6 @@ class UpstreamClient:
 
 
 def split_upstream_command(value: str) -> list[str]:
-    """Parse an upstream command string (``SABOTEUR_UPSTREAM``) into argv."""
     import shlex
 
     return shlex.split(value)

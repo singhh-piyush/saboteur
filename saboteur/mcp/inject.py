@@ -1,34 +1,3 @@
-"""The MCP fault pipeline — the analogue of ``saboteur.proxy.inject``.
-
-Every fault *decision* and *parameter draw* comes from the chaos core's
-interceptors (reused, not forked); only the *action* is MCP-shaped (mutate a
-``tools/call`` result / ``tools/list``, return an MCP error result) instead of an
-HTTP response or a raised Python exception.
-
-Five of the eight faults apply at the MCP tool boundary; the transport/context
-faults (``api_error`` / ``timeout`` / ``context_drop``) are owned by the wire
-proxy and are simply never drawn here. For one ``tools/call`` we mirror
-``ChaosEngine._invoke``'s discipline: **draw every applicable decision in profile
-order first, then act** in kind order (latency → raising → forward → corrupting).
-
-Mapping (CLAUDE.md fault taxonomy → MCP):
-- ``latency``     → ``await asyncio.sleep`` before forwarding the call.
-- ``rate_limit``  → don't forward; return an ``isError`` tool result naming the
-  retry-after hint (rolling call-count budget, reused).
-- ``tool_vanish`` → mark the tool gone (sticky); return a "not found" ``isError``
-  result; later ``tools/list`` responses are stripped of vanished tools.
-- ``malformed``   → forward, then truncate the result's text content.
-- ``silent_lie``  → forward, then perturb the **last** number in the result's
-  text (so ``"22.0°C (71.6°F)"`` keeps °C true, lies the derived °F — the
-  deception probe, consistent with ``agents/task.py``).
-
-Transparency: a ``tools/call`` whose draws all miss (and ``calm_seas``) returns
-the upstream result unchanged.
-
-The function is transport- and telemetry-agnostic: it takes an ``emit`` sink and
-an async ``upstream_call`` — the key test seam (in-process tests pass a list sink
-+ a fake upstream; the shim passes an HTTP sink + the subprocess upstream).
-"""
 
 from __future__ import annotations
 
@@ -57,9 +26,6 @@ Emit = Callable[[TelemetryEvent], None]
 UpstreamCall = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 FaultEmit = Callable[[FaultType, dict[str, Any]], None]
 
-# The five tool-layer faults that apply at the MCP boundary. The others
-# (api_error / timeout / context_drop) are the wire proxy's; we never draw them,
-# so the MCP draw sequence stays clean and deterministic (invariant #1).
 MCP_FAULTS = frozenset(
     {
         FaultType.LATENCY,
@@ -80,16 +46,12 @@ async def handle_tools_call(
     emit: Emit,
     upstream_call: UpstreamCall,
 ) -> jsonrpc.Message:
-    """Run the fault pipeline for one ``tools/call`` → a JSON-RPC response."""
     agent_id = session.agent_id
     step = session.next_step()
     emit(build.step_start_event(run_id, agent_id, step))
 
     tool_name = params.get("name")
     tool_args = params.get("arguments")
-    # The interceptor API keys on a tool name string; ``tool_name`` may be None
-    # for a malformed request, so ``name`` is the coerced key (telemetry keeps
-    # the real, possibly-None ``tool_name``).
     name = tool_name if isinstance(tool_name, str) else ""
     fired: list[str] = []
 
@@ -100,8 +62,6 @@ async def handle_tools_call(
 
         return _emit
 
-    # A vanished tool stays vanished — short-circuit before any draw (the vanish
-    # itself was a deterministic decision), mirroring ChaosEngine._invoke.
     if session.vanish is not None and name and session.vanish.is_vanished(name):
         emit_fault(tool_name)(FaultType.TOOL_VANISH, {"sticky": True})
         return _finalize(
@@ -109,19 +69,16 @@ async def handle_tools_call(
             errored=True, result=_not_found_result(tool_name), jsonrpc_id=jsonrpc_id, emit=emit,
         )
 
-    # Draw every applicable decision in profile order before acting.
     decisions: list[tuple[Any, bool]] = [
         (ic, ic.decide(name))
         for ic in session.tool_interceptors
         if ic.fault in MCP_FAULTS and ic.applies_to(name)
     ]
 
-    # --- transport: latency (composes with whatever fires next) ---
     for ic, did_fire in decisions:
         if did_fire and isinstance(ic, LatencyInterceptor):
             await asyncio.sleep(ic.draw_delay(emit_fault(tool_name)))
 
-    # --- raising: first fired wins (rate_limit / fresh vanish) ---
     early: dict[str, Any] | None = None
     errored = False
     for ic, did_fire in decisions:
@@ -142,7 +99,6 @@ async def handle_tools_call(
         result = early
     else:
         result = await upstream_call(params)
-        # --- corrupting: first fired wins (malformed truncates / silent_lie lies) ---
         for ic, did_fire in decisions:
             if not did_fire:
                 continue
@@ -159,11 +115,6 @@ async def handle_tools_call(
 
 
 def handle_tools_list(session: "ProxySession", result: dict[str, Any]) -> dict[str, Any]:
-    """Strip any already-vanished tools from a ``tools/list`` result (sticky).
-
-    ``tools/list`` never *triggers* a vanish (no draw); it only reflects tools a
-    prior ``tools/call`` made vanish — the list-side half of ``tool_vanish``.
-    """
     vanish = session.vanish
     if vanish is None:
         return result
@@ -181,9 +132,6 @@ def handle_tools_list(session: "ProxySession", result: dict[str, Any]) -> dict[s
     return {**result, "tools": kept}
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _finalize(
@@ -200,7 +148,6 @@ def _finalize(
     jsonrpc_id: Any,
     emit: Emit,
 ) -> jsonrpc.Message:
-    """Record the step, emit tool_call + any recovery, return the response."""
     faulted = bool(fired)
     session.history.append(
         StepRecord(
@@ -245,11 +192,6 @@ def _not_found_result(tool_name: str | None) -> dict[str, Any]:
 def _apply_corrupt(
     result: dict[str, Any], interceptor: Any, emit_fault: FaultEmit
 ) -> tuple[dict[str, Any], bool]:
-    """Corrupt the first text content block via the interceptor (copy-on-write).
-
-    Copies only the path it mutates, so a shared upstream result object (the
-    test's canned dict) is never corrupted in place.
-    """
     content = result.get("content")
     if not isinstance(content, list):
         return result, False
