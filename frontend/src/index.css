@@ -242,6 +242,160 @@ body::before {
   }
 }
 
+/* Launch-film intro: scene cut, depth entrances, cohort floor flicker */
+@keyframes scene-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes intro-line {
+  from {
+    opacity: 0;
+    transform: translateZ(-140px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0);
+    filter: blur(0);
+  }
+}
+@keyframes intro-dolly {
+  from {
+    transform: rotateX(9deg) scale(1.07);
+  }
+  to {
+    transform: rotateX(5deg) scale(1);
+  }
+}
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes intro-chip {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateZ(var(--z, 0px)) translateY(30px) scale(0.9);
+    filter: blur(6px);
+  }
+  to {
+    /* land on the chip's resting depth-of-field values so the fill handoff never pops */
+    opacity: var(--intro-o, 1);
+    transform: translate(-50%, -50%) translateZ(var(--z, 0px)) translateY(0) scale(1);
+    filter: blur(var(--intro-blur, 0px));
+  }
+}
+@keyframes intro-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 24px 3px color-mix(in oklch, var(--color-accent) 40%, transparent);
+  }
+}
+@keyframes intro-flicker {
+  0%,
+  100% {
+    background-color: color-mix(in oklch, var(--color-ok) 16%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 55%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-ok) 45%, transparent);
+  }
+  30% {
+    background-color: color-mix(in oklch, var(--color-warn) 16%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-warn) 55%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-warn) 45%, transparent);
+  }
+  55% {
+    background-color: color-mix(in oklch, var(--color-crit) 18%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-crit) 60%, transparent);
+    box-shadow: 0 0 16px -2px color-mix(in oklch, var(--color-crit) 50%, transparent);
+  }
+  80% {
+    background-color: color-mix(in oklch, var(--color-win) 16%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-win) 55%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-win) 45%, transparent);
+  }
+}
+.intro-cell {
+  animation: intro-flicker 2.8s linear infinite;
+}
+@keyframes intro-floor {
+  from {
+    transform: rotateX(58deg) scale(1.06);
+  }
+  to {
+    transform: rotateX(52deg) scale(1);
+  }
+}
+
+/* Studio lighting: film grain, drifting key light, specular shine, handheld 3D drift */
+@keyframes intro-grain {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-1.5%, 2%);
+  }
+  50% {
+    transform: translate(2%, -1.5%);
+  }
+  75% {
+    transform: translate(-2%, -2%);
+  }
+}
+.intro-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: intro-grain 0.7s steps(4) infinite;
+}
+@keyframes intro-keylight {
+  from {
+    transform: translate(-85%, -50%) rotate(16deg);
+  }
+  to {
+    transform: translate(-15%, -50%) rotate(16deg);
+  }
+}
+@keyframes intro-shine {
+  from {
+    background-position: 230% 0;
+  }
+  to {
+    background-position: -130% 0;
+  }
+}
+.intro-shine {
+  background-image: linear-gradient(
+    105deg,
+    transparent 44%,
+    rgba(255, 255, 255, 0.9) 50%,
+    transparent 56%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: intro-shine 2000ms cubic-bezier(0.4, 0, 0.2, 1) 1300ms both;
+}
+@keyframes intro-drift {
+  from {
+    transform: rotateX(1.6deg) rotateY(-2.4deg);
+  }
+  to {
+    transform: rotateX(-1.2deg) rotateY(2.4deg);
+  }
+}
+
 /* Autopilot cursor click ripple */
 @keyframes ap-ripple {
   from {
