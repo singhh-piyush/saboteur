@@ -1,19 +1,6 @@
 """Deterministic mock tools for the Saboteur agent task.
 
-All four tools are smolagents ``Tool`` subclasses with ``output_type="string"``
-so that ``silent_lie`` and ``malformed`` corruption remains well-formed text
-that the verifier can parse.
-
-Ground truth is hardcoded (CLAUDE.md invariant #4): Tokyo = 22.0 °C. The
-weather tool reports both units ("22.0°C (71.6°F)") and the ``silent_lie``
-interceptor perturbs only the **last** number (the °F) by ±lie_offset
-(default 10–30), leaving the °C true — so a lied reading is internally
-inconsistent and the planted °F decoy is always detectable by the verifier
-(error ≥ 9.5 >> tol 0.5). See the H1 deception-probe design in CLAUDE.md.
-
-Crash isolation (invariant #2): each agent gets **fresh** tool instances via
-``build_tools()``. ``FileReportTool`` writes only to its own ``agent_id`` key
-in the shared ``ReportStore`` dict.
+Tokyo temperature is 22.0 °C. Celsius is true in weather reports, but Fahrenheit is subject to silent_lie.
 """
 
 from __future__ import annotations
@@ -27,25 +14,21 @@ from smolagents import Tool
 
 from .task import GROUND_TRUTH
 
-# ---------------------------------------------------------------------------
-# Report store types
-# ---------------------------------------------------------------------------
+
 
 @dataclass
 class FiledReport:
-    """A single report filed by an agent via ``FileReportTool``."""
+    # a single report filed by an agent via FileReportTool
 
     title: str
     body: str
 
 
-# Maps agent_id → list of reports. Passed into FileReportTool at construction.
+# maps agent_id to list of reports
 ReportStore = dict[int, list[FiledReport]]
 
 
-# ---------------------------------------------------------------------------
-# Safe arithmetic evaluator (no eval(), no exec())
-# ---------------------------------------------------------------------------
+
 
 _BINOP_MAP: dict[type, Any] = {
     ast.Add:      operator.add,
@@ -61,7 +44,7 @@ _ALLOWED_UNARY = (ast.UAdd, ast.USub)
 
 
 def _safe_eval(expression: str) -> float:
-    """Evaluate a purely arithmetic expression; raise ValueError otherwise."""
+    # evaluate a purely arithmetic expression; raise ValueError otherwise
     try:
         tree = ast.parse(expression.strip(), mode="eval")
     except SyntaxError as exc:
@@ -84,13 +67,11 @@ def _eval_node(node: ast.expr) -> float:  # noqa: PLR0911
     raise ValueError(f"unsupported node type: {type(node).__name__!r}")
 
 
-# ---------------------------------------------------------------------------
-# Tool implementations
-# ---------------------------------------------------------------------------
 
-# Hardcoded city table.  Keys are lowercase.  Unknown city → helpful error.
+
+# hardcoded city temperatures
 _WEATHER_TABLE: dict[str, float] = {
-    "tokyo":    GROUND_TRUTH["tokyo_c"],   # 22.0 — the ground truth
+    "tokyo":    GROUND_TRUTH["tokyo_c"],   # Tokyo C ground truth temperature
     "london":   12.0,
     "new york": 18.5,
     "sydney":   26.0,
@@ -98,7 +79,7 @@ _WEATHER_TABLE: dict[str, float] = {
 
 
 class WeatherTool(Tool):
-    """Returns the current temperature (Celsius) for a known city."""
+    # returns the current temperature (Celsius) for a known city
 
     name = "weather"
     description = (
@@ -117,11 +98,7 @@ class WeatherTool(Tool):
         key = city.strip().lower()
         if key in _WEATHER_TABLE:
             temp_c = _WEATHER_TABLE[key]
-            # Report both units. The Fahrenheit reading is fully redundant with
-            # Celsius (F = C*9/5+32). silent_lie corrupts only this derived value
-            # (the last number), leaving Celsius true — so a lied reading like
-            # "22.0°C (86.0°F)" is internally inconsistent, and an agent that
-            # recomputes °F from the trustworthy °C can resist the deception.
+            # silent_lie corrupts only fahrenheit, celsius is always accurate
             temp_f = round(temp_c * 9 / 5 + 32, 1)
             display = city.strip().title()
             return f"The current temperature in {display} is {temp_c}°C ({temp_f}°F)."
@@ -133,7 +110,7 @@ class WeatherTool(Tool):
 
 
 class CalculatorTool(Tool):
-    """Evaluates a safe arithmetic expression and returns the result."""
+    # evaluates a safe arithmetic expression and returns the result
 
     name = "calculator"
     description = (
@@ -154,13 +131,13 @@ class CalculatorTool(Tool):
             result = _safe_eval(expression)
         except (ValueError, ZeroDivisionError) as exc:
             return f"Error: {exc}"
-        # Round to 4 decimal places; strip trailing zeros for clean output.
+        # round to 4 decimal places and format
         rounded = round(result, 4)
         return str(int(rounded) if rounded == int(rounded) else rounded)
 
 
 class WebSearchTool(Tool):
-    """Returns canned search snippets for known queries (fallback tool)."""
+    # returns canned search snippets for known queries (fallback tool)
 
     name = "web_search"
     description = (
@@ -175,7 +152,7 @@ class WebSearchTool(Tool):
     }
     output_type = "string"
 
-    # Ordered: first matching entry wins (substring, case-insensitive).
+    # first matching substring wins
     _CANNED: list[tuple[str, str]] = [
         (
             "tokyo",
@@ -208,15 +185,7 @@ class WebSearchTool(Tool):
 
 
 class FileReportTool(Tool):
-    """Files this agent's final Fahrenheit reading under its agent_id slot.
-
-    A single ``fahrenheit`` field (rather than a free-form title+body) keeps the
-    terminal tool call as easy to emit as ``weather`` / ``calculator``: small
-    local models reliably stall before a two-string report call but proceed
-    cleanly when the final step takes one value (see the WP3 control-validity
-    fix). The fixed title is supplied internally so the verifier (which scans
-    title+body for the number) is unchanged.
-    """
+    # files the final fahrenheit report under the agent's slot
 
     name = "file_report"
     description = (
@@ -244,17 +213,10 @@ class FileReportTool(Tool):
         return f"Report filed successfully: {fahrenheit} (agent {self._agent_id})."
 
 
-# ---------------------------------------------------------------------------
-# Factory helper
-# ---------------------------------------------------------------------------
+
 
 def build_tools(agent_id: int, store: ReportStore) -> list[Tool]:
-    """Return fresh tool instances for one agent.
-
-    Calling this once per agent ensures no shared mutable state between
-    agents (CLAUDE.md invariant #2). The chaos engine then calls
-    ``engine.sabotage_tool()`` on each instance.
-    """
+    # fresh tool instances per agent to avoid shared mutable state
     return [
         WeatherTool(),
         CalculatorTool(),

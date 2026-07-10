@@ -1,23 +1,6 @@
-"""The 8 fault interceptors, composable at three layers.
+"""Fault interceptors composable at three layers.
 
-Each interceptor instance belongs to exactly one :class:`ChaosEngine`
-(one engine per agent), so all sticky state (vanished tools, rate-limit
-windows) is per-agent by construction — no shared mutable state
-(invariant #2) and no locks needed (an agent's tool calls are
-sequential).
-
-Interceptor kinds, applied by the engine in this order per tool call:
-
-- ``latency``    — sleep before the call (transport; composes with the rest)
-- ``raising``    — raise instead of calling the tool; first fired wins
-- ``corrupting`` — mutate the real tool's output; first fired wins
-
-Sleeps are synchronous ``time.sleep``: smolagents tools are sync and
-each agent loop runs under ``asyncio.to_thread``, so a blocking sleep
-stalls only that agent's worker thread, never the event loop.
-
-``context_drop`` is not a tool wrapper — it is a hook called between
-agent steps that trims the tail of ``agent.memory.steps``.
+Implements the 8 fault interceptors for tool, transport, and context layers.
 """
 
 from __future__ import annotations
@@ -46,7 +29,7 @@ _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 class Interceptor:
-    """Base for tool- and transport-layer interceptors."""
+    # base for tool- and transport-layer interceptors
 
     kind: str  # "latency" | "raising" | "corrupting"
     fault: FaultType
@@ -59,12 +42,7 @@ class Interceptor:
         return self.spec.target_tools is None or tool_name in self.spec.target_tools
 
     def decide(self, tool_name: str) -> bool:
-        """Draw this call's fire/no-fire decision (exactly one RNG draw).
-
-        The engine calls this for every applicable interceptor on every
-        call, in profile order, regardless of which fault ends up
-        winning — a fixed draw order keeps the sequence deterministic.
-        """
+        # draw this call's fire decision (exactly one RNG draw)
         return self.rng.should_fire(self.spec.probability)
 
 
@@ -73,11 +51,7 @@ class ApiErrorInterceptor(Interceptor):
     fault = FaultType.API_ERROR
 
     def draw_status(self, emit: EmitFn) -> int:
-        """Draw the 5xx status, emit the fault, and return it (no raise).
-
-        Shared by the tool path (``inject``) and the wire proxy, so both draw
-        the status identically — same RNG sequence ⇒ same fault (invariant #1).
-        """
+        # draw the status, emit the fault, and return it
         status = self.rng.choice(self.spec.status_codes)
         emit(self.fault, {"status_code": status})
         return status
@@ -87,13 +61,7 @@ class ApiErrorInterceptor(Interceptor):
 
 
 class RateLimitInterceptor(Interceptor):
-    """429s on probability or when the rolling call budget is exhausted.
-
-    The budget is a per-tool window over the *call sequence* (the last
-    ``window_calls`` calls may contain at most ``burst_budget``
-    non-limited calls) — call-count based, never wall-clock based, so it
-    stays deterministic under invariant #1.
-    """
+    # rate limit interceptor using call-count budget
 
     kind = "raising"
     fault = FaultType.RATE_LIMIT
@@ -114,7 +82,7 @@ class RateLimitInterceptor(Interceptor):
         return limited
 
     def draw_retry_after(self, emit: EmitFn) -> float:
-        """Draw the Retry-After hint, emit the fault, and return it (no raise)."""
+        # draw the Retry-After hint, emit the fault, and return it (no raise)
         # Profile validation guarantees retry_after_s is set for rate_limit.
         assert self.spec.retry_after_s is not None
         retry_after = round(self.rng.uniform(*self.spec.retry_after_s), 1)
@@ -126,7 +94,7 @@ class RateLimitInterceptor(Interceptor):
 
 
 class ToolVanishInterceptor(Interceptor):
-    """Once triggered, the tool is gone for the remainder of the run."""
+    # once triggered, the tool is gone for the remainder of the run
 
     kind = "raising"
     fault = FaultType.TOOL_VANISH
@@ -139,11 +107,7 @@ class ToolVanishInterceptor(Interceptor):
         return tool_name in self._vanished
 
     def vanish(self, tool_name: str, emit: EmitFn) -> None:
-        """Mark a tool gone for the rest of the session + emit (no raise).
-
-        Shared by the tool path (``inject``, which then raises) and the wire
-        proxy (which strips the tool from the request's ``tools`` array).
-        """
+        # mark a tool vanished for this session
         self._vanished.add(tool_name)
         emit(self.fault, {"sticky": False})
 
@@ -157,13 +121,7 @@ class TimeoutInterceptor(Interceptor):
     fault = FaultType.TIMEOUT
 
     def draw_deadline(self, emit: EmitFn) -> float:
-        """Emit the fault and return the deadline (no sleep, no raise).
-
-        The wire proxy awaits the sleep asynchronously, then returns a 504;
-        the tool path sleeps synchronously, then raises. Both consume zero
-        RNG draws here (the deadline is a fixed profile param), so the draw
-        sequence is unaffected (invariant #1).
-        """
+        # emit the fault and return the deadline
         # Profile validation guarantees timeout_after_s is set for timeout.
         deadline = self.spec.timeout_after_s
         assert deadline is not None
@@ -181,12 +139,7 @@ class LatencyInterceptor(Interceptor):
     fault = FaultType.LATENCY
 
     def draw_delay(self, emit: EmitFn) -> float:
-        """Draw the delay, emit the fault, and return it (no sleep).
-
-        The wire proxy awaits the sleep asynchronously; the tool path
-        (``apply``) sleeps synchronously. The single ``uniform`` draw is shared,
-        so both paths see the same RNG sequence (invariant #1).
-        """
+        # draw delay, emit fault, and return it
         # Profile validation guarantees delay_s is set for latency.
         assert self.spec.delay_s is not None
         delay = round(self.rng.uniform(*self.spec.delay_s), 3)
@@ -198,7 +151,7 @@ class LatencyInterceptor(Interceptor):
 
 
 class MalformedInterceptor(Interceptor):
-    """Truncates the tool's output into broken JSON / garbage text."""
+    # truncates the tool's output into broken JSON / garbage text
 
     kind = "corrupting"
     fault = FaultType.MALFORMED
@@ -211,18 +164,7 @@ class MalformedInterceptor(Interceptor):
 
 
 class SilentLieInterceptor(Interceptor):
-    """Perturbs numeric values so the output is wrong but well-formed.
-
-    Rule: a bare numeric result is multiplied by ``lie_factor``
-    (calculator-style). In text/JSON only the **last** number gets a ±
-    ``lie_offset`` shift; any earlier numbers are left untouched. For a
-    multi-unit reading like ``"22.0°C (71.6°F)"`` this lies about the derived
-    value (°F) while keeping the primary (°C) true, so the reading becomes
-    internally inconsistent — a reasoning agent that recomputes from the
-    untouched value can detect and resist the lie. For a single-number string
-    the last number *is* the only number, so it is simply shifted. The event
-    detail carries original and lied values so the verifier can prove the lie.
-    """
+    # perturbs numeric values so the output is wrong but well-formed
 
     kind = "corrupting"
     fault = FaultType.SILENT_LIE
@@ -256,8 +198,7 @@ class SilentLieInterceptor(Interceptor):
         return int(round(lied)) if isinstance(value, int) else round(lied, 1)
 
     def _lie_in_text(self, text: str) -> str:
-        # Corrupt only the LAST number, leaving any earlier numbers intact, so a
-        # two-unit reading becomes internally inconsistent (see class docstring).
+        # silent_lie corrupts only the last number in a multi-unit temperature reading so the agent can detect the inconsistency
         matches = list(_NUMBER_RE.finditer(text))
         if not matches:
             return text
@@ -270,12 +211,7 @@ class SilentLieInterceptor(Interceptor):
 
 
 class ContextDropInterceptor:
-    """Deletes the last K steps from a smolagents agent's memory.
-
-    Coded defensively against smolagents internals changing: any missing
-    attribute or unexpected shape makes this a silent no-op. The task
-    step itself (``TaskStep``) is never deleted.
-    """
+    # deletes the last K steps from an agent's memory
 
     fault = FaultType.CONTEXT_DROP
 
@@ -316,8 +252,7 @@ def _task_step_type() -> type | None:
 
 
 def _is_task_step(step: Any) -> bool:
-    # Name check first so this works even if smolagents moves the class;
-    # isinstance covers subclasses with different names.
+    # name check first to be compatible with other versions
     if type(step).__name__ == "TaskStep":
         return True
     task_step = _task_step_type()
@@ -338,15 +273,7 @@ INTERCEPTOR_TYPES: dict[FaultType, type[Interceptor]] = {
 def build_interceptors(
     profile: ChaosProfile, rng: ChaosRandom
 ) -> tuple[list[Interceptor], list[ContextDropInterceptor]]:
-    """Construct a profile's interceptors against one seeded RNG, in profile order.
-
-    Shared by :class:`~saboteur.chaos.engine.ChaosEngine` (the tool path) and the
-    wire proxy (``saboteur.proxy``) so both build the exact same interceptor set
-    from a profile — the only thing the two surfaces do differently is *act* on
-    the decisions (raise/sleep vs. an HTTP response). Returns the tool-layer
-    interceptors and the context-layer interceptors separately; ``context_drop``
-    is not a per-call wrapper (it runs between turns / requests).
-    """
+    # construct a profile's interceptors in profile order
     tool_interceptors: list[Interceptor] = []
     context_interceptors: list[ContextDropInterceptor] = []
     for spec in profile.faults:

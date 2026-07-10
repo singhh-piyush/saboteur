@@ -1,5 +1,4 @@
-"""Chaos engine: deterministic fault injection for agent tool calls,
-transport, and context. See CLAUDE.md invariants #1 and #2."""
+# chaos engine: deterministic fault injection for agent tool calls, transport, and context
 
 from .engine import ChaosEngine
 from .events import (

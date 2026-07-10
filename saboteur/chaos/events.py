@@ -1,6 +1,6 @@
 """Fault taxonomy, fault events, and simulated-failure exceptions.
 
-The 8 fault types live on 3 layers (CLAUDE.md fault taxonomy):
+The 8 fault types live on 3 layers (fault taxonomy):
 
 - tool:      api_error, rate_limit, malformed, silent_lie, tool_vanish
 - transport: latency, timeout
@@ -20,7 +20,7 @@ from typing import Any
 
 
 class FaultType(enum.StrEnum):
-    """The 8 fault types Saboteur can inject."""
+    # the 8 fault types saboteur can inject
 
     API_ERROR = "api_error"
     RATE_LIMIT = "rate_limit"
@@ -64,11 +64,12 @@ class FaultEvent:
 
 
 class ChaosFault(Exception):
-    """Base class for every exception the chaos engine injects."""
+    # base class for every exception the chaos engine injects
+    pass
 
 
 class SimulatedAPIError(ChaosFault):
-    """Simulated upstream HTTP 5xx from a tool's backing service."""
+    # simulated upstream HTTP 5xx from a tool's backing service
 
     def __init__(self, status_code: int) -> None:
         self.status_code = status_code
@@ -76,7 +77,7 @@ class SimulatedAPIError(ChaosFault):
 
 
 class SimulatedRateLimit(ChaosFault):
-    """Simulated HTTP 429 with a Retry-After hint."""
+    # simulated HTTP 429 with a Retry-After hint
 
     def __init__(self, retry_after_s: float) -> None:
         self.retry_after_s = retry_after_s
@@ -86,7 +87,7 @@ class SimulatedRateLimit(ChaosFault):
 
 
 class ToolVanishedError(ChaosFault):
-    """The tool no longer exists (sticky for the remainder of the run)."""
+    # the tool no longer exists (sticky for the remainder of the run)
 
     def __init__(self, tool_name: str) -> None:
         self.tool_name = tool_name
@@ -94,7 +95,7 @@ class ToolVanishedError(ChaosFault):
 
 
 class SimulatedTimeout(ChaosFault, TimeoutError):
-    """The tool call exceeded its deadline; the tool never ran."""
+    # the tool call exceeded its deadline; the tool never ran
 
     def __init__(self, timeout_after_s: float) -> None:
         self.timeout_after_s = timeout_after_s

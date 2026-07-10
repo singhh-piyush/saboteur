@@ -1,19 +1,4 @@
-"""Chaos profile schema and YAML loader.
-
-A profile is a named, seeded list of fault specs (see ``profiles/*.yaml``)::
-
-    name: rate_limit_storm
-    seed: 1337
-    description: "..."
-    faults:
-      - type: rate_limit
-        probability: 0.45
-        target_tools: [web_search, calculator]
-        retry_after_s: [2, 8]
-
-Validation errors from :func:`load_profile` name the file and the
-offending field.
-"""
+# chaos profile schema and yaml loader
 
 from __future__ import annotations
 
@@ -26,7 +11,7 @@ from .events import FaultType
 
 Range = tuple[float, float]
 
-# Fields that must be present for a given fault type.
+# required fields per fault type
 _REQUIRED_PARAMS: dict[FaultType, tuple[str, ...]] = {
     FaultType.RATE_LIMIT: ("retry_after_s",),
     FaultType.LATENCY: ("delay_s",),
@@ -34,11 +19,7 @@ _REQUIRED_PARAMS: dict[FaultType, tuple[str, ...]] = {
     FaultType.CONTEXT_DROP: ("drop_last_k",),
 }
 
-# The FaultSpec params that are *relevant* to each fault type (a superset of
-# _REQUIRED_PARAMS — includes the optional knobs). The single source of truth
-# for the /faults catalog and the dashboard's Profile Builder, so the editable
-# fields can never drift from the schema. ``probability`` and ``target_tools``
-# are common to every fault and intentionally omitted here.
+# relevant params per fault type for validation and profile building
 FAULT_PARAMS: dict[FaultType, tuple[str, ...]] = {
     FaultType.API_ERROR: ("status_codes",),
     FaultType.RATE_LIMIT: ("retry_after_s", "burst_budget", "window_calls"),
@@ -52,19 +33,17 @@ FAULT_PARAMS: dict[FaultType, tuple[str, ...]] = {
 
 
 class FaultSpec(BaseModel):
-    """One fault entry in a chaos profile."""
+    # one fault entry in a chaos profile
 
     model_config = ConfigDict(extra="forbid")
 
     type: FaultType
     probability: float = Field(ge=0.0, le=1.0)
-    target_tools: list[str] | None = None  # None = applies to every tool
+    target_tools: list[str] | None = None  # None applies to all tools
 
     # --- rate_limit ---
     retry_after_s: Range | None = None
-    # Rolling budget: at most burst_budget calls pass per window of
-    # window_calls consecutive calls. Call-count based, never time-based
-    # (invariant #1). Must be set together.
+    # burst budget limits calls per window of consecutive calls
     burst_budget: int | None = Field(default=None, ge=1)
     window_calls: int | None = Field(default=None, ge=1)
 
@@ -79,8 +58,8 @@ class FaultSpec(BaseModel):
     status_codes: tuple[int, ...] = (500, 503)
 
     # --- silent_lie ---
-    lie_offset: Range = (10.0, 30.0)  # additive, temperature-style
-    lie_factor: Range = (1.5, 3.0)  # multiplicative, calculator-style
+    lie_offset: Range = (10.0, 30.0)  # additive temperature offset
+    lie_factor: Range = (1.5, 3.0)  # multiplicative calculator factor
 
     @model_validator(mode="after")
     def _check_params(self) -> "FaultSpec":
@@ -105,7 +84,7 @@ class FaultSpec(BaseModel):
 
 
 class ChaosProfile(BaseModel):
-    """A named, seeded chaos profile."""
+    # a named, seeded chaos profile
 
     model_config = ConfigDict(extra="forbid")
 

@@ -1,22 +1,6 @@
-"""Target abstraction + registry — *what* a cohort runs.
+"""Target abstraction and registry.
 
-A **Target** is one runnable agent under test:
-
-- ``reference`` — Saboteur's own smolagents ``ToolCallingAgent`` (the
-  batteries-included default; faults injected at the tool-call boundary).
-- ``command`` — a BYO agent we don't own, launched as a subprocess whose
-  ``OPENAI_BASE_URL`` points at the wire proxy (faults injected on the wire).
-
-Targets are persisted in the ``targets`` table of the SQLite index
-(:mod:`saboteur.storage.db`). The reference target is built-in: always present,
-never stored, never deletable. (The registry was a JSON file in PWP3; it now
-lives in the DB — the one piece of DB state that is authoritative rather than a
-rebuildable cache.)
-
-A command target may carry an optional :class:`OracleConfig` describing how to
-judge success (reusing the pluggable :mod:`saboteur.agents.oracle` classes —
-never an LLM judge, invariant #4). ``build_oracle`` maps the config to an
-:class:`~saboteur.agents.oracle.Oracle` (or ``None`` for behavioral-only runs).
+Defines target kinds (reference vs. command) and manages target storage in the DB.
 """
 
 from __future__ import annotations
@@ -39,22 +23,18 @@ _NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class OracleConfig(BaseModel):
-    """How to judge a BYO command target's success (optional).
-
-    ``kind == "none"`` → behavioral tier only (survival stays ``null`` +
-    ``no_oracle``). The other kinds map to the existing oracle classes.
-    """
+    # how to judge a BYO command target's success (optional)
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["none", "regex", "command", "http"] = "none"
-    pattern: str | None = None  # regex: matched against the agent's final output
-    command: str | None = None  # assertion command: exit 0 == success
-    url: str | None = None  # http callback: POST trace → {"success": bool}
+    pattern: str | None = None  # regex matched against final output
+    command: str | None = None  # exit code 0 is success
+    url: str | None = None  # http callback post trace returning success
 
 
 class Target(BaseModel):
-    """One runnable agent under test (the reference agent or a BYO command)."""
+    # one runnable agent under test (the reference agent or a BYO command)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -66,7 +46,7 @@ class Target(BaseModel):
     oracle: OracleConfig = OracleConfig()
 
 
-# The built-in default: Saboteur's own smolagents agent. Never stored on disk.
+# built-in default target
 REFERENCE_TARGET = Target(name="reference", kind="reference")
 
 
@@ -94,28 +74,22 @@ def build_oracle(cfg: OracleConfig) -> Oracle | None:
 
 
 class TargetExistsError(ValueError):
-    """Raised by :meth:`TargetStore.add` when the name is already taken."""
+    # raised by TargetStore.add when the name is already taken
+    pass
 
 
 class TargetNotFoundError(KeyError):
-    """Raised by :meth:`TargetStore.delete` for an unknown / undeletable name."""
+    # raised by TargetStore.delete for an unknown / undeletable name
+    pass
 
 
 class TargetStore:
-    """The ``targets`` table of the SQLite index (reference is implicit).
-
-    A thin facade over :class:`~saboteur.storage.db.Database`: pydantic
-    ``Target`` ⇆ JSON blob. A corrupt stored row is skipped rather than failing
-    the whole list (the reference target is always available).
-
-    ``db`` defaults to the module singleton, so all callers share one table;
-    tests pass a :class:`Database` on a temp path for isolation.
-    """
+    # SQLite targets store manager
 
     def __init__(self, db: Database | None = None) -> None:
         self._db = db if db is not None else _default_db
 
-    # -- reads ----------------------------------------------------------
+
 
     def _stored(self) -> list[Target]:
         targets: list[Target] = []
@@ -127,7 +101,7 @@ class TargetStore:
         return targets
 
     def all(self) -> list[Target]:
-        """All targets, reference first, then stored command targets."""
+        # all targets, reference first, then stored command targets
         return [REFERENCE_TARGET, *self._stored()]
 
     def get(self, name: str) -> Target | None:
@@ -141,10 +115,10 @@ class TargetStore:
         except ValueError:
             return None
 
-    # -- writes ---------------------------------------------------------
+
 
     def _validate(self, target: Target) -> None:
-        """Shared create/update validation (raises ValueError on a bad spec)."""
+        # shared create/update validation (raises ValueError on a bad spec)
         if target.name == REFERENCE_TARGET.name:
             raise TargetExistsError("'reference' is a reserved built-in target")
         if not _NAME_RE.match(target.name):
@@ -158,7 +132,7 @@ class TargetStore:
         build_oracle(target.oracle)  # raises ValueError on a bad oracle config
 
     def add(self, target: Target) -> Target:
-        """Register a command target. Raises on a reserved name or duplicate."""
+        # register a command target; raises on reserved name or duplicate
         self._validate(target)
         if self._db.target_get(target.name) is not None:
             raise TargetExistsError(f"target {target.name!r} already exists")
@@ -181,5 +155,5 @@ class TargetStore:
             raise TargetNotFoundError(name)
 
 
-# Module singleton over the shared DB index; tests pass a temp-path Database.
+
 target_store = TargetStore()

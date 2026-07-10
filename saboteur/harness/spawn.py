@@ -1,21 +1,6 @@
-"""BYO cohort spawner — launch N subprocess agents through the wire proxy.
+"""BYO cohort spawner.
 
-The subprocess analogue of :func:`saboteur.harness.cohort.cohort_run`: same
-shape (a concurrency semaphore + ``gather(return_exceptions=True)`` + a hard
-per-agent wall-clock timeout), but the agent source is an **OS subprocess** and
-telemetry arrives **through the proxy**, not via an in-process ``on_event``.
-
-Each subprocess is a copy of a BYO ``command`` target, pointed at the proxy
-(``OPENAI_BASE_URL=<proxy>/v1``) and attributed to one proxy session via the
-``SABOTEUR_RUN_ID`` / ``SABOTEUR_AGENT_ID`` env vars (the agent forwards them as
-``X-Saboteur-*`` headers — see :mod:`saboteur.proxy.shim` and the bundled
-``examples/byo_min_agent``). As the agent makes chat-completions calls, the proxy
-injects faults and emits the same ``TelemetryEvent`` schema as the reference
-cohort, so the existing grid / scorecard / replay render live with no change.
-
-Invariants: each agent is its own OS process (crash isolation, #2); a timed-out
-process is SIGKILL'd by **process group** (bounded runs, #5); no shared mutable
-state across agents (each owns its env + subprocess + proxy session).
+Launches N subprocess agents through the wire proxy.
 """
 
 from __future__ import annotations
@@ -47,15 +32,7 @@ async def run_byo_cohort(
     agent_timeout_s: float | None = None,
     proxy_base: str | None = None,
 ) -> None:
-    """Run a BYO command target as an ``n_agents`` cohort under *profile*.
-
-    Sets up (or reuses) the proxy run, spawns the subprocesses concurrently,
-    waits for them with a per-agent wall-clock kill, judges the target's oracle
-    (if any) once per agent at completion, and finishes the run (emits terminals
-    + ``run_finished``, scores behavioral tier, persists the scorecard, tears
-    down). ``finish`` runs in a ``finally`` so the run is always scored — even
-    if every spawn failed.
-    """
+    # run a BYO command target as an n_agents cohort under profile
     if target.kind != "command" or not target.cmd:
         raise ValueError("run_byo_cohort requires a 'command' target with a cmd")
 
@@ -70,10 +47,7 @@ async def run_byo_cohort(
     semaphore = asyncio.Semaphore(limit) if limit > 0 else None
 
     run = await manager.create(run_id, profile, n_agents, runs_dir=runs_dir)
-    # The spawner owns this run's lifecycle (it always calls finish() in its
-    # finally, with per-agent terminals). Neutralise the idle watchdog so it
-    # can't auto-finish mid-cohort with terminals=None and drop our outcome
-    # classification — the watchdog exists only for the header-only proxy path.
+    # disable idle watchdog since spawner manages lifecycle
     run.idle_timeout_s = float("inf")
     oracle = build_oracle(target.oracle)
 
@@ -83,7 +57,7 @@ async def run_byo_cohort(
                 return await _spawn_one(run, target, run_id, agent_id, oracle, base, timeout_s)
             async with semaphore:
                 return await _spawn_one(run, target, run_id, agent_id, oracle, base, timeout_s)
-        except Exception as exc:  # never let one agent's failure escape (#2)
+        except Exception as exc:  # prevent single agent failure from escaping
             return AgentTerminal(agent_id, raised=True, detail=repr(exc))
 
     terminals: dict[int, AgentTerminal] = {}
@@ -110,10 +84,8 @@ async def _spawn_one(
     proxy_base: str,
     timeout_s: float,
 ) -> AgentTerminal:
-    """Spawn one subprocess agent, await it (bounded), judge the oracle."""
-    # An initial step_start makes the agent's card appear on the grid the moment
-    # it's launched (Battle-Royale visual); step 0 never collides with the
-    # proxy's real steps (which start at 1) and is ignored by scoring.
+    # spawn one subprocess agent, await it (bounded), judge the oracle
+    # emit step 0 start so agent is visible on the grid immediately
     run.emit_step_start(agent_id, 0)
 
     env = _build_env(target, run_id, agent_id, proxy_base)
@@ -126,7 +98,7 @@ async def _spawn_one(
             env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,  # own process group ⇒ killable as a unit
+            start_new_session=True,  # spawn in a new process group
         )
     except Exception as exc:
         return await _judge(
@@ -160,9 +132,9 @@ async def _spawn_one(
 def _build_env(
     target: Target, run_id: str, agent_id: int, proxy_base: str
 ) -> dict[str, str]:
-    """The subprocess environment: target extras + forced routing/attribution."""
+    # the subprocess environment: target extras + forced routing/attribution
     env = {**os.environ, **target.env}
-    # We own routing + attribution — these always win over target.env.
+    # routing and attribution override target environment variables
     env["OPENAI_BASE_URL"] = f"{proxy_base.rstrip('/')}/v1"
     env["SABOTEUR_RUN_ID"] = run_id
     env["SABOTEUR_AGENT_ID"] = str(agent_id)
@@ -177,19 +149,11 @@ async def _judge(
     oracle: Oracle | None,
     terminal: AgentTerminal,
 ) -> AgentTerminal:
-    """Freeze the oracle's verdict onto the terminal (once, at completion).
-
-    No oracle → ``success`` stays ``None`` (behavioral tier only). A command /
-    http oracle blocks on I/O, so it runs in a worker thread; its own impls
-    never raise into us (invariant #4).
-    """
+    # freeze the oracle's verdict onto the terminal at completion
     if oracle is None:
         return terminal
     if terminal.timed_out:
-        # The process was SIGKILL'd mid-flight — it did not complete the task,
-        # whatever a lenient oracle would say about its partial output. Freeze
-        # a failure instead of judging (the oracle is still recorded so the
-        # timeout counts as a failed verdict, not as "no oracle").
+        # freeze failure on timeout; process did not complete task
         terminal.success = False
         terminal.oracle = oracle.name
         terminal.deception_aware = oracle.deception_aware
@@ -208,7 +172,7 @@ async def _judge(
         }
         for rec in sess.history
     ]
-    # timed_out returned above (frozen failure) — only exit-state outcomes here.
+    # only exit-state outcomes reach here
     outcome = "hard_exception" if terminal.raised else "completed"
     ctx = OracleRunContext(
         agent_id=agent_id,
@@ -228,12 +192,7 @@ async def _judge(
 
 
 def _kill_group(proc: asyncio.subprocess.Process) -> None:
-    """SIGKILL the subprocess's whole process group (POSIX), best-effort.
-
-    ``start_new_session=True`` made the child a group leader, so this reaps any
-    helpers it spawned too. Falls back to killing just the child, and tolerates
-    an already-dead process.
-    """
+    # SIGKILL the subprocess's process group
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
     except (ProcessLookupError, PermissionError, OSError, AttributeError):

@@ -1,43 +1,6 @@
-"""Resilience Scorecard — a pure function over the telemetry event stream.
+"""Resilience Scorecard computation.
 
-``score()`` consumes nothing but two ``list[TelemetryEvent]`` (chaos cohort +
-calm_seas control cohort), so it produces identical results from the live bus
-capture and from ``read_jsonl()`` replay (invariant #3). It is order-
-insensitive across agents: events are grouped by ``agent_id`` and only the
-per-agent order (which JSONL preserves) matters.
-
-Metric definitions (CLAUDE.md scorecard). Two tiers — behavioral metrics are
-always computable from the stream; oracle-gated metrics are ``None`` + a
-``*_reason`` unless a verdict-producing oracle ran.
-
-Behavioral:
-
-- **mttr_steps** — for each ``fault_injected`` at step *s*, the distance to
-  that agent's next *productive* ``recovery_action`` at step *s′ ≥ s* — i.e.
-  one whose kind is neither ``gave_up`` nor ``no_action`` (a stall is not a
-  recovery); mean over recovered faults, ``None`` if no fault recovered.
-- **recovery_breakdown** — counts of ``recovery_action`` events by kind.
-- **waste_factor** — Σ chaos ``tokens_used`` ÷ Σ control ``tokens_used``
-  (``agent_done`` events); ``None`` when the control total is zero.
-- **failure_modes** — histogram of non-``completed`` terminal outcomes;
-  harness-level ``agent_crashed`` (no ``agent_done`` at all) is merged into
-  ``hard_exception``.
-- **crash_rate** — ``hard_exception`` share of the cohort. This is the
-  hard-crash fraction, **not** ``1 − survival_rate`` (it excludes
-  ``infinite_retry`` / ``timeout`` / ``silent_abandonment``).
-- **latency_degradation** — mean chaos ``duration_ms`` ÷ mean control
-  ``duration_ms``; soft/secondary (also reflects batching contention).
-
-Oracle-gated (read the verdict frozen into ``agent_done`` at run completion):
-
-- **survival_rate** — fraction of agents whose frozen ``payload["success"]`` is
-  True. ``None`` + ``"no_oracle"`` when no oracle judged the run.
-- **deception_detection_rate** — among agents shown a lied (internally
-  inconsistent) reading, the fraction that still produced a correct value, but
-  **only** when the oracle is ``deception_aware`` (the reference oracle, where
-  success ⇔ resisting the °F decoy). Otherwise ``None`` with reason
-  ``"no_oracle"`` / ``"deception_requires_reference_oracle"`` /
-  ``"no_deception_probe"``. Pair with the ``liars_den`` profile.
+Scores the telemetry event stream to compute behavioral and oracle-gated metrics.
 """
 
 from __future__ import annotations
@@ -50,26 +13,12 @@ from pydantic import BaseModel, Field
 from saboteur.agents.outcomes import Outcome, RecoveryKind
 from saboteur.telemetry.schema import TelemetryEvent
 
-# Recovery kinds that are not a productive reaction to a fault: a stall
-# (``no_action``) and a give-up. Excluded when computing MTTR.
+# non-productive recovery kinds excluded when computing mttr
 _NON_PRODUCTIVE = {str(RecoveryKind.NO_ACTION), str(RecoveryKind.GAVE_UP)}
 
 
 class Scorecard(BaseModel):
-    """The Resilience Scorecard for one chaos run (JSON-serializable).
-
-    Two tiers (CLAUDE.md invariant #4):
-
-    - **Behavioral** (always computed, no ground truth): ``mttr_steps``,
-      ``recovery_breakdown``, ``waste_factor``, ``failure_modes``,
-      ``crash_rate``, ``latency_degradation``.
-    - **Oracle-gated** (only when a verdict-producing oracle ran):
-      ``survival_rate``, ``deception_detection_rate``. When ungated they are
-      ``None`` with an explicit ``*_reason`` — never a silent 0/1.
-
-    All fields added after the initial release are defaulted so a pre-WP
-    ``runs/*.scorecard.json`` still validates against this model.
-    """
+    # the Resilience Scorecard for one chaos run
 
     run_id: str
     profile: str
@@ -109,8 +58,7 @@ def score(
     per_agent_events = _group_by_agent(events)
     n_agents = _n_agents(events, per_agent_events)
 
-    # success_map: the frozen verdict per agent. ``None`` = no verdict (the
-    # agent crashed before agent_done, or no oracle judged it).
+    # map agent_id to frozen success verdict or None
     success_map: dict[int, bool | None] = {}
     outcomes: dict[int, str] = {}
     per_agent: dict[int, dict[str, Any]] = {}
@@ -153,7 +101,7 @@ def score(
             "recoveries": [e.recovery for e in recoveries if e.recovery],
         }
 
-    # --- behavioral tier (always computable, no ground truth) ---
+
     mttr = sum(mttr_samples) / len(mttr_samples) if mttr_samples else None
 
     chaos_tokens = _total_tokens(events)
@@ -172,7 +120,7 @@ def score(
     )
     latency_degradation = _latency_degradation(events, control_events)
 
-    # --- oracle-gated tier (read frozen verdicts; null + reason otherwise) ---
+
     oracle_present = bool(dones) and any(
         d.payload.get("oracle") is not None or d.payload.get("success") is not None
         for d in dones
@@ -213,14 +161,12 @@ def score(
     )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+
 
 def _group_by_agent(
     events: list[TelemetryEvent],
 ) -> dict[int, list[TelemetryEvent]]:
-    """Group agent events (id ≥ 0) preserving per-agent emission order."""
+    # group agent events by agent_id
     grouped: dict[int, list[TelemetryEvent]] = defaultdict(list)
     for event in events:
         if event.agent_id >= 0:
@@ -232,7 +178,7 @@ def _n_agents(
     events: list[TelemetryEvent],
     per_agent_events: dict[int, list[TelemetryEvent]],
 ) -> int:
-    """Cohort size: run_started's declared n_agents, else distinct agent ids."""
+    # determine cohort size from run_started or distinct agent ids
     for event in events:
         if event.event == "run_started":
             declared = event.payload.get("n_agents")
@@ -253,7 +199,7 @@ def _last(
 def _recovery_distances(
     faults: list[TelemetryEvent], recoveries: list[TelemetryEvent]
 ) -> list[int]:
-    """Steps from each fault to the next productive recovery, if any."""
+    # steps from each fault to the next productive recovery, if any
     productive_steps = sorted(
         e.step
         for e in recoveries
@@ -283,13 +229,7 @@ def _deception(
     lied_to: set[int],
     success_map: dict[int, bool | None],
 ) -> tuple[float | None, str | None]:
-    """Deception-detection rate, gated on a deception-aware oracle.
-
-    Only an oracle whose verdict makes ``success`` equivalent to *resisting* the
-    ``silent_lie`` decoy licenses this metric. A BYO oracle's "succeeded while
-    lied to" is not "caught the lie", so we return ``None`` + a reason rather
-    than a misleading number.
-    """
+    # deception-detection rate, gated on a deception-aware oracle
     if not oracle_present:
         return None, "no_oracle"
     # Absent flag ⇒ True so pre-WP reference runs (no flag) still compute.
@@ -305,12 +245,7 @@ def _deception(
 def _latency_degradation(
     events: list[TelemetryEvent], control_events: list[TelemetryEvent]
 ) -> float | None:
-    """Mean chaos ``duration_ms`` ÷ mean control ``duration_ms``.
-
-    Soft/secondary: at shared-slot N this also reflects batching contention
-    (comparable across the paired cohorts, not isolated injected latency).
-    ``None`` if either cohort recorded no durations.
-    """
+    # compute latency degradation as ratio of mean durations
     chaos = _mean_duration(events)
     control = _mean_duration(control_events)
     if chaos is None or control is None or control == 0:

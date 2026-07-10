@@ -1,23 +1,6 @@
-"""Cohort run — run N identical agents concurrently under one chaos profile.
+"""Cohort run orchestration.
 
-Crash isolation (invariant #2): every agent gets its own factory-built
-``SaboteurAgent`` (own ChaosEngine, own tools, own history); the only shared
-object is the ``ReportStore`` dict, which each agent writes under its own
-``agent_id`` key. Each run is guarded so an unexpected exception becomes an
-``agent_crashed`` telemetry event plus a synthesized ``HARD_EXCEPTION``
-result — never an unhandled error — and ``asyncio.gather`` runs with
-``return_exceptions=True`` as a second belt.
-
-Determinism (invariant #1): per-agent event *content* is fully determined by
-(profile, seed, agent_id) — the engine RNG is seeded per agent. The
-*interleaving* of events across agents in the bus stream is scheduling-
-dependent and therefore not deterministic; scoring is order-insensitive
-across agents (it groups by ``agent_id``).
-
-Bounded wall-clock (invariant #5): each ``SaboteurAgent.run()`` is capped by
-``settings.agent_timeout_s`` and the semaphore admits at most
-``concurrency_limit`` agents at a time, so the whole cohort finishes within
-~ceil(N / limit) × timeout.
+Runs N identical agents concurrently under one chaos profile.
 """
 
 from __future__ import annotations
@@ -38,24 +21,20 @@ from saboteur.telemetry.schema import EventKind, TelemetryEvent
 
 from .instrumentation import make_on_event
 
-# How long to wait for the event collector to drain after run_finished. Only
-# trips if the bus was never bound (emits silently dropped) — a caller bug.
+# drain timeout for event collector to prevent hanging if bus is unbound
 _COLLECTOR_DRAIN_TIMEOUT_S = 10.0
 
 
 class RunnableAgent(Protocol):
-    """What cohort_run needs from an agent: just an async run()."""
+    # what cohort_run needs from an agent: just an async run()
 
     async def run(self) -> AgentRunResult: ...
 
 
 class AgentFactory(Protocol):
-    """Factory seam: production is :func:`build_agent`; tests inject a FakeAgent.
+    """Factory seam for producing runnable agents.
 
-    Declared as a Protocol (not a bare ``Callable``) so the **keyword-only**
-    ``oracle`` argument is part of the type — ``runner.orchestrate`` binds it via
-    ``functools.partial(agent_factory, oracle=…)`` and that must type-check
-    (otherwise the oracle seam drifts silently — the WP2/PWP1 interface-drift bug).
+    Declared as a Protocol to ensure oracle argument type-checking.
     """
 
     def __call__(
@@ -71,7 +50,7 @@ class AgentFactory(Protocol):
 
 @dataclass
 class RunReport:
-    """Everything one cohort produced: per-agent results + the event stream."""
+    # everything one cohort produced: per-agent results + the event stream
 
     run_id: str
     profile_name: str
@@ -79,8 +58,7 @@ class RunReport:
     n_agents: int
     results: list[AgentRunResult] = field(default_factory=list)
     events: list[TelemetryEvent] = field(default_factory=list)
-    # True when the cohort was externally cancelled (STOP RUN / shutdown):
-    # events hold whatever the agents emitted up to the stop, results is empty.
+    # true if the run was cancelled externally
     cancelled: bool = False
 
 
@@ -118,11 +96,7 @@ async def cohort_run(
     store: ReportStore = {}
     base_on_event = make_on_event(bus, run_id)
 
-    # Which agents have emitted their terminal. Tracked here (not scraped from
-    # the collected events, which lag the loop) so a cancelled cohort can
-    # synthesize terminals for agents that never got to emit one — e.g. an
-    # agent still waiting on the semaphore when STOP landed (invariant #2:
-    # every agent id gets exactly one terminal, the grid can never freeze).
+    # track agents that emitted terminal to synthesize missing ones on cancellation
     seen_terminal: set[int] = set()
 
     def on_event(event: AgentEvent) -> None:
@@ -130,9 +104,7 @@ async def cohort_run(
             seen_terminal.add(event.agent_id)
         base_on_event(event)
 
-    # Collect this run's events from our own subscription, started before
-    # run_started is emitted so the report misses nothing. The collector
-    # stops itself at run_finished (the bus stays open for other subscribers).
+    # subscription starts before run_started to capture all events
     events: list[TelemetryEvent] = []
     subscribed = asyncio.Event()
 
@@ -147,8 +119,7 @@ async def cohort_run(
                     if event.event == "run_finished":
                         return
                 except Exception:
-                    # A malformed event must never tear down the run (#2). Keep
-                    # draining; the worst case is one dropped collected event.
+                    # ignore malformed events to prevent run teardown
                     continue
 
     collector = asyncio.create_task(_collect())
@@ -183,19 +154,12 @@ async def cohort_run(
                 *(_run_one(i) for i in range(n_agents)), return_exceptions=True
             )
         except asyncio.CancelledError:
-            # External stop (STOP RUN / shutdown). gather has already waited
-            # for every child to finish unwinding, so each agent's terminal
-            # (emitted in SaboteurAgent.run's CancelledError arm) is on the
-            # bus. Swallow the cancellation and finish gracefully — emit
-            # run_finished and return a partial report so the caller can
-            # still score and persist what happened (invariants #2/#3).
+            # handle external cancellation and return partial report for scoring
             cancelled = True
             raw = []
 
         if cancelled:
-            # Belt for agents that never reached SaboteurAgent.run's own
-            # CancelledError arm (e.g. still queued on the semaphore): emit a
-            # synthesized terminal so score() and the grid see every agent.
+            # synthesize terminal for agents that did not start before cancellation
             for agent_id in range(n_agents):
                 if agent_id in seen_terminal:
                     continue
@@ -216,8 +180,7 @@ async def cohort_run(
                     )
                 )
 
-        # _run_one already converts exceptions; this handles anything that
-        # slipped past it (e.g. CancelledError-adjacent edge cases).
+        # handle any exceptions that escaped _run_one
         results = [
             r if isinstance(r, AgentRunResult) else _crashed(bus, run_id, i, r)
             for i, r in enumerate(raw)
@@ -232,16 +195,13 @@ async def cohort_run(
         try:
             await asyncio.wait_for(collector, timeout=_COLLECTOR_DRAIN_TIMEOUT_S)
         except asyncio.TimeoutError:
-            # Bus never delivered run_finished (unbound bus?) — keep what we
-            # have rather than hanging the run.
+            # keep partial events if run_finished is never received
             collector.cancel()
         except asyncio.CancelledError:
-            # A second STOP landed during the drain — keep what we have; the
-            # JSONL writer (flushed per event) already has everything.
+            # ignore cancellation during drain
             collector.cancel()
         except Exception:
-            # The collector should never raise (its body is guarded), but if it
-            # somehow does, that must not escape the run (#2): keep what we have.
+            # ignore collector exceptions
             collector.cancel()
     finally:
         if not collector.done():
@@ -259,7 +219,7 @@ async def cohort_run(
 
 
 def _run_event(run_id: str, kind: EventKind, payload: dict) -> TelemetryEvent:
-    """A run-lifecycle event; agent_id -1 means 'the run itself'."""
+    # a run-lifecycle event; agent_id -1 is the run itself
     return TelemetryEvent(
         run_id=run_id, agent_id=-1, step=None, event=kind, payload=payload
     )
@@ -268,7 +228,7 @@ def _run_event(run_id: str, kind: EventKind, payload: dict) -> TelemetryEvent:
 def _crashed(
     bus: TelemetryBus, run_id: str, agent_id: int, exc: BaseException
 ) -> AgentRunResult:
-    """Convert an escaped exception into telemetry + a synthesized result."""
+    # convert an escaped exception into telemetry + a synthesized result
     bus.emit(
         TelemetryEvent(
             run_id=run_id,

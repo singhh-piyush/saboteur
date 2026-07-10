@@ -1,12 +1,9 @@
 """Canonical task definition and ground truth for the Saboteur demo.
 
-Every agent receives the same ``TASK_PROMPT``. Success is measured against
-``GROUND_TRUTH`` by the programmatic verifier (CLAUDE.md invariant #4 —
-no LLM judge, ever).
+Success is measured against GROUND_TRUTH by the programmatic verifier.
 """
 
-# Single source of truth.  Import this from verifier.py and tools.py so
-# there is zero risk of the two diverging.
+# single source of truth for verification and tools
 GROUND_TRUTH: dict[str, float] = {
     "tokyo_c": 22.0,
     "tokyo_f": 71.6,

@@ -1,26 +1,12 @@
-"""Pluggable success oracles (CLAUDE.md invariant #4 — never an LLM judge).
+"""Pluggable success oracles.
 
-An :class:`Oracle` decides whether one agent run succeeded. It is consulted
-**once, at run completion** (see :mod:`saboteur.agents.factory`); its verdict is
-frozen into the ``agent_done`` telemetry event. Scoring then reads the frozen
-verdict and never re-judges — so re-scoring a JSONL log is byte-stable even for
-oracles with side effects (shell command, HTTP), preserving invariant #3.
-
-This module is **pure of smolagents**: it imports only stdlib + pydantic, so the
-behavioral scoring path that touches it stays model-free. The reference scenario
-uses :class:`BuiltinReferenceOracle`, which merely surfaces the
-``verify()``-computed verdict the shell already placed on the context — so the
-reference scorecard is numerically identical to the pre-oracle behavior.
+An Oracle decides whether an agent run succeeded. It is consulted once at run completion, and the verdict is frozen into telemetry.
 
 Four implementations:
-
-- :class:`BuiltinReferenceOracle` — the deterministic ground-truth verifier's
-  verdict (the regression anchor). The only ``deception_aware`` oracle.
-- :class:`RegexOracle` — a user regex over the agent's final output.
-- :class:`AssertionCommandOracle` — a user shell command; exit 0 = success.
-- :class:`HttpCallbackOracle` — POST the trace to a user URL; ``{"success": bool}``.
-
-None of these is an LLM judge.
+- BuiltinReferenceOracle: deterministic ground-truth verifier verdict (the regression anchor)
+- RegexOracle: user regex over the agent's final output
+- AssertionCommandOracle: user shell command (exit 0 is success)
+- HttpCallbackOracle: POST the trace to a user URL
 """
 
 from __future__ import annotations
@@ -37,7 +23,7 @@ from pydantic import BaseModel
 
 
 class OracleVerdict(BaseModel):
-    """One oracle's success ruling for one agent run."""
+    # one oracle's success ruling for one agent run
 
     success: bool
     detail: str
@@ -46,14 +32,7 @@ class OracleVerdict(BaseModel):
 
 
 class OracleRunContext(BaseModel):
-    """The per-agent projection an oracle judges, built at run completion.
-
-    Everything here is plain data (no smolagents): the shell fills it from the
-    finished run. ``reference_success`` carries the deterministic verifier's
-    verdict for :class:`BuiltinReferenceOracle`; it defaults to ``None`` so a
-    BYO oracle never trips on a missing reference. ``trace`` is a lightweight
-    list of per-step records (dicts) for the assertion/HTTP oracles.
-    """
+    # data object containing agent run results to be judged by an oracle
 
     agent_id: int
     final_output: str | None = None
@@ -69,12 +48,9 @@ class OracleRunContext(BaseModel):
 
 @runtime_checkable
 class Oracle(Protocol):
-    """A success oracle. ``judge`` must be total — never raise into scoring.
+    """A success oracle. judge must never raise into scoring.
 
-    ``deception_aware`` marks oracles whose verdict construction makes
-    ``success`` equivalent to *resisting* a ``silent_lie`` decoy. Only such
-    oracles license the ``deception_detection_rate`` metric; others leave it
-    ``null`` (a BYO success while lied to is not "caught the lie").
+    deception_aware marks oracles where success requires resisting a silent_lie decoy.
     """
 
     name: str
@@ -84,12 +60,7 @@ class Oracle(Protocol):
 
 
 class BuiltinReferenceOracle:
-    """Surface the deterministic ground-truth verifier's verdict.
-
-    The shell runs ``verify()`` and places its boolean on
-    ``ctx.reference_success``; this oracle just reports it. It is the regression
-    anchor: the reference scorecard is identical to the pre-oracle behavior.
-    """
+    # surfaces the deterministic ground-truth verifier verdict
 
     name = "builtin_reference"
     deception_aware = True
@@ -106,7 +77,7 @@ class BuiltinReferenceOracle:
 
 
 class RegexOracle:
-    """Success iff ``pattern`` matches anywhere in the agent's final output."""
+    # success iff pattern matches anywhere in the agent's final output
 
     name = "regex"
     deception_aware = False
@@ -129,13 +100,7 @@ class RegexOracle:
 
 
 class AssertionCommandOracle:
-    """Run a user shell command; exit code 0 = success.
-
-    The agent's final output is piped on **stdin**. The environment carries
-    ``SABOTEUR_AGENT_ID``, ``SABOTEUR_OUTCOME``, and ``SABOTEUR_TRACE`` (path to
-    a temp JSON file of ``ctx.trace``). ``shell=True`` is acceptable for this
-    local single-user tool.
-    """
+    # runs a shell command (exit 0 = success) with final output on stdin
 
     name = "assertion_command"
     deception_aware = False
@@ -179,7 +144,7 @@ class AssertionCommandOracle:
                 success=False,
                 detail=f"command timed out after {self._timeout_s}s",
             )
-        except Exception as exc:  # never raise into scoring
+        except Exception as exc:  # handle error without raising
             return OracleVerdict(success=False, detail=f"command error: {exc!r}")
         finally:
             if trace_path is not None:
@@ -190,7 +155,7 @@ class AssertionCommandOracle:
 
 
 class HttpCallbackOracle:
-    """POST the run to a user URL; expect a JSON ``{"success": bool}`` reply."""
+    # POST the run to a user URL; expect a JSON {"success": bool} reply
 
     name = "http_callback"
     deception_aware = False
@@ -223,7 +188,7 @@ class HttpCallbackOracle:
                 success=success,
                 detail=f"http callback returned success={success}",
             )
-        except Exception as exc:  # network/JSON error → not a success
+        except Exception as exc:  # handle network or json errors
             return OracleVerdict(
                 success=False, detail=f"http callback error: {exc!r}"
             )

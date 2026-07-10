@@ -1,15 +1,6 @@
-"""AgentEvent → TelemetryEvent adapter (the harness half of invariant #3).
+"""AgentEvent to TelemetryEvent adapter (the harness half of invariant #3).
 
-The agent layer emits :class:`~saboteur.agents.outcomes.AgentEvent` — agent-
-local, no ``run_id``/``ts``. The harness enriches each one into the canonical
-:class:`~saboteur.telemetry.schema.TelemetryEvent` and publishes it on the
-run's :class:`~saboteur.telemetry.bus.TelemetryBus`. ``bus.emit`` is already
-thread-safe, which matters because the agent callbacks fire inside
-``asyncio.to_thread`` worker threads.
-
-The adapter is total: an unknown event kind is dropped (returns ``None``),
-and the bus callback swallows every exception — telemetry must never crash
-an agent.
+Enriches AgentEvents into canonical TelemetryEvents and publishes them on the TelemetryBus.
 """
 
 from __future__ import annotations
@@ -21,7 +12,7 @@ from saboteur.telemetry.schema import EventKind, TelemetryEvent
 
 from saboteur.agents.factory import OnEvent
 
-# AgentEvent.kind → canonical EventKind.
+# map agent event kind to telemetry event kind
 _KIND_MAP: dict[str, EventKind] = {
     "step_start": "step_start",
     "tool_call": "tool_call",
@@ -32,12 +23,7 @@ _KIND_MAP: dict[str, EventKind] = {
 
 
 def to_telemetry(event: AgentEvent, run_id: str) -> TelemetryEvent | None:
-    """Enrich an agent-local event into the canonical schema.
-
-    Lifts the fields the scorecard keys on (``fault``, ``recovery``,
-    ``tokens_used``) out of the payload; everything else rides along in
-    ``payload``. Returns ``None`` for unknown kinds so callers can drop them.
-    """
+    # enrich an agent-local event into the canonical schema
     kind = _KIND_MAP.get(event.kind)
     if kind is None:
         return None
@@ -72,10 +58,7 @@ def to_telemetry(event: AgentEvent, run_id: str) -> TelemetryEvent | None:
 
 
 def make_on_event(bus: TelemetryBus, run_id: str) -> OnEvent:
-    """Build the per-agent ``on_event`` callback for a run.
-
-    Safe to call from worker threads; never raises into the agent loop.
-    """
+    # build the per-agent on_event callback for a run
 
     def _on_event(event: AgentEvent) -> None:
         try:

@@ -1,16 +1,6 @@
-"""Pure, LLM-free outcome and recovery classification.
+"""Pure outcome and recovery classification.
 
-This module is the unit-testable core of the agent layer: it imports no
-smolagents and runs no model. The factory (``factory.py``) projects each
-smolagents ``ActionStep`` into a neutral :class:`StepRecord`, and the pure
-functions here turn a list of those records into:
-
-- a terminal :class:`Outcome` (CLAUDE.md failure-mode taxonomy), and
-- a list of :class:`RecoveryEvent` (CLAUDE.md scorecard categories).
-
-Keeping this logic pure means scoring stays a function over the event
-stream (invariant #3) and the classifiers can be tested without a live LLM
-(invariant #4).
+Converts StepRecord lists to a terminal Outcome and RecoveryEvents.
 """
 
 from __future__ import annotations
@@ -24,12 +14,10 @@ from saboteur.chaos.events import FaultEvent
 from .verifier import TaskResult
 
 
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
+
 
 class Outcome(StrEnum):
-    """Terminal state of one agent run (CLAUDE.md failure-mode taxonomy)."""
+    # terminal state of one agent run
 
     COMPLETED = "completed"
     INFINITE_RETRY = "infinite_retry"
@@ -39,38 +27,20 @@ class Outcome(StrEnum):
 
 
 class RecoveryKind(StrEnum):
-    """How an agent reacted to a fault.
+    # reaction to a fault, classified from telemetry
 
-    Only kinds distinguishable from telemetry alone (the post-fault tool call,
-    or its absence) are kept. The former ``backoff`` was dropped — we can't
-    observe from the event stream whether the agent actually *waited* before a
-    rate-limit re-call, so it was indistinguishable from ``retry``. The former
-    ``replan`` was split into the two distinct things it conflated:
-    ``reformulate`` (a real reattempt with new arguments) and ``no_action`` (no
-    tool call at all — usually a parse failure / stall, which is *not* a
-    recovery and does not count toward MTTR or survival).
-    """
-
-    RETRY = "retry"               # same tool, same arguments
-    REFORMULATE = "reformulate"   # same tool, different arguments
-    FALLBACK_TOOL = "fallback_tool"  # a different tool toward the same goal
-    NO_ACTION = "no_action"       # no tool call this step (stall / parse failure)
-    GAVE_UP = "gave_up"           # run ended on a faulted step with no follow-up
+    RETRY = "retry"
+    REFORMULATE = "reformulate"
+    FALLBACK_TOOL = "fallback_tool"
+    NO_ACTION = "no_action"
+    GAVE_UP = "gave_up"
 
 
-# ---------------------------------------------------------------------------
-# Neutral projections (built in factory.py, consumed here)
-# ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class StepRecord:
-    """A smolagents ``ActionStep`` projected to fault-relevant fields.
-
-    ``arguments`` is whatever smolagents recorded on the ``ToolCall`` (a dict
-    or a raw string); it is compared by equality to detect a retry, so it is
-    kept as-is. ``fault_types`` are the ``FaultType`` string values stamped to
-    this step by the engine's ``on_fault`` callback.
-    """
+    # a smolagents step projected to fault-relevant fields
 
     step: int
     tool_name: str | None
@@ -83,7 +53,7 @@ class StepRecord:
 
 @dataclass(frozen=True)
 class RecoveryEvent:
-    """A classified reaction to the fault on the preceding step."""
+    # a classified reaction to the fault on the preceding step
 
     step: int
     kind: RecoveryKind
@@ -92,13 +62,7 @@ class RecoveryEvent:
 
 @dataclass(frozen=True)
 class AgentEvent:
-    """An agent-local telemetry event emitted through ``on_event``.
-
-    The harness / telemetry bus later enriches this with ``run_id`` and ``ts``
-    to form the canonical telemetry event (invariant #3). ``kind`` is one of
-    ``"step_start"``, ``"tool_call"``, ``"fault"``, ``"recovery"``,
-    ``"terminal"``.
-    """
+    # an agent-local telemetry event
 
     agent_id: int
     step: int | None
@@ -108,11 +72,7 @@ class AgentEvent:
 
 @dataclass
 class AgentRunResult:
-    """The full result of one ``SaboteurAgent.run()``.
-
-    Distinct from smolagents' ``RunResult``: this is Saboteur's own scoring
-    surface, consumed by the harness.
-    """
+    # result of SaboteurAgent.run, consumed by the harness
 
     agent_id: int
     outcome: Outcome
@@ -124,34 +84,12 @@ class AgentRunResult:
     error: str | None = None
 
 
-# ---------------------------------------------------------------------------
-# Recovery classifier (pure)
-# ---------------------------------------------------------------------------
+
 
 def classify_recoveries(
     history: list[StepRecord], *, terminal: bool = True
 ) -> list[RecoveryEvent]:
-    """Classify each agent reaction that follows a faulted step.
-
-    Pure function over the step history (no LLM, no I/O). For every step whose
-    *previous* step carried a fault, we classify the transition using only what
-    telemetry can actually witness — the post-fault tool call, or its absence:
-
-    - ``RETRY`` — same tool, same arguments again (includes a re-call after a
-      rate-limit: we can't see whether the agent waited, so we don't over-claim
-      a separate "backoff").
-    - ``REFORMULATE`` — same tool, *different* arguments (a real reattempt).
-    - ``FALLBACK_TOOL`` — a *different* tool toward the same subgoal.
-    - ``NO_ACTION`` — no tool call this step (stall / parse failure). Surfaced
-      for visibility but **not** a productive recovery (excluded from MTTR).
-    - ``GAVE_UP`` — only when ``terminal`` and the run ended on a faulted step
-      with no follow-up: the fault was the agent's last productive moment.
-
-    ``terminal`` defaults to True (the end-of-run view used for scoring). The
-    factory passes ``terminal=False`` for the live per-step view, so a faulted
-    step is not prematurely reported as a give-up before the agent has had its
-    next turn to recover.
-    """
+    # classify the agent transition that follows each faulted step
     events: list[RecoveryEvent] = []
     for i in range(1, len(history)):
         prev = history[i - 1]
@@ -163,9 +101,7 @@ def classify_recoveries(
         kind = _classify_transition(prev, cur)
         events.append(RecoveryEvent(step=cur.step, kind=kind, after_fault=after))
 
-    # If the run ended on a faulted step with no follow-up at all, that fault
-    # was a give-up point — surface it so survival/MTTR scoring sees it. Only
-    # meaningful once the run is over (terminal view).
+    # end-of-run fault with no follow-up counts as a give-up for survival scoring
     if terminal and history and history[-1].faulted:
         last = history[-1]
         after = last.fault_types[-1] if last.fault_types else ""
@@ -176,28 +112,22 @@ def classify_recoveries(
 
 
 def _classify_transition(prev: StepRecord, cur: StepRecord) -> RecoveryKind:
-    # No tool call at all on the step after a fault → the agent emitted no
-    # action (most often a parse failure / stall). This is not a productive
-    # recovery; surface it honestly rather than calling it a "replan".
+    # no tool call after fault indicates a stall or parse failure
     if cur.tool_name is None:
         return RecoveryKind.NO_ACTION
 
     if cur.tool_name == prev.tool_name:
-        # Same tool, same arguments → a blind retry. A re-call after a
-        # rate-limit lands here too: telemetry can't tell whether the agent
-        # actually waited, so we don't claim a distinct "backoff".
+        # same tool with identical arguments is classified as a retry
         if cur.arguments == prev.arguments:
             return RecoveryKind.RETRY
-        # Same tool, different arguments → a genuine reformulated attempt.
+        # same tool with different arguments is classified as reformulate
         return RecoveryKind.REFORMULATE
 
-    # A different tool toward the same goal is the canonical fallback.
+    # different tool is classified as fallback_tool
     return RecoveryKind.FALLBACK_TOOL
 
 
-# ---------------------------------------------------------------------------
-# Outcome classifier (pure)
-# ---------------------------------------------------------------------------
+
 
 def classify_outcome(
     history: list[StepRecord],
@@ -208,18 +138,7 @@ def classify_outcome(
     timed_out: bool,
     repeat_threshold: int = 3,
 ) -> Outcome:
-    """Classify a run's terminal state (CLAUDE.md failure-mode taxonomy).
-
-    Precedence (most severe / most specific first):
-
-    1. ``timed_out``  → :attr:`Outcome.TIMEOUT` (wall-clock cap tripped).
-    2. ``raised``     → :attr:`Outcome.HARD_EXCEPTION` (a non-AgentError
-       escaped ``agent.run`` — injected faults never do this).
-    3. ``hit_step_cap`` with ``>= repeat_threshold`` identical consecutive
-       tool calls → :attr:`Outcome.INFINITE_RETRY`.
-    4. no report filed → :attr:`Outcome.SILENT_ABANDONMENT`.
-    5. otherwise       → :attr:`Outcome.COMPLETED`.
-    """
+    # classify terminal state based on timeouts, exceptions, infinite retries, or filed reports
     if timed_out:
         return Outcome.TIMEOUT
     if raised:
@@ -232,7 +151,7 @@ def classify_outcome(
 
 
 def _max_identical_streak(history: list[StepRecord]) -> int:
-    """Longest run of consecutive identical (tool_name, arguments) calls."""
+    # longest run of consecutive identical (tool_name, arguments) calls
     best = 0
     streak = 0
     prev_key: tuple[str | None, Any] | None = None
@@ -252,7 +171,7 @@ def _max_identical_streak(history: list[StepRecord]) -> int:
 
 
 def _hashable(arguments: Any) -> Any:
-    """Best-effort stable key for argument equality comparison."""
+    # best-effort stable key for argument equality comparison
     if isinstance(arguments, dict):
         return tuple(sorted((k, _hashable(v)) for k, v in arguments.items()))
     if isinstance(arguments, (list, tuple)):

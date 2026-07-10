@@ -1,14 +1,6 @@
-"""Run orchestration — the single entrypoint the API layer calls.
+"""Run orchestration.
 
-``orchestrate()`` runs a paired control cohort (calm_seas) and a chaos
-cohort, each with its own TelemetryBus and per-event-flushed JSONL log
-(``runs/{run_id}-control.jsonl`` / ``runs/{run_id}.jsonl``), registers the
-live bus for ``/ws/{run_id}`` streaming, scores the two event streams, and
-persists ``runs/{run_id}.scorecard.json``.
-
-A prior control :class:`RunReport` can be passed in to skip re-running the
-baseline (cloud credits are scarce — re-use the control cohort when only the
-chaos profile changes).
+Runs control and chaos cohorts, scores the results, and persists the scorecard.
 """
 
 from __future__ import annotations
@@ -36,7 +28,7 @@ _DEFAULT_CONTROL_PROFILE = Path("profiles/calm_seas.yaml")
 
 
 def make_run_id(profile_name: str) -> str:
-    """Generate a unique, sortable run identifier."""
+    # generate a unique, sortable run identifier
     stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S")
     return f"{profile_name}-{stamp}-{uuid.uuid4().hex[:6]}"
 
@@ -55,15 +47,7 @@ async def orchestrate(
     agent_factory: AgentFactory = build_agent,
     oracle: Oracle | None = None,
 ) -> Scorecard:
-    """Run control + chaos cohorts and return the persisted Scorecard.
-
-    Must be awaited from a running event loop (binds each bus to it).
-
-    The success ``oracle`` (default: the deterministic reference verifier) is
-    judged once per agent at completion and frozen into telemetry; both cohorts
-    use the same oracle so survival is comparable. It is bound onto the factory
-    via ``functools.partial``, so the cohort/factory seam stays unchanged.
-    """
+    # run control and chaos cohorts and return the persisted Scorecard
     settings = get_settings()
     profile = load_profile(profile_path)
     if seed_override is not None:
@@ -96,10 +80,7 @@ async def orchestrate(
             agent_factory=bound_factory,
         )
         if control_report.cancelled:
-            # Stopped before the chaos cohort even started: launching it now
-            # would ignore the stop, and scoring an empty chaos stream would
-            # persist a misleading scorecard. Propagate the cancellation
-            # (cohort_run swallowed it to finish its own teardown cleanly).
+            # propagate cancellation if control cohort was cancelled
             raise asyncio.CancelledError
 
     report = await _execute_cohort(
@@ -135,11 +116,9 @@ async def _execute_cohort(
     concurrency_limit: int | None,
     agent_factory: AgentFactory,
 ) -> RunReport:
-    """One cohort: fresh bus + JSONL writer + WS registration, then the cohort run.
+    # execute one cohort run with telemetry logging and streaming
 
-    The bus is always closed, the writer always awaited, and the registry
-    entry always removed — a failed cohort never leaks a registered bus.
-    """
+    # Clean up bus, writer, and registry on completion or failure.
     bus = TelemetryBus()
     bus.bind(asyncio.get_running_loop())
     registry.register(run_id, bus)

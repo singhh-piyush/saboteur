@@ -1,19 +1,4 @@
-"""ChaosEngine: wires a chaos profile onto an agent's tools.
-
-One engine per agent. All mutable state (call counter, vanish flags,
-rate-limit windows) lives on the instance, so concurrent agents never
-share state (invariant #2). All randomness comes from one
-``ChaosRandom(profile.seed + agent_id)`` (invariant #1).
-
-Usage::
-
-    engine = ChaosEngine(profile, agent_id=3, on_fault=bus.publish)
-    tools = engine.wrap_tools({"web_search": search, "calculator": calc})
-    # or for smolagents Tool instances (one instance per agent!):
-    tool = engine.sabotage_tool(tool)
-    # between agent steps:
-    engine.step_hook(agent)
-"""
+# chaos engine wires a chaos profile onto an agent's tools
 
 from __future__ import annotations
 
@@ -35,7 +20,7 @@ OnFault = Callable[[FaultEvent], None]
 
 
 class ChaosEngine:
-    """Deterministic fault injection for one agent."""
+    # deterministic fault injection for one agent
 
     def __init__(
         self,
@@ -52,12 +37,10 @@ class ChaosEngine:
             profile, self._rng
         )
 
-    # ------------------------------------------------------------------
-    # Wrapping
-    # ------------------------------------------------------------------
+
 
     def wrap(self, name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
-        """Wrap a plain callable in this engine's interceptor chain."""
+        # wrap a plain callable in this engine's interceptor chain
 
         def sabotaged(*args: Any, **kwargs: Any) -> Any:
             return self._invoke(name, fn, *args, **kwargs)
@@ -68,21 +51,16 @@ class ChaosEngine:
     def wrap_tools(
         self, tools: dict[str, Callable[..., Any]]
     ) -> dict[str, Callable[..., Any]]:
-        """Wrap a registry of callables, keyed by tool name."""
+        # wrap a registry of callables, keyed by tool name
         return {name: self.wrap(name, fn) for name, fn in tools.items()}
 
     def sabotage_tool(self, tool: "Tool") -> "Tool":
-        """Sabotage a smolagents Tool in place by wrapping its forward().
-
-        Name/description/inputs/output_type are untouched, so the JSON
-        tool-call boundary the LLM sees is unchanged. The tool instance
-        must not be shared with another agent (invariant #2).
-        """
+        # sabotage a smolagents tool in place by wrapping its forward method
         tool.forward = self.wrap(tool.name, tool.forward)  # type: ignore[method-assign]
         return tool
 
     def step_hook(self, agent: Any) -> None:
-        """Run context-layer faults; call between agent steps."""
+        # run context-layer faults; call between agent steps
         for interceptor in self._context_interceptors:
             interceptor.maybe_drop(
                 agent,
@@ -91,9 +69,7 @@ class ChaosEngine:
                 ),
             )
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
+
 
     def _invoke(
         self, name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any
@@ -104,15 +80,13 @@ class ChaosEngine:
         def emit(fault: FaultType, detail: Detail) -> None:
             self._emit(fault, name, index, detail)
 
-        # A vanished tool stays vanished — short-circuit before any draws
-        # (deterministic: vanishing itself was a deterministic decision).
+        # vanished tools stay vanished, short-circuit before draws
         for interceptor in self._tool_interceptors:
             if isinstance(interceptor, ToolVanishInterceptor) and interceptor.is_vanished(name):
                 emit(FaultType.TOOL_VANISH, {"sticky": True})
                 raise ToolVanishedError(name)
 
-        # Draw every applicable decision in profile order before acting,
-        # so the RNG draw sequence per call is fixed (invariant #1).
+        # draw decisions in profile order before acting to keep RNG sequence fixed
         decisions = [
             (interceptor, interceptor.decide(name))
             for interceptor in self._tool_interceptors
@@ -153,5 +127,5 @@ class ChaosEngine:
         try:
             self._on_fault(event)
         except Exception:
-            # Telemetry must never crash an agent.
+            # prevent telemetry errors from crashing agent
             pass

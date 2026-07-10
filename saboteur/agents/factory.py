@@ -1,22 +1,4 @@
-"""Agent factory: assemble a sabotaged, instrumented ``ToolCallingAgent``.
-
-``build_agent(agent_id, profile, store)`` returns a :class:`SaboteurAgent` —
-a thin async wrapper around a smolagents ``ToolCallingAgent`` whose four WP3
-tools have been wrapped in a per-agent :class:`ChaosEngine`. The wrapper:
-
-- runs the (sync) agent loop under ``asyncio.to_thread`` with a per-agent
-  wall-clock timeout (invariant #5),
-- classifies the terminal outcome and recovery actions with the pure
-  functions in :mod:`.outcomes`,
-- consults the programmatic verifier (invariant #4, never an LLM judge),
-- streams structured :class:`AgentEvent`s through an ``on_event`` seam that
-  the future telemetry bus will adapt (invariant #3).
-
-One :class:`ChaosEngine`, one set of fresh tools, and one private history per
-agent — no shared mutable state, safe under ~50 concurrent agents (invariant
-#2). The model always comes from :func:`saboteur.config.get_model` (the single
-inference seam) — never instantiated here.
-"""
+# agent factory: assemble a sabotaged, instrumented SaboteurAgent
 
 from __future__ import annotations
 
@@ -47,9 +29,7 @@ from .verifier import verify
 OnEvent = Callable[[AgentEvent], None]
 
 
-# Modest, generic resilience guidance injected as the agent's system-prompt
-# ``instructions``. It must NOT name the eight faults or say when they fire —
-# we measure self-healing, we don't teach to the test (CLAUDE.md).
+# resilience guidance must not name the faults to avoid teaching to the test
 RESILIENCE_INSTRUCTIONS = (
     "You are operating in an unreliable environment. Tools may occasionally "
     "fail, hang, or return surprising results. Work resiliently:\n"
@@ -70,14 +50,7 @@ RESILIENCE_INSTRUCTIONS = (
 
 
 class SaboteurAgent:
-    """One agent under chaos: assembly + instrumented async run.
-
-    Construct via :func:`build_agent`. The instance is created *before* the
-    underlying smolagents agent so that :meth:`_handle_fault` can serve as the
-    engine's ``on_fault`` callback during construction; ``self.agent`` is then
-    assigned and is always set by the time :meth:`run` (hence the callbacks)
-    execute.
-    """
+    # one agent under chaos. created before the underlying agent so callbacks can be registered
 
     def __init__(
         self,
@@ -89,28 +62,20 @@ class SaboteurAgent:
         self.agent_id = agent_id
         self.store = store
         self._on_event = on_event
-        # The success oracle, consulted once at run completion (invariant #4).
-        # Default is the deterministic reference verifier — identical numbers
-        # to the pre-oracle behavior.
+        # success oracle consulted once at completion. defaults to reference verifier for backward compatibility
         self._oracle: Oracle = oracle or BuiltinReferenceOracle()
         self.agent: ToolCallingAgent | None = None
         self.engine: ChaosEngine | None = None
 
-        # Append-only analysis state, private to this agent (invariant #2).
+
         self._history: list[StepRecord] = []
         self._faults: list[FaultEvent] = []
         # Faults emitted during the in-flight step, drained by _on_step.
         self._pending_faults: list[FaultEvent] = []
-        # Set in run()'s finally. Once true, all callbacks go silent: a
-        # timed-out run leaves an orphan smolagents worker thread alive (see
-        # run()'s note), and that thread must not keep emitting telemetry after
-        # the harness has moved on — otherwise late events reach the JSONL but
-        # not the in-memory collector, breaking replay parity (invariant #3).
+        # silences callbacks post-finish to prevent orphan thread telemetry from breaking replay parity
         self._finished = False
 
-    # ------------------------------------------------------------------
-    # Event emission (telemetry must never crash an agent — invariant #3)
-    # ------------------------------------------------------------------
+    # telemetry errors must not propagate to the agent
 
     def _emit(self, kind: str, step: int | None, data: dict[str, Any]) -> None:
         if self._on_event is None or self._finished:
@@ -120,14 +85,11 @@ class SaboteurAgent:
         except Exception:
             pass
 
-    # ------------------------------------------------------------------
-    # ChaosEngine callback
-    # ------------------------------------------------------------------
+
 
     def _handle_fault(self, event: FaultEvent) -> None:
-        """Engine ``on_fault`` sink: record + stamp with the current step."""
-        # An orphan thread from a timed-out run may still hit a sabotaged tool;
-        # drop its faults so post-run telemetry can't desync JSONL vs. collector.
+        # record and emit fault event
+        # ignore faults from orphan thread to prevent post-run telemetry desync
         if self._finished:
             return
         step = getattr(self.agent, "step_number", None)
@@ -144,18 +106,10 @@ class SaboteurAgent:
             },
         )
 
-    # ------------------------------------------------------------------
-    # smolagents step callback (end of each ActionStep)
-    # ------------------------------------------------------------------
+
 
     def _on_step(self, memory_step: ActionStep, agent: Any = None) -> None:
-        """Fires after each step is finalized, before it is appended to memory.
-
-        smolagents exposes no pre-step hook, so ``step_start`` is emitted here
-        for the step that just completed. We build the :class:`StepRecord`,
-        emit per-tool-call and recovery events, then run the context_drop hook
-        *last* so our own history is unaffected by memory trimming.
-        """
+        # fires after each step. emits start, tool, and recovery events, and runs context_drop last
         if self._finished:
             return
         try:
@@ -163,11 +117,9 @@ class SaboteurAgent:
             record = self._build_record(memory_step)
             self._history.append(record)
 
-            # Detect tool-call parse failures so they appear in the JSONL and
-            # are diagnosable from runs/*.jsonl without rerunning (invariant #3).
-            # smolagents records AgentParsingError on action_step.error when the
-            # model emits prose instead of a JSON tool call. We fold the raw
-            # output into the step_start payload — no new EventKind needed.
+            # smolagents has no pre-step hook, so step_start is emitted here
+            # record tool parse failures in telemetry for diagnosis
+            # fold raw output into step_start if action_step has AgentParsingError
             step_err = getattr(memory_step, "error", None)
             parse_failed = (
                 step_err is not None
@@ -184,8 +136,7 @@ class SaboteurAgent:
             )
             self._emit("step_start", record.step, step_payload)
 
-            # One tool_call event per call this step. (ToolCallingAgent files
-            # one tool call per step in the common case, but be general.)
+            # emit tool call details for each tool call in the step
             tool_calls = getattr(memory_step, "tool_calls", None) or []
             for call in tool_calls:
                 faulted_here = record.faulted and call.name == record.tool_name
@@ -202,8 +153,7 @@ class SaboteurAgent:
                     },
                 )
 
-            # Recovery for the most recent transition, if any. terminal=False:
-            # don't speculatively emit a give-up before the agent's next turn.
+            # identify recovery for this step; terminal=False avoids speculative give-up
             recoveries = classify_recoveries(self._history, terminal=False)
             if recoveries and recoveries[-1].step == record.step:
                 rec = recoveries[-1]
@@ -213,17 +163,15 @@ class SaboteurAgent:
                     {"kind": str(rec.kind), "after_fault": rec.after_fault},
                 )
 
-            # Apply context_drop between turns. Done last: _history already
-            # captured this step, so trimming agent memory never loses data
-            # from our analysis (and never drops the live step we just saw).
+            # run context_drop last so trimming does not affect this step's history
             if self.engine is not None and target is not None:
                 self.engine.step_hook(target)
         except Exception:
-            # A telemetry/bookkeeping bug must never crash the agent loop.
+            # prevent telemetry bugs from crashing the agent
             pass
 
     def _build_record(self, memory_step: ActionStep) -> StepRecord:
-        # Drain faults stamped to this step by the engine callback.
+        # drain faults recorded during this step
         pending = self._pending_faults
         self._pending_faults = []
         fault_types = tuple(str(f.fault) for f in pending)
@@ -242,7 +190,7 @@ class SaboteurAgent:
         )
 
     def _trace_records(self) -> list[dict[str, Any]]:
-        """Lightweight, JSON-able per-step trace for assertion/HTTP oracles."""
+        # lightweight, JSON-able per-step trace for assertion/HTTP oracles
         return [
             {
                 "step": rec.step,
@@ -254,19 +202,13 @@ class SaboteurAgent:
             for rec in self._history
         ]
 
-    # ------------------------------------------------------------------
-    # Run
-    # ------------------------------------------------------------------
+
 
     async def run(self) -> AgentRunResult:
         """Run the agent under a wall-clock timeout and classify the outcome.
 
-        The smolagents loop is synchronous, so it runs in a worker thread via
-        ``asyncio.to_thread`` and is bounded by ``asyncio.wait_for``. Note:
-        ``wait_for`` cannot truly cancel the worker thread — on timeout the
-        orphan thread finishes on its own. That is acceptable because the run
-        is also bounded by ``max_steps`` and per-tool fault sleeps (invariant
-        #5); the wall-clock cap is a backstop, not the primary bound.
+        Runs the sync smolagents loop in a worker thread. A timeout leaves the
+        worker thread as an orphan, which eventually exits due to step bounds.
         """
         assert self.agent is not None, "build_agent must set self.agent"
         settings = get_settings()
@@ -287,12 +229,8 @@ class SaboteurAgent:
         except asyncio.TimeoutError:
             timed_out = True
         except asyncio.CancelledError:
-            # External stop (STOP RUN / shutdown) — the one exit that must not
-            # unwind silently: emit the terminal *before* propagating so the
-            # grid never freezes on a live state and score() sees every agent
-            # (invariants #2/#3). Synchronous only — no awaits during
-            # cancellation; like the timeout path, the oracle is not judged
-            # and a failure verdict is frozen instead.
+            # emit terminal before cancel propagates to prevent grid lock and ensure scoring
+            # synchronous only: no awaits during cancellation; freeze failure instead of judging
             duration_ms = (time.perf_counter() - t0) * 1000.0
             outcome = classify_outcome(
                 self._history,
@@ -319,7 +257,7 @@ class SaboteurAgent:
             )
             self._finished = True
             raise
-        except Exception as exc:  # a non-AgentError escaped → real crash
+        except Exception as exc:  # unexpected crash
             raised = True
             error = repr(exc)
         duration_ms = (time.perf_counter() - t0) * 1000.0
@@ -341,11 +279,8 @@ class SaboteurAgent:
         )
         recoveries = classify_recoveries(self._history)
 
-        # Judge success once, at completion (invariant #4). The verdict is
-        # frozen into telemetry; scoring only ever reads it (invariant #3), so
-        # effectful oracles run exactly once. ``verify()`` above supplies the
-        # reference verdict for the builtin oracle. Run off the event loop —
-        # assertion/HTTP oracles block.
+        # judge success exactly once at completion so scoring reads a frozen verdict
+        # run in executor because assertion/HTTP oracles block
         raw_output = getattr(run_result, "output", None)
         final_output = str(raw_output) if raw_output is not None else None
         ctx = OracleRunContext(
@@ -359,11 +294,7 @@ class SaboteurAgent:
             trace=self._trace_records(),
         )
         if timed_out:
-            # A wall-clock kill means agent.run never returned — the task was
-            # not completed. The orphan worker thread can still file a valid
-            # report into the store before verify() reads it, so consulting the
-            # oracle here would score a killed agent as a pass. Freeze a
-            # failure instead of judging.
+            # freeze failure on timeout; oracle might falsely pass if orphan files late report
             verdict = OracleVerdict(
                 success=False,
                 detail=(
@@ -389,9 +320,7 @@ class SaboteurAgent:
                 "duration_ms": duration_ms,
             },
         )
-        # Terminal event is out; from here any orphan worker thread (from a
-        # timed-out run) is silenced, so no telemetry can land after the
-        # harness emits run_finished and desync JSONL vs. the collector.
+        # terminal event emitted; orphan worker thread is now silenced to prevent post-run desync
         self._finished = True
 
         return AgentRunResult(
@@ -407,7 +336,7 @@ class SaboteurAgent:
 
 
 def _tokens_from(run_result: Any) -> int:
-    """Sum input+output tokens from a smolagents RunResult, if available."""
+    # sum input+output tokens from a smolagents RunResult, if available
     if run_result is None:
         return 0
     usage = getattr(run_result, "token_usage", None)
@@ -443,13 +372,11 @@ def build_agent(
         agent_id=agent_id, store=store, on_event=on_event, oracle=oracle
     )
 
-    # Engine first: its on_fault is the shell's handler. The handler only runs
-    # during run(), by which point shell.agent is set.
+    # build engine first; handler only fires during run when shell.agent is set
     engine = ChaosEngine(profile, agent_id, on_fault=shell._handle_fault)
     shell.engine = engine
 
-    # Fresh tools per agent, sabotaged in place (JSON tool-call boundary
-    # untouched — only forward() is wrapped).
+    # sabotage tools in-place without touching json boundary
     tools = build_tools(agent_id, store)
     for tool in tools:
         engine.sabotage_tool(tool)
@@ -459,7 +386,7 @@ def build_agent(
         model=get_model(),
         max_steps=get_settings().max_steps,
         instructions=RESILIENCE_INSTRUCTIONS,
-        # smolagents requires name to be a valid Python identifier.
+        # smolagents requires identifier name
         name=f"agent_{agent_id}",
         step_callbacks={ActionStep: shell._on_step},
     )

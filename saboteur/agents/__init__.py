@@ -49,7 +49,6 @@ __all__ = [
     "verify",
     "TaskResult",
     "FailureReason",
-    # Factory + instrumentation (WP4)
     "build_agent",
     "SaboteurAgent",
     "RESILIENCE_INSTRUCTIONS",

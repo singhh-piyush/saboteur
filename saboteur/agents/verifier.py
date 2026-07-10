@@ -1,8 +1,6 @@
-"""Programmatic task verifier (CLAUDE.md invariant #4).
+"""Programmatic task verifier.
 
-Success criterion: at least one report filed by this agent contains a
-number within ``tol`` of the expected Fahrenheit value (default 71.6).
-No LLM judge is used — ever.
+Success is defined as filing a report with a value close to expected.
 """
 
 from __future__ import annotations
@@ -18,7 +16,7 @@ _NUMBER_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 class FailureReason(str, Enum):
-    """Why the verifier rejected this agent's run."""
+    # verifier rejection reasons
 
     NO_REPORT = "no_report"
     WRONG_VALUE = "wrong_value"
@@ -27,7 +25,7 @@ class FailureReason(str, Enum):
 
 @dataclass(frozen=True)
 class TaskResult:
-    """Outcome of one agent's run as seen by the verifier."""
+    # verifier result for one run
 
     success: bool
     failure_reason: FailureReason | None
@@ -66,7 +64,7 @@ def verify(
             detail=f"Agent {agent_id} filed no reports.",
         )
 
-    # Scan all reports for any parseable number.
+    # scan reports for numbers
     candidates: list[float] = []
     for report in reports:
         text = report.title + " " + report.body
@@ -83,7 +81,7 @@ def verify(
             ),
         )
 
-    # Take the candidate closest to the expected value.
+    # find candidate closest to expected value
     best = min(candidates, key=lambda v: abs(v - expected))
     error = abs(best - expected)
 
