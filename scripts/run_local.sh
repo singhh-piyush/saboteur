@@ -1,19 +1,5 @@
 #!/usr/bin/env bash
-# run_local.sh — start llama-server (if not already up) then uvicorn.
-#
-# --jinja is REQUIRED for OpenAI-style tool calling: the Jinja2 chat template
-#   renders the tool-call JSON that smolagents ToolCallingAgent parses.
-#
-# -np 8 = 8 parallel slots, matching the local N_AGENTS=8 cap.
-#   Slots split the -c context budget: 32768 ÷ 8 = 4096 tokens per agent slot.
-#   That is enough headroom for the 15-step cap with normal prompts.
-#
-# GGUF download (one-time setup):
-#   pip install huggingface_hub[cli]
-#   huggingface-cli download bartowski/Meta-Llama-3.1-8B-Instruct-GGUF \
-#       --include "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf" \
-#       --local-dir ./models
-#   Then set MODEL_GGUF=./models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf in .env.
+# Usage: ./scripts/run_local.sh
 
 set -euo pipefail
 

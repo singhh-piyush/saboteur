@@ -1,12 +1,5 @@
 #!/usr/bin/env python
-"""Demo: wrap dummy tools in the ChaosEngine and watch faults fire.
-
-Runs 30 simulated tool calls under hell_mode (with sleeps scaled down to
-milliseconds) for two agents, then re-runs agent 0 to show the fault
-sequence is byte-identical — same profile + seed + agent_id, same chaos.
-
-Usage: python scripts/demo_chaos.py
-"""
+# Usage: python scripts/demo_chaos.py
 
 from __future__ import annotations
 
@@ -19,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def fast_hell_mode() -> ChaosProfile:
-    """hell_mode with sleeps shrunk to milliseconds so the demo is instant."""
+    # hell_mode with sleeps shrunk to milliseconds so the demo is instant.
     profile = load_profile(REPO_ROOT / "profiles" / "hell_mode.yaml")
     faults = []
     for spec in profile.faults:

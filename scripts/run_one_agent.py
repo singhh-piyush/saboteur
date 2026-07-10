@@ -1,24 +1,5 @@
 #!/usr/bin/env python
-"""Run ONE Saboteur agent end-to-end against flaky_friday (needs a live LLM).
-
-This is the WP4 acceptance harness. It builds a single sabotaged agent, runs
-it under the configured inference endpoint, streams every telemetry event to
-stdout, then prints the classified terminal outcome and the programmatic
-verifier's verdict.
-
-Prereq: an OpenAI-compatible server reachable at ``OPENAI_BASE_URL`` (see
-``.env`` / ``saboteur.config.get_settings()`` — local llama.cpp or a remote
-vLLM endpoint both work). Local llama.cpp needs ``--jinja`` (so the chat
-template emits OpenAI-style tool calls) — start it via ``scripts/run_local.sh``
-or directly. If tool calls come back malformed/garbage on a local server, the
-first thing to check is that ``--jinja`` was passed — before suspecting this
-code.
-
-Usage::
-
-    .venv/bin/python scripts/run_one_agent.py
-    .venv/bin/python scripts/run_one_agent.py profiles/hell_mode.yaml
-"""
+# Usage: .venv/bin/python scripts/run_one_agent.py [profile]
 
 from __future__ import annotations
 

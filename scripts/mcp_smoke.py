@@ -1,25 +1,5 @@
 #!/usr/bin/env python
-"""Smoke-test the MCP shim end-to-end (self-contained — no MCP client needed).
-
-What it proves (the WP acceptance for ``saboteur/mcp``):
-  (a) calm_seas — a ``tools/call`` through the shim returns the SAME result as
-      hitting the trivial upstream directly: the transparency contract.
-  (b) a chaos profile — the same call, attributed to a chaos run, now observes
-      corrupted / dropped / delayed results over a few attempts, and the run
-      renders on the dashboard grid.
-
-It spawns the shim (``python -m saboteur.mcp``) wrapping
-``examples/mcp_min_server`` and drives it with raw JSON-RPC over stdio.
-
-Prereq for the dashboard half: the Saboteur app on :8000
-(``uvicorn saboteur.api:app``) so telemetry has somewhere to land. Part (a)
-works without it.
-
-Usage::
-
-    .venv/bin/python scripts/mcp_smoke.py
-    .venv/bin/python scripts/mcp_smoke.py --api http://localhost:8000 --profile hell_mode --attempts 8
-"""
+# Usage: .venv/bin/python scripts/mcp_smoke.py [--api URL] [--profile NAME] [--attempts N]
 
 from __future__ import annotations
 

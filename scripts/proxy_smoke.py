@@ -1,21 +1,5 @@
 #!/usr/bin/env python
-"""Smoke-test the wire proxy with the raw OpenAI SDK (needs a live stack).
-
-What it proves (the WP acceptance for ``saboteur/proxy``):
-  (a) calm_seas — a request through the proxy returns the SAME content as
-      hitting the upstream (llama.cpp) directly: the transparency contract.
-  (b) hell_mode — the same request, attributed to a chaos run, now observes
-      injected faults (429 / 5xx / latency / malformed) over a few attempts.
-
-Prereqs (both via ``scripts/run_local.sh``):
-  - ``llama-server`` on :8080 (the upstream the proxy forwards to).
-  - the Saboteur app on :8000 (serves ``/v1/chat/completions`` + ``/proxy/*``).
-
-Usage::
-
-    .venv/bin/python scripts/proxy_smoke.py
-    .venv/bin/python scripts/proxy_smoke.py --api http://localhost:8000 --profile hell_mode
-"""
+# Usage: .venv/bin/python scripts/proxy_smoke.py [--api URL] [--profile NAME]
 
 from __future__ import annotations
 

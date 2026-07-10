@@ -1,23 +1,5 @@
 #!/usr/bin/env python
-"""Run a full cohort run locally (needs a live LLM) and print the scorecard.
-
-This is the WP5 acceptance harness: a calm_seas control cohort followed by a
-chaos cohort under the given profile, both at N agents, producing
-``runs/{run_id}-control.jsonl``, ``runs/{run_id}.jsonl`` and
-``runs/{run_id}.scorecard.json``.
-
-Prereq: an OpenAI-compatible server reachable at ``OPENAI_BASE_URL`` (see
-``.env`` / ``saboteur.config.get_settings()`` — local llama.cpp or a remote
-vLLM endpoint both work). Local llama.cpp needs ``--jinja`` (so the chat
-template emits OpenAI-style tool calls). If tool calls come back
-malformed/garbage on a local server, the first thing to check is that
-``--jinja`` was passed — before suspecting this code.
-
-Usage::
-
-    .venv/bin/python scripts/run_cohort.py
-    .venv/bin/python scripts/run_cohort.py profiles/hell_mode.yaml 8
-"""
+# Usage: .venv/bin/python scripts/run_cohort.py [profile] [n_agents]
 
 from __future__ import annotations
 

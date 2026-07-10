@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""Replay a recorded JSONL run through the live dashboard.
-
-Usage::
-
-    python scripts/replay.py runs/my-run.jsonl
-    python scripts/replay.py --speed 5 --api http://localhost:8000 runs/my-run.jsonl
-
-The script calls POST /replay on the running Saboteur server, then connects
-to the returned run_id's WS channel and prints each event as JSON.
-Press Ctrl+C to stop.
-"""
+# Usage: python scripts/replay.py [--speed N] [--api URL] runs/my-run.jsonl
 from __future__ import annotations
 
 import argparse

@@ -1,18 +1,5 @@
 #!/usr/bin/env bash
-# dev.sh — one-command dev environment: llama-server + uvicorn + vite
-#
-# Starts each service in dependency order, health-gates before the next,
-# interleaves their logs with colored prefixes, and tears everything down
-# cleanly on Ctrl+C — never killing a llama-server it did not start.
-#
 # Usage: ./scripts/dev.sh [--no-llm] [--no-web] [--quiet-llm]
-#   --no-llm      skip llama-server (assume LLM_PORT already serving)
-#   --no-web      skip vite (backend-only, useful for curl-driven testing)
-#   --quiet-llm   suppress [LLM] lines except errors/warnings
-#
-# Ports (env or .env overridable — e.g. when an SSH tunnel owns :8000):
-#   API_PORT  uvicorn port        (default 8000)
-#   LLM_PORT  llama-server port   (default 8080)
 
 set -euo pipefail
 
@@ -129,7 +116,7 @@ trap cleanup INT TERM EXIT
 UVICORN=uvicorn
 [[ -x .venv/bin/uvicorn ]] && UVICORN=.venv/bin/uvicorn
 
-# ─── 1. LLM ──────────────────────────────────────────────────────────────────
+
 
 if (( NO_LLM )); then
     printf '%s--no-llm: assuming server on :%s\n' "$LLM_PFX" "$LLM_PORT"
@@ -150,7 +137,7 @@ else
     printf '%sstarting llama-server ...\n' "$LLM_PFX"
 
     if (( QUIET_LLM )); then
-        # Under --quiet-llm, only surface error/warning lines.
+
         llama-server -m "$MODEL_GGUF" --port "$LLM_PORT" -c 32768 -np 8 --jinja \
             > >(grep --line-buffered -iE 'error|fail|fatal|warn' \
                 | prefix_stream "$LLM_PFX") 2>&1 &
