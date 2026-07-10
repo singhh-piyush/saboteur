@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Callout } from "./Callout";
 import { Spotlight, useSpotlightRect } from "./Spotlight";
 import type { Beat, TourCtx, TourTarget } from "./tour";
-import { agentCell, DRIVE_LABEL } from "./autopilot";
+import { DRIVE_LABEL, resolveTourTarget } from "./autopilot";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 interface TourOverlayProps {
@@ -120,11 +120,7 @@ export function TourOverlay({
   const bodyText = awaiting ? (beat?.promptBody ?? beat?.body ?? "") : (beat?.body ?? "");
   const phaseKey = awaiting ? "prompt" : "reveal";
 
-  const resolve = useCallback((): HTMLElement | null => {
-    if (target.kind === "none") return null;
-    if (target.kind === "agent") return agentCell(target.id);
-    return document.querySelector<HTMLElement>(`[data-tour="${target.name}"]`);
-  }, [target]);
+  const resolve = useCallback((): HTMLElement | null => resolveTourTarget(target), [target]);
 
   const rect = useSpotlightRect(resolve, active && beat ? `${beat.id}:${phaseKey}` : "inactive");
 

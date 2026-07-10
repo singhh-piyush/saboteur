@@ -13,6 +13,8 @@ import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
 import { DEMO_FAMILIES, type DemoRun } from "../demo";
 import { Autopilot } from "./Autopilot";
+import { resolveTourTarget } from "./autopilot";
+import { CAMERA_IDENTITY, computeCamera, type CameraTransform } from "./camera";
 import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
 import { Reveal } from "./Reveal";
@@ -241,9 +243,52 @@ function WalkthroughShell({
   const apAwaiting =
     !!activeBeat?.interactive && selectedAgent !== activeBeat.interactive.agent;
 
+  const cameraRef = useRef<CameraTransform>(CAMERA_IDENTITY);
+  const [camera, setCamera] = useState<CameraTransform>(CAMERA_IDENTITY);
+  useEffect(() => {
+    const reset = () => {
+      cameraRef.current = CAMERA_IDENTITY;
+      setCamera(CAMERA_IDENTITY);
+    };
+    if (!tourActive || tourSuspended || covered || reducedMotion || activeBeat === null) {
+      reset();
+      return;
+    }
+    const target =
+      apAwaiting && activeBeat.interactive
+        ? ({ kind: "agent", id: activeBeat.interactive.agent } as const)
+        : activeBeat.target;
+    if (target.kind === "none" || (target.kind === "region" && target.name === "grid")) {
+      reset();
+      return;
+    }
+    // measure after the beat's onEnter side effects (tab switch, drawer) commit
+    const t = window.setTimeout(() => {
+      const el = resolveTourTarget(target);
+      const r = el?.getBoundingClientRect();
+      if (!r || r.width < 2 || r.height < 2) {
+        reset();
+        return;
+      }
+      const next = computeCamera(r, cameraRef.current, window.innerWidth, window.innerHeight);
+      cameraRef.current = next;
+      setCamera(next);
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [tourActive, tourSuspended, covered, reducedMotion, activeBeat, apAwaiting]);
+
   return (
     <TooltipSuppression active={tourMode === "tour"}>
-    <div className="flex h-screen flex-col gap-2 bg-void p-2">
+    <div className="fixed inset-0 overflow-hidden bg-void">
+    <div
+      className="flex h-full flex-col gap-2 p-2"
+      style={{
+        transformOrigin: "0 0",
+        transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+        transition: reducedMotion ? undefined : "transform 820ms cubic-bezier(0.4, 0, 0.2, 1)",
+        willChange: tourActive ? "transform" : undefined,
+      }}
+    >
       <header
         className={`${CARD} flex items-center gap-4 px-4 py-2.5`}
         style={{ animation: "card-in 0.3s ease-out backwards" }}
@@ -463,6 +508,7 @@ function WalkthroughShell({
           />,
           document.body,
         )}
+    </div>
     </div>
     </TooltipSuppression>
   );

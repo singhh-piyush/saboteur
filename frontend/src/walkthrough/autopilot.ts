@@ -1,5 +1,5 @@
 
-import type { Beat } from "./tour";
+import type { Beat, TourTarget } from "./tour";
 
 export type AutopilotStep =
   | { kind: "dwell"; ms: number }
@@ -38,6 +38,12 @@ export function planPhase(beat: Beat, awaiting: boolean): AutopilotStep[] {
 export function agentCell(id: number): HTMLElement | null {
   const grid = document.querySelector('[data-tour="grid"]');
   return grid?.querySelectorAll<HTMLElement>(".agent-cell-wrap")[id] ?? null;
+}
+
+export function resolveTourTarget(target: TourTarget): HTMLElement | null {
+  if (target.kind === "none") return null;
+  if (target.kind === "agent") return agentCell(target.id);
+  return document.querySelector<HTMLElement>(`[data-tour="${target.name}"]`);
 }
 
 export function resolveClickTarget(step: AutopilotStep): HTMLElement | null {
