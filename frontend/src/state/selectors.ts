@@ -1,7 +1,3 @@
-/**
- * Pure projections over RunViewState for the views. No component derives
- * data any other way - everything is a function of the event-sourced state.
- */
 
 import type { AgentState, RunViewState, TerminalMark } from "./reducer";
 
@@ -15,7 +11,7 @@ export interface RunCounts {
   recovering: number;
   crashed: number;
   succeeded: number;
-  done: number; // ran to completion but no oracle verdict (neutral)
+  done: number;
   pending: number;
   faults: number;
 }
@@ -39,14 +35,13 @@ export function runCounts(state: RunViewState): RunCounts {
   return counts;
 }
 
-/** Survival-over-time series: fraction of terminal agents that succeeded,
- * sampled at each agent_done/agent_crashed mark. */
+/** survival-over-time series: sampled at each terminal event */
 export interface SurvivalPoint {
-  /** Seconds since the first terminal mark. */
+  /** seconds since the first terminal mark */
   t: number;
-  /** Cumulative succeeded count. */
+  /** cumulative succeeded count */
   succeeded: number;
-  /** Cumulative terminal count. */
+  /** cumulative terminal count */
   done: number;
 }
 
@@ -67,7 +62,6 @@ export function survivalSeries(terminals: TerminalMark[]): SurvivalPoint[] {
   });
 }
 
-/** Recovery-kind counts across all agents (from recovery_action events). */
 export function recoveryBreakdown(state: RunViewState): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const agent of Object.values(state.agents)) {
@@ -80,16 +74,12 @@ export function recoveryBreakdown(state: RunViewState): Record<string, number> {
   return counts;
 }
 
-/** Total tokens reported by agent_done events (for live waste preview). */
 export function totalTokens(state: RunViewState): number {
   let sum = 0;
   for (const agent of Object.values(state.agents)) sum += agent.tokensUsed ?? 0;
   return sum;
 }
 
-/** Survival rate over all agents (oracle success). Returns null when no agent
- * carries a real verdict (success !== null) - a no-oracle run has no survival
- * rate (honesty, invariant #4), never a fabricated 0%. */
 export function survivalRate(state: RunViewState): number | null {
   const agents = Object.values(state.agents);
   if (agents.length === 0) return null;

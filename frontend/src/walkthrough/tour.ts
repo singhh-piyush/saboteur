@@ -1,17 +1,3 @@
-/**
- * The guided tour is data-driven: it scans the bundled run to pick
- * representative agents (one that recovers and survives, one that crashes, one
- * that resists a planted lie) and the event indices to seek to, then emits an
- * ordered list of beats. Swapping the runs rebinds everything automatically -
- * nothing here is hardcoded to a specific agent id, model, or number.
- *
- * The tour is built ONCE over the active family's runs. Each beat carries the
- * index of the run it narrates; entering a beat first ensures that run is
- * active (a no-op when it already is), so stepping forward or backward across
- * the face-off boundary always shows the right run. With two runs in the
- * family, the tour walks the primary and ends by switching to the sibling in
- * place.
- */
 
 import { agentLabel } from "../lib/format";
 import type { Scorecard } from "../lib/api";
@@ -29,55 +15,48 @@ export type TourAction =
   | { label: string; variant: "primary" | "ghost"; kind: "exit" }
   | { label: string; variant: "primary" | "ghost"; kind: "link"; href: string };
 
-/** Side-effect surface a beat can drive when it becomes active. */
+/** side-effects a beat can drive when it becomes active */
 export interface TourCtx {
   seek: (index: number) => void;
-  /** Jump the replay position behind a quick grid fade: only the start and
-   * destination states are ever visible, never the churn of the events in
-   * between. Reduced motion (or a no-op target) seeks instantly. */
+  /** seek with a brief grid fade so only the destination state is visible */
   seekSmooth: (index: number) => void;
   pause: () => void;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
-  /** Make a bundled run active (in-place swap; no-op when already active). */
+  /** swap the active bundled run; no-op if already active */
   switchRun: (index: number) => void;
 }
 
-/** One model's identity + frozen scorecard for the face-off comparison. */
+/** one model's identity + frozen scorecard for the face-off comparison */
 export interface FaceoffModel {
   label: string;
   short: string;
   scorecard: Scorecard;
 }
 
-/** The two models a face-off beat contrasts (primary vs sibling). Every number
- * the comparison shows derives from these scorecards - nothing is hardcoded. */
+/** the two models a face-off beat contrasts; all numbers derive from these scorecards */
 export interface FaceoffData {
   models: [FaceoffModel, FaceoffModel];
 }
 
 export interface Beat {
   id: string;
-  /** Which bundled run this beat narrates; entering the beat activates it. */
+  /** which bundled run this beat narrates; entering activates it */
   run: number;
-  /** The phase-2 (or sole) target. Interactive beats override this with the
-   * agent cell during phase 1 (handled in TourOverlay). */
+  /** primary target (interactive beats override with agent cell during phase 1) */
   target: TourTarget;
   placement: "top" | "bottom" | "left" | "right" | "center";
   eyebrow: string;
   title: string;
   body: string;
-  /** When set, the beat waits for the viewer to click this agent before
-   * revealing the trace: phase 1 spotlights the cell + shows `promptBody`;
-   * once clicked, phase 2 spotlights the drawer + shows `body`. */
+  /** phase-2 interactive: waits for viewer to click agent before revealing trace */
   interactive?: { agent: number };
-  /** Phase-1 call to action, shown while waiting for the click. */
+  /** phase-1 call to action shown while waiting for click */
   promptBody?: string;
   actions?: TourAction[];
-  /** Label for the last beat's primary footer button (default "Finish"). */
+  /** label for last beat's primary footer button (default "finish") */
   finishLabel?: string;
-  /** When set, the beat renders the interactive face-off comparison (metric
-   * deltas + model toggle + chart popup) instead of a plain body paragraph. */
+  /** when set, renders the face-off comparison instead of a plain body paragraph */
   compare?: FaceoffData;
   onEnter: (ctx: TourCtx) => void;
 }
@@ -91,9 +70,6 @@ interface PerAgent {
   recoveries: string[];
 }
 
-/** Fold index (exclusive upper bound) such that folding events[0..idx) includes
- * the n-th (1-based) event matching `pred`. Falls back to the last match, or to
- * `fallback` when there is no match at all. */
 function nthFoldIndex(
   events: TelemetryEvent[],
   pred: (ev: TelemetryEvent) => boolean,
@@ -112,11 +88,6 @@ function nthFoldIndex(
   return lastMatch >= 0 ? lastMatch + 1 : fallback;
 }
 
-/** A small fold index where the cohort is visibly underway (a handful of faults
- * have landed) but nothing has finished yet - the opening shot. Also used by the
- * provider to seed the first paint (and every run switch), so it matches the
- * tour's first beat. All cells already exist from run_started, so this is
- * purely for visual liveness. */
 export function introFoldIndex(events: TelemetryEvent[]): number {
   return nthFoldIndex(
     events,
@@ -145,21 +116,18 @@ function pickAgents(perAgent: Record<string, PerAgent>): {
   const failed = entries.filter((a) => a.success !== true);
   const realRecovery = (a: PerAgent) => a.recoveries.some((r) => REAL_RECOVERIES.has(r));
 
-  // Recovering + survived; prefer one that was rate-limited (matches narrative).
   const recovering =
     survived.find((a) => realRecovery(a) && a.faults.includes("rate_limit"))?.id ??
     survived.find(realRecovery)?.id ??
     survived[0]?.id ??
     null;
 
-  // Crashed; prefer a vanished-tool victim ("retried a dead tool").
   const crashed =
     failed.find((a) => a.faults.includes("tool_vanish") && a.id !== recovering)?.id ??
     failed.find((a) => a.id !== recovering)?.id ??
     failed[0]?.id ??
     null;
 
-  // Deceived + survived: got a silent_lie and still passed.
   const deceived =
     survived.find((a) => a.faults.includes("silent_lie") && a.id !== recovering && a.id !== crashed)?.id ??
     survived.find((a) => a.faults.includes("silent_lie") && a.id !== recovering)?.id ??
@@ -174,8 +142,6 @@ function asPct(value: number | null | undefined): string {
   return `${Math.round(value * 100)}%`;
 }
 
-/** How the picked crashed agent actually failed, from its frozen outcome -
- * never assert a failure story the data doesn't back. */
 function crashStory(agent: PerAgent | undefined): string {
   switch (agent?.outcome) {
     case "infinite_retry":
@@ -193,7 +159,6 @@ function crashStory(agent: PerAgent | undefined): string {
   }
 }
 
-/** The recovery actions the picked surviving agent actually took. */
 function recoveryStory(agent: PerAgent | undefined): string {
   const kinds = new Set((agent?.recoveries ?? []).filter((r) => REAL_RECOVERIES.has(r)));
   const parts: string[] = [];
@@ -211,9 +176,6 @@ export function buildTour(runs: DemoRun[]): Beat[] {
   const end = events.length;
   const intro = introFoldIndex(events);
   const clampIdx = (i: number) => Math.max(intro, Math.min(i, end));
-  // Mid-run frames chosen for visual richness (a mix of nominal / recovering /
-  // crashed / succeeded cells, and a busy chaos feed). Trace beats seek to the
-  // end so the grid is fully resolved while we inspect one agent's full trace.
   const mixedIdx = clampIdx(Math.round(end * 0.3));
   const feedBusyIdx = clampIdx(Math.round(end * 0.46));
 
@@ -297,7 +259,6 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.pause();
-        // Fade-jump to the finished run - the cut hides the churn in between.
         ctx.seekSmooth(end);
       },
     });
@@ -319,7 +280,6 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.pause();
-        // Fade-jump to the finished run - the cut hides the churn in between.
         ctx.seekSmooth(end);
       },
     });
@@ -341,7 +301,6 @@ export function buildTour(runs: DemoRun[]): Beat[] {
         ctx.setTab("grid");
         ctx.selectAgent(null);
         ctx.pause();
-        // Fade-jump to the finished run - the cut hides the churn in between.
         ctx.seekSmooth(end);
       },
     });
@@ -391,10 +350,6 @@ export function buildTour(runs: DemoRun[]): Beat[] {
     });
   }
 
-  // The tour ends on a choice, not a hard cut: the scorecard stays on screen
-  // (nothing behind the card changes on the way in), and the viewer picks
-  // between watching the full replay (free mode: scrubber, speed, run
-  // switcher) or heading back to the landing.
   beats.push({
     id: "close",
     run: lastRun,

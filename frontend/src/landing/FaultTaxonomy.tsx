@@ -12,7 +12,6 @@ const LAYER_LABEL: Record<Layer, string> = {
 
 const LAYER_ORDER: Layer[] = ["tool", "transport", "context"];
 
-/** Group the 8 faults by their layer, preserving FAULT_STYLES order. */
 const BY_LAYER: Record<Layer, string[]> = { tool: [], transport: [], context: [] };
 for (const [name, style] of Object.entries(FAULT_STYLES)) {
   BY_LAYER[style.layer].push(name);

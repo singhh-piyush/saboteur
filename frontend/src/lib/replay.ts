@@ -1,29 +1,13 @@
-/**
- * ReplayDriver - re-drives the SAME reducer with a recorded event array.
- *
- * Replay and live are identical by construction: both paths dispatch
- * `{type:"reset"}` followed by `{type:"event"}` actions in event order; the
- * only difference is pacing. `runToEnd()` (synchronous) is what the
- * invariant #3 test uses; `play()` paces dispatches by the recorded
- * timestamp gaps scaled by `speed`.
- *
- * Gap clamping is configurable. The live console keeps the default cap (a long
- * gap between control and chaos cohorts must not stall replay). The static
- * walkthrough passes a tight `[minGapMs, maxGapMs]` window so a recorded run
- * feels live and a 15s injected-latency gap never freezes the guided tour.
- */
 
 import type { Action } from "../state/reducer";
 import type { TelemetryEvent } from "../types/telemetry";
 
-/** A single long gap (e.g. between control and chaos cohorts) is capped so
- * replay never appears to stall. */
 const MAX_GAP_MS = 2000;
 
 export interface ReplayOptions {
-  /** Floor for the inter-event delay before dividing by speed (default 0). */
+  /** min inter-event delay before speed divisor (default 0ms) */
   minGapMs?: number;
-  /** Ceiling for the inter-event delay before dividing by speed (default 2000). */
+  /** max inter-event delay before speed divisor (default 2000ms) */
   maxGapMs?: number;
 }
 
@@ -85,7 +69,7 @@ export class ReplayDriver {
     this.notify();
   }
 
-  /** Dispatch every remaining event synchronously (tests + "skip to end"). */
+  /** dispatch every remaining event synchronously (skip-to-end) */
   runToEnd(): void {
     this.pause();
     if (this.index === 0) {
@@ -123,9 +107,7 @@ export class ReplayDriver {
     this.timer = setTimeout(() => this.step(), gap);
   }
 
-  /** Jump to event `i` (0..length): re-derive state from a fresh reducer by
-   * folding events[0..i). Correct for backward scrub - the reducer is pure, so
-   * folding from the start always reproduces the exact state at that index. */
+  /** seek to event index `i`; re-derives state from scratch (correct for backward scrub) */
   seek(i: number): void {
     this.pause();
     const target = Math.max(0, Math.min(i, this.events.length));

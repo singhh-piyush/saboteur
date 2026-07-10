@@ -1,11 +1,3 @@
-/**
- * Regression tests for the configurable API base (VITE_API_BASE_URL).
- *
- * The MI300X run exposed the wiring bug: with the API on a non-default port
- * (SSH tunnel on :8000 → uvicorn moved to :8080) the dashboard's /runs
- * request died. The base must be read at call time, default to same-origin
- * (relative paths), and drive both REST and WebSocket URLs.
- */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 

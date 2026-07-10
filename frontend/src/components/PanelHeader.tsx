@@ -2,17 +2,13 @@ import React from "react";
 
 interface PanelHeaderProps {
   title: React.ReactNode;
-  /** Optional right-aligned slot (counts, buttons). */
+  /** optional right-aligned slot (counts, buttons) */
   right?: React.ReactNode;
-  /** When provided, renders a collapse chevron and makes the header clickable. */
+  /** when provided, renders a collapse chevron and makes the header clickable */
   collapsed?: boolean;
   onToggle?: () => void;
 }
 
-/**
- * Unified section header for every panel card: accent tick + bold caps title.
- * Replaces the assorted dim-grey caps headers so all panels share one look.
- */
 export function PanelHeader({ title, right, collapsed, onToggle }: PanelHeaderProps) {
   const collapsible = onToggle !== undefined;
 

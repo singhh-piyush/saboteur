@@ -1,16 +1,3 @@
-/**
- * Wires the pure reducer to the two event sources: the live WebSocket and
- * the ReplayDriver. Components only ever read `state` and call the actions
- * exposed here - they never touch sockets or timers directly.
- *
- * Navigation: a simple hash-based router (no library). Pages:
- *   #/runs        → RunsPage (run management)
- *   #/live/{id}   → Live view (grid + scorecard)
- *   #/targets     → TargetsPage (register / edit BYO agents)
- *   #/profiles    → ProfileBuilder (compose chaos profiles)
- *   #/compare     → ComparePage (per-metric run delta; ?a=&b= deep-link)
- *   default       → #/runs
- */
 
 import {
   createContext,
@@ -52,33 +39,29 @@ export type Page =
 
 export interface RunContextValue {
   state: RunViewState;
-  /** The run id currently being watched or replayed. */
+  /** currently watched or replayed run id */
   activeRunId: string | null;
-  /** Current page from hash router. */
+  /** current page from hash router */
   page: Page;
-  /** Navigate to a page. */
+  /** navigate to a page */
   navigate: (page: Page) => void;
-  /** Connect the live WebSocket for a run (stops any replay).
-   *  `expectedAgents` is a UI hint for the skeleton grid size. */
+  /** start watching a run via live websocket; stops any replay. `expectedAgents` is a ui hint for skeleton grid size */
   watchRun: (runId: string, expectedAgents?: number) => void;
-  /** How many agents this run is expected to have (skeleton hint). */
+  /** expected agent count (skeleton hint) */
   expectedAgents: number | null;
-  /** Start replaying a recorded event array (stops any live socket). */
+  /** start replaying a recorded event array; stops any live socket */
   startReplay: (runId: string, events: TelemetryEvent[]) => void;
   replay: ReplayControls | null;
   stop: () => void;
-  /** Manual reconnect after max retries exhausted. */
+  /** manual reconnect after max retries exhausted */
   reconnect: () => void;
 }
 
-/** Exported so the static WalkthroughProvider can supply a same-shaped value,
- * letting the dashboard components consume it via `useRun()` unchanged. */
 export const RunContext = createContext<RunContextValue | null>(null);
 
 function parseHash(): Page {
   const raw = window.location.hash.replace(/^#\/?/, "");
   const [path, query] = raw.split("?");
-  // Empty hash or #/landing → the marketing landing page (default front door).
   if (path === "" || path === "landing") return { kind: "landing" };
   if (path === "walkthrough") return { kind: "walkthrough" };
   if (path.startsWith("live/")) {
@@ -144,7 +127,6 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<RunSocket | null>(null);
   const driverRef = useRef<ReplayDriver | null>(null);
 
-  // Listen for hash changes (back/forward navigation).
   useEffect(() => {
     const handler = () => setPage(parseHash());
     window.addEventListener("hashchange", handler);
@@ -173,8 +155,6 @@ export function RunProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "conn", conn: "connecting" });
       const socket = new RunSocket(runId, {
         onOpen: () => {
-          // Server replays the full backlog after open: rebuild from zero.
-          // The reducer deduplicates, so re-sent events produce no changes.
           dispatch({ type: "conn", conn: "live" });
           dispatch({ type: "reset" });
         },
@@ -185,7 +165,6 @@ export function RunProvider({ children }: { children: ReactNode }) {
       });
       socketRef.current = socket;
       socket.connect();
-      // Navigate to the live view.
       navigate({ kind: "live", runId });
     },
     [teardown, navigate],

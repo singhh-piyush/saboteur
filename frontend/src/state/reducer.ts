@@ -1,59 +1,44 @@
-/**
- * The event-sourced core (invariant #3): one pure reducer consumes
- * TelemetryEvents - from the live WebSocket or from a replayed JSONL - and
- * derives ALL view state. Live and replay are indistinguishable by
- * construction: same events in, same state out (literally tested in
- * reducer.test.ts).
- *
- * Idempotency: the reducer deduplicates events by identity (ts + agent_id +
- * step + event + fault + recovery) so a reconnect that re-sends the JSONL
- * backlog produces ZERO state changes and zero re-renders. The `_seen` set
- * is cleared on `reset`.
- */
 
 import type { TelemetryEvent } from "../types/telemetry";
 
-// ---------------------------------------------------------------------------
-// State shapes
-// ---------------------------------------------------------------------------
 
 export type AgentStatus =
-  | "pending" // cell exists (run_started said N agents) but no events yet
+  | "pending" 
   | "healthy"
-  | "recovering" // fault seen, not yet resolved
-  | "crashed" // agent_crashed, agent_done success=false, or a no-oracle behavioral failure
-  | "succeeded" // agent_done success=true (an oracle judged it a pass)
-  | "done"; // agent_done success=null (no oracle) + ran to completion - neither pass nor fail
+  | "recovering" 
+  | "crashed" 
+  | "succeeded" 
+  | "done"; 
 
 export type ConnStatus =
   | "idle"
   | "connecting"
   | "live"
   | "reconnecting"
-  | "complete"  // stream finished cleanly - no reconnect
-  | "offline"   // max retries exhausted
+  | "complete"  
+  | "offline"   
   | "replay";
 
 export interface AgentState {
   id: number;
   status: AgentStatus;
-  /** Highest step number seen for this agent. */
+  /** highest step number seen for this agent */
   step: number;
   faultCount: number;
   recoveryCount: number;
-  /** Unresolved fault type, cleared by a recovery or a clean tool call. */
+  /** active fault type; cleared on recovery or clean tool call */
   activeFault: string | null;
   outcome: string | null;
   success: boolean | null;
   tokensUsed: number | null;
-  /** Bumps on every visible state change - keys the cell pulse animation. */
+  /** bumps on each visible state change; drives the cell pulse animation key */
   seq: number;
-  /** Full per-agent event trace, in arrival order (timeline drawer). */
+  /** per-agent event trace in arrival order (timeline drawer) */
   events: TelemetryEvent[];
 }
 
 export interface ChaosLogEntry {
-  id: number; // monotonic, for React keys
+  id: number;
   ts: string;
   agentId: number;
   fault: string;
@@ -74,15 +59,15 @@ export interface RunViewState {
   nAgents: number;
   finished: boolean;
   agents: Record<number, AgentState>;
-  /** Newest-first feed of fault injections, capped (rendering only). */
+  /** newest-first fault feed, capped for rendering */
   chaosLog: ChaosLogEntry[];
-  /** Total fault injections seen - keeps counting past the render cap. */
+  /** total fault count; keeps incrementing past the render cap */
   faultCount: number;
-  /** agent_done / agent_crashed marks, for the survival-over-time line. */
+  /** agent_done/agent_crashed marks for the survival-over-time chart */
   terminals: TerminalMark[];
   eventCount: number;
   conn: ConnStatus;
-  /** Dedup set: event identity → true. Prevents backlog replay re-renders. */
+  /** dedup set: prevents backlog replay from re-rendering seen events */
   _seen: Set<string>;
 }
 
@@ -108,24 +93,15 @@ export const initialState: RunViewState = {
   _seen: new Set(),
 };
 
-// ---------------------------------------------------------------------------
-// Event identity for deduplication
-// ---------------------------------------------------------------------------
 
-/** Stable identity matching the backend's _Identity tuple in ws.py. */
 function eventIdentity(ev: TelemetryEvent): string {
   return `${ev.ts}|${ev.agent_id}|${ev.step ?? ""}|${ev.event}|${ev.fault ?? ""}|${ev.recovery ?? ""}`;
 }
 
-// ---------------------------------------------------------------------------
-// Reducer
-// ---------------------------------------------------------------------------
 
 export function reduce(state: RunViewState, action: Action): RunViewState {
   switch (action.type) {
     case "reset":
-      // Keep the connection status: reset fires on (re)connect, right before
-      // the backlog replays.
       return { ...initialState, conn: state.conn, _seen: new Set() };
     case "conn":
       return { ...state, conn: action.conn };
@@ -134,7 +110,6 @@ export function reduce(state: RunViewState, action: Action): RunViewState {
   }
 }
 
-/** Fold a full event log into a view state (scorecard view + tests). */
 export function foldEvents(events: TelemetryEvent[]): RunViewState {
   return events.reduce(
     (state, event) => reduce(state, { type: "event", event }),
@@ -143,14 +118,10 @@ export function foldEvents(events: TelemetryEvent[]): RunViewState {
 }
 
 function applyEvent(state: RunViewState, ev: TelemetryEvent): RunViewState {
-  // --- Idempotency: deduplicate by event identity ---
   const id = eventIdentity(ev);
   if (state._seen.has(id)) {
-    // Already processed - return the SAME reference so React skips re-render.
     return state;
   }
-  // Mutating the set is safe: we always spread into a new state object below,
-  // and the set is never read by React for rendering.
   const seen = new Set(state._seen);
   seen.add(id);
 
@@ -209,9 +180,6 @@ function applyEvent(state: RunViewState, ev: TelemetryEvent): RunViewState {
   return next;
 }
 
-// ---------------------------------------------------------------------------
-// Per-agent transition rules
-// ---------------------------------------------------------------------------
 
 function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
   const agent: AgentState = { ...prev, events: [...prev.events, ev] };
@@ -227,8 +195,6 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
       break;
 
     case "tool_call": {
-      // A clean (unsabotaged, unerrored) call after a fault means the agent
-      // is making progress again, even before a classified recovery arrives.
       const clean =
         ev.payload["sabotaged"] === false && ev.payload["errored"] !== true;
       if (!terminal) {
@@ -245,13 +211,10 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
       agent.faultCount = prev.faultCount + 1;
       agent.activeFault = ev.fault;
       if (!terminal) setStatus(agent, "recovering");
-      else agent.seq = prev.seq + 1; // badge still updates post-terminal
+      else agent.seq = prev.seq + 1; // seq bump even for terminal agents keeps the cell reactive
       break;
 
     case "recovery_action":
-      // `no_action` is a stall (no tool call / parse failure), not a
-      // productive recovery: don't count it, don't clear the fault, and leave
-      // the agent in `recovering` - it hasn't actually recovered yet.
       if (ev.recovery === "no_action") break;
       agent.recoveryCount = prev.recoveryCount + 1;
       agent.activeFault = null;
@@ -260,11 +223,6 @@ function transition(prev: AgentState, ev: TelemetryEvent): AgentState {
 
     case "agent_done": {
       const raw = ev.payload["success"];
-      // null ⇒ the run finished but no oracle judged it (BYO without an oracle).
-      // Honesty (invariant #4): never fabricate a verdict. success stays null and
-      // the cell renders a NEUTRAL "done" (not green "succeeded") when it merely
-      // ran to completion - a real behavioral failure (timeout / hard_exception)
-      // still goes red. An oracle verdict colors green/red as before.
       const success = raw === true ? true : raw === false ? false : null;
       agent.outcome = asString(ev.payload["outcome"]);
       agent.success = success;
@@ -312,9 +270,6 @@ function freshAgent(id: number): AgentState {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function describeFault(ev: TelemetryEvent): string {
   const detail = ev.payload["detail"];

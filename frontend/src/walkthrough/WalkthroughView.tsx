@@ -1,14 +1,3 @@
-/**
- * WalkthroughView - the static, backend-free demo page. It lays out the exact
- * same dashboard components the live console uses (CohortGrid, RunBar,
- * ChaosLog, TimelineDrawer, ScorecardView), driven by the WalkthroughProvider's
- * replay instead of a WebSocket, and layers a guided tour on top.
- *
- * The chrome mirrors App.tsx's Shell (modular gapped cards on the void) so the
- * page is visually indistinguishable from the real console. The network-bound
- * ControlPanel is replaced by a static "recorded run" info card; everything
- * else is the genuine article.
- */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -36,11 +25,8 @@ type Tab = "grid" | "scorecard";
 
 const CARD = "rounded-lg border border-line bg-panel";
 
-/** How long the grid keeps its morph treatment after a tour position jump: the
- * cells ease from their current state to the target state over this window. */
 const MORPH_MS = 480;
 
-/** Dip-to-black time for the demo -> family-selector handoff. */
 const DIP_MS = 320;
 
 type Stage =
@@ -48,16 +34,8 @@ type Stage =
   | { kind: "reveal" | "demo"; family: number; nonce: number };
 
 export function WalkthroughView({ onExit }: { onExit: () => void }) {
-  // Stage machine: family selector -> branded reveal -> demo. The provider +
-  // shell mount at "reveal", UNDER the opaque Reveal overlay, so the keyed
-  // remount and the first paint are never visible - the reveal fades out over
-  // a fully painted demo. Within a mounted demo the provider still swaps the
-  // family's sibling runs IN PLACE (no remount): the tour's face-off beat and
-  // the free-mode switcher stay seamless.
   const [stage, setStage] = useState<Stage>({ kind: "select" });
   const [dipping, setDipping] = useState(false);
-  // Armed when the reveal begins its fade-out: the tour comes up UNDER the still
-  // opaque black so there is no dead pause before step 1. Reset on every pick.
   const [tourArmed, setTourArmed] = useState(false);
   const dipTimer = useRef<number | null>(null);
   const nonceRef = useRef(0);
@@ -69,8 +47,6 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
     [],
   );
 
-  // Every pick gets a fresh nonce -> fresh provider + fresh guided tour, even
-  // when re-picking the same family. Reduced motion skips the reveal.
   const pickFamily = (index: number) => {
     nonceRef.current += 1;
     setTourArmed(false);
@@ -81,9 +57,6 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
     });
   };
 
-  // Dip to black, run `after` at the darkest point, then lift. The selector and
-  // the reveal are both pure black, so a handoff through the dip is seamless.
-  // Reduced motion runs `after` immediately (no fade).
   const runDip = (after: () => void) => {
     if (dipping) return;
     if (prefersReducedMotion()) {
@@ -106,8 +79,6 @@ export function WalkthroughView({ onExit }: { onExit: () => void }) {
   }
 
   const family = DEMO_FAMILIES[stage.family] ?? DEMO_FAMILIES[0];
-  // The other bundled family (two families total) - the last tour beat offers to
-  // route to its run through the reveal sequence.
   const otherFamilyIndex = stage.family === 0 ? 1 : 0;
   const otherFamily = DEMO_FAMILIES[otherFamilyIndex];
   return (
@@ -155,12 +126,8 @@ function WalkthroughShell({
   runs: DemoRun[];
   onSwitchFamily: () => void;
   onExit: () => void;
-  /** The other bundled family's name + a handler that routes to its run (via
-   * the reveal); surfaced as an extra action on the last tour beat. */
   otherFamilyLabel?: string;
   onViewOtherFamily?: () => void;
-  /** True while the reveal overlay covers the shell: the tour overlay stays
-   * dormant so the reveal's skip keys can never step or exit the tour. */
   tourSuspended?: boolean;
 }) {
   const { state } = useRun();
@@ -174,11 +141,8 @@ function WalkthroughShell({
   const [feedCollapsed, setFeedCollapsed] = useState(false);
   const [tourMode, setTourMode] = useState<"tour" | "free">("tour");
   const [tourBeat, setTourBeat] = useState(0);
-  // Click-to-reveal side-by-side comparison, shown only during the face-off beat.
   const [sideBySideOpen, setSideBySideOpen] = useState(false);
 
-  // Built once over the family's runs; each beat carries its run binding, so
-  // the list stays stable across in-place run switches.
   const beats = useMemo(() => buildTour(runs), [runs]);
 
   const selectAgent = (id: number | null) => {
@@ -186,8 +150,6 @@ function WalkthroughShell({
     setSelectedAgent(id);
   };
 
-  // Free-mode run switch: land on a clean paused grid at the new run's intro
-  // fold (the swap itself seeks there). Tour beats do their own tab/selection.
   const switchRunFree = (index: number) => {
     switchRun(index);
     selectAgent(null);
@@ -196,23 +158,15 @@ function WalkthroughShell({
 
   const reducedMotion = usePrefersReducedMotion();
 
-  // Tour beat position jumps: morph, don't churn. The seek is instant, but the
-  // grid gets a `grid-morphing` treatment for a beat - the cells ease from their
-  // current state to the target state and the mass state-flash burst is
-  // suppressed - so a jump reads as one smooth settle, not a strobe of rings.
-  // Reduced motion seeks instantly with no morph window.
   const [morphing, setMorphing] = useState(false);
   const morphTimer = useRef<number | null>(null);
   const seekSmooth = (index: number) => {
-    if (index === position) return; // nothing changes - no morph needed
+    if (index === position) return; 
     if (reducedMotion) {
       seek(index);
       return;
     }
     if (morphTimer.current !== null) window.clearTimeout(morphTimer.current);
-    // Enable the morph class and seek in the SAME commit (React batches both),
-    // so the new state first paints with the lengthened transition + flash
-    // suppression already applied - the cells glide old-state -> new-state.
     setMorphing(true);
     seek(index);
     morphTimer.current = window.setTimeout(() => {
@@ -231,28 +185,17 @@ function WalkthroughShell({
   const drawerOpen = selectedAgent !== null && state.agents[selectedAgent] !== undefined;
   const tourActive = tourMode === "tour";
 
-  // While the scorecard / face-off beats dock their coachmark to the left, the
-  // scorecard is fully visible beside it on wide screens. On narrow screens the
-  // callout flips to a bottom bar, so reserve room beneath the scorecard there
-  // (lg+ needs none) - nothing is hidden under the docked card at any width.
   const activeBeat = tourActive ? (beats[tourBeat] ?? null) : null;
   const activeBeatId = activeBeat?.id ?? null;
   const scorecardDock = activeBeatId === "scorecard" || activeBeatId === "faceoff";
-  // On the face-off beat the scorecard shows the sibling model (models[1]) and
-  // the moved metrics highlight in place versus the primary (models[0]); a
-  // "Compare side by side" pill reveals both scorecards at once. Null on every
-  // other beat -> no baseline, no pill, and the overlay closes.
   const faceoffData = activeBeat?.compare ?? null;
   const scBaseline = faceoffData ? faceoffData.models[0].scorecard : null;
   const scBaselineLabel = faceoffData ? faceoffData.models[0].short : undefined;
 
-  // Leaving the face-off beat closes the comparison overlay.
   useEffect(() => {
     if (faceoffData === null && sideBySideOpen) setSideBySideOpen(false);
   }, [faceoffData, sideBySideOpen]);
 
-  // Fade in from black on entry, completing the dip-to-black handoff from the
-  // landing page (the demo mounts under a black cover that then lifts).
   const [covered, setCovered] = useState(!reducedMotion);
   const [coverFade, setCoverFade] = useState(false);
   useEffect(() => {
@@ -271,16 +214,12 @@ function WalkthroughShell({
     setTourMode("free");
     play();
   };
-  // Finishing the tour ("Watch the full run" on the last beat) drops into free
-  // mode and auto-plays the full replay from the very beginning at 2x - the
-  // grid tab fades in as the run starts, so the canvas only changes because
-  // the viewer chose to watch.
   const finishTour = () => {
     setTourMode("free");
     selectAgent(null);
     setTab("grid");
     setSpeed(2);
-    restart(); // seeks to the start and plays
+    restart(); 
   };
   const replayTour = () => {
     setTourBeat(0);
@@ -290,7 +229,6 @@ function WalkthroughShell({
   return (
     <TooltipSuppression active={tourMode === "tour"}>
     <div className="flex h-screen flex-col gap-2 bg-void p-2">
-      {/* Header */}
       <header
         className={`${CARD} flex items-center gap-4 px-4 py-2.5`}
         style={{ animation: "card-in 0.3s ease-out backwards" }}
@@ -345,9 +283,7 @@ function WalkthroughShell({
         </div>
       </header>
 
-      {/* Body */}
       <div className="relative flex min-h-0 flex-1 gap-2 overflow-hidden">
-        {/* Sidebar */}
         <aside
           className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col gap-2 transition-transform xl:relative xl:flex xl:translate-x-0 ${
             sidebarOpen ? "flex translate-x-0" : "hidden -translate-x-full"
@@ -383,7 +319,6 @@ function WalkthroughShell({
           />
         )}
 
-        {/* Main */}
         <main
           className={`${CARD} flex min-w-0 flex-1 flex-col overflow-hidden`}
           style={{ animation: "card-in 0.3s ease-out 120ms backwards" }}
@@ -404,15 +339,8 @@ function WalkthroughShell({
             </TabButton>
           </nav>
 
-          {/* Both tabs stay mounted and cross-fade with opacity. This pre-warms
-              ScorecardView (its heavy foldEvents + recharts first render happen
-              once at load, behind the intro spotlight) so switching to the
-              scorecard is an instant fade, not a stutter. */}
+          {/* both tabs stay mounted: pre-warms ScorecardView (heavy first render) so tab switch is instant */}
           <div className="relative min-h-0 flex-1">
-            {/* On a tour seek the grid gets `grid-morphing`: cells ease from
-                their current state to the target state (and the state-flash
-                burst is suppressed) so the jump settles smoothly. Tab switching
-                still cross-fades via the pane opacity. */}
             <div
               data-tour="grid"
               className={`absolute inset-0 transition-opacity duration-500 ease-out ${morphing ? "grid-morphing" : ""}`}
@@ -453,13 +381,7 @@ function WalkthroughShell({
           </div>
         </main>
 
-        {/* Timeline drawer - over the grid (no grid reflow). In free mode it slides
-            in via transform. During the guided tour it instead snaps to its final
-            position and fades in (transition-opacity only, no transform transition):
-            a slide-in would move the drawer's rect across the screen, and the tour
-            spotlight would try to chase it - so the outline appeared to dart off and
-            come back. A fixed-position fade gives the spotlight a stable target to
-            glide to in one clean motion. */}
+        {/* tour mode: opacity-only transition so spotlight has a stable rect to glide to (not a sliding target) */}
         <div
           data-tour="timeline"
           className={`absolute inset-y-0 right-0 z-30 w-[20.5rem] pl-2 xl:w-[23rem] max-sm:inset-0 max-sm:w-full max-sm:pl-0 will-change-transform ${
@@ -498,15 +420,14 @@ function WalkthroughShell({
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
       />
 
-      {/* Face-off beat: the side-by-side comparison of both models' scorecards,
-          toggled from the coachmark's "Compare side by side" action. */}
+      {/* face-off beat: side-by-side scorecard comparison */}
       <SideBySide
         open={sideBySideOpen && faceoffData !== null}
         data={faceoffData}
         onClose={() => setSideBySideOpen(false)}
       />
 
-      {/* Fade-in-from-black cover (portaled above the tour overlays). */}
+      {/* fade-in-from-black cover portaled above tour overlays */}
       {covered &&
         createPortal(
           <div

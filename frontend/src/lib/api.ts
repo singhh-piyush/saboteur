@@ -1,27 +1,15 @@
-/**
- * Typed fetchers for the orchestrator REST API. Paths are same-origin by
- * default: the Vite dev server proxies them to FastAPI, and the production
- * build is served by FastAPI itself. When the API lives elsewhere (split
- * ports, SSH tunnels, a static deploy), set VITE_API_BASE_URL and every
- * request - REST and WebSocket - is rebased onto it.
- */
 
 import type { TelemetryEvent } from "../types/telemetry";
 
-/** The configured API origin, "" = same-origin (the default). Read at call
- * time so tests can stub the env without re-importing the module. */
 function apiBase(): string {
   const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
   return base.replace(/\/+$/, "");
 }
 
-/** Prefix an API path with the configured base (no-op when same-origin). */
 export function apiUrl(path: string): string {
   return `${apiBase()}${path}`;
 }
 
-/** WebSocket URL for a run's telemetry channel, derived from the API base
- * (http→ws / https→wss) or from the page origin when same-origin. */
 export function wsUrl(runId: string): string {
   const base = apiBase();
   const origin = base !== "" ? base : `${window.location.protocol}//${window.location.host}`;
@@ -54,14 +42,12 @@ export interface Scorecard {
   run_id: string;
   profile: string;
   n_agents: number;
-  // Behavioral tier (always present).
   mttr_steps: number | null;
   recovery_breakdown: Record<string, number>;
   waste_factor: number | null;
   failure_modes: Record<string, number>;
   crash_rate: number;
   latency_degradation: number | null;
-  // Oracle-gated tier (null + reason when no/ineligible oracle).
   survival_rate: number | null;
   survival_rate_reason: string | null;
   deception_detection_rate: number | null;
@@ -102,38 +88,17 @@ export class ApiError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Offline mode (static walkthrough deploy - no backend)
-// ---------------------------------------------------------------------------
-//
-// The static walkthrough serves a recorded run with no FastAPI behind it. To
-// keep the reused `ScorecardView` byte-identical (it statically imports
-// `fetchScorecard` / `fetchAllEvents`), we intercept those reads here instead
-// of editing the component: a registered run resolves from bundled data, and
-// any other read is refused WITHOUT touching the network while offline. Live
-// behavior is unchanged when `OFFLINE` is false (the default).
 
 let OFFLINE = false;
 const OFFLINE_RUNS = new Map<string, { scorecard: Scorecard; events: TelemetryEvent[] }>();
 
-// Offline mode is reference-counted by owner token (one per mounted walkthrough
-// provider). A keyed remount (switching model family) mounts the new provider
-// BEFORE the old one's deferred teardown runs; with a naive boolean + global
-// clear, that stale teardown wiped the new provider's just-registered runs and
-// flipped offline off, so the end-of-tour scorecard escaped to the network and
-// 404'd. Counting owners keeps offline on (and the runs map intact) as long as
-// any provider is mounted - the map is cleared only when the LAST owner leaves.
 const OFFLINE_OWNERS = new Set<symbol>();
 
-/** Acquire offline mode for an owner token (idempotent per token, so a provider
- * may call it from both render and its mount effect). */
 export function acquireOffline(token: symbol): void {
   OFFLINE_OWNERS.add(token);
   OFFLINE = true;
 }
 
-/** Release an owner's hold on offline mode. Only when no owners remain does
- * offline turn off and the registered runs get cleared. */
 export function releaseOffline(token: symbol): void {
   OFFLINE_OWNERS.delete(token);
   if (OFFLINE_OWNERS.size === 0) {
@@ -142,8 +107,6 @@ export function releaseOffline(token: symbol): void {
   }
 }
 
-/** Register a run's bundled scorecard + events so the reused views resolve it
- * without any network request. */
 export function registerOfflineRun(
   id: string,
   scorecard: Scorecard,
@@ -152,7 +115,7 @@ export function registerOfflineRun(
   OFFLINE_RUNS.set(id, { scorecard, events });
 }
 
-/** Full RunListEntry matching the backend RunListEntry model. */
+/** matches the backend RunListEntry model */
 export interface RunListEntry {
   run_id: string;
   target: string;
@@ -212,7 +175,6 @@ export function fetchScorecard(runId: string): Promise<Scorecard> {
   return request<Scorecard>(`/runs/${encodeURIComponent(runId)}/scorecard`);
 }
 
-/** Full event history for replay. The backend paginates; pull everything. */
 export async function fetchAllEvents(runId: string): Promise<TelemetryEvent[]> {
   const offline = OFFLINE_RUNS.get(runId);
   if (offline) return offline.events;
@@ -234,11 +196,7 @@ export async function fetchAllEvents(runId: string): Promise<TelemetryEvent[]> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Run management (DELETE, downloads)
-// ---------------------------------------------------------------------------
 
-/** Delete a single run and its artifacts. Returns 204 on success. */
 export async function deleteRun(runId: string): Promise<void> {
   const resp = await fetch(apiUrl(`/runs/${encodeURIComponent(runId)}`), {
     method: "DELETE",
@@ -249,9 +207,7 @@ export async function deleteRun(runId: string): Promise<void> {
   }
 }
 
-/** Cancel a running or pending run. */
 export async function cancelRun(runId: string): Promise<void> {
-  // Offline (walkthrough): there is nothing to stop and no backend to call.
   if (OFFLINE) return;
   const resp = await fetch(apiUrl(`/runs/${encodeURIComponent(runId)}/cancel`), {
     method: "POST",
@@ -262,29 +218,21 @@ export async function cancelRun(runId: string): Promise<void> {
   }
 }
 
-/** Bulk-delete all finished runs. Returns the count deleted. */
 export async function bulkDeleteRuns(): Promise<{ deleted: number }> {
   return request<{ deleted: number }>("/runs?status=finished", {
     method: "DELETE",
   });
 }
 
-/** Direct download URL for a run's JSONL event log. */
 export function downloadJsonlUrl(runId: string): string {
   return apiUrl(`/runs/${encodeURIComponent(runId)}/download/jsonl`);
 }
 
-/** Direct download URL for a run's scorecard JSON. */
 export function downloadScorecardUrl(runId: string): string {
   return apiUrl(`/runs/${encodeURIComponent(runId)}/download/scorecard`);
 }
 
-// ---------------------------------------------------------------------------
-// Wire proxy (capture-all "sabotage my agent" mode)
-// ---------------------------------------------------------------------------
 
-/** Start a proxy run. With `capture_all`, headerless /v1 traffic is absorbed
- * into it - point any agent's OPENAI_BASE_URL at the proxy and it renders live. */
 export function startProxyRun(body: {
   profile: string;
   n_agents?: number;
@@ -296,12 +244,10 @@ export function startProxyRun(body: {
   });
 }
 
-/** The run currently absorbing headerless /v1 traffic (run_id null = none). */
 export function fetchCaptureStatus(): Promise<{ run_id: string | null }> {
   return request<{ run_id: string | null }>("/proxy/capture");
 }
 
-/** Finish a proxy run: emit terminals, score, persist the scorecard. */
 export function finishProxyRun(runId: string): Promise<{ status: string; run_id: string }> {
   return request<{ status: string; run_id: string }>(
     `/proxy/runs/${encodeURIComponent(runId)}/finish`,
@@ -309,9 +255,6 @@ export function finishProxyRun(runId: string): Promise<{ status: string; run_id:
   );
 }
 
-// ---------------------------------------------------------------------------
-// Targets (registry of runnable agents)
-// ---------------------------------------------------------------------------
 
 export type OracleKind = "none" | "regex" | "command" | "http";
 
@@ -359,9 +302,6 @@ export async function deleteTarget(name: string): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Profile builder (fault catalog + validate + save)
-// ---------------------------------------------------------------------------
 
 export type ParamKind = "range" | "int" | "float" | "int_list";
 
@@ -379,7 +319,7 @@ export interface FaultCatalogEntry {
   params: ParamSpec[];
 }
 
-/** One fault entry in a profile draft. Loose record: validated server-side. */
+/** one fault entry in a profile draft; validated server-side */
 export type FaultDraft = Record<string, unknown> & { type: string; probability: number };
 
 export interface ProfileDraft {
@@ -399,7 +339,7 @@ export interface ValidationResult {
   errors: ValidationItem[];
 }
 
-/** A full saved profile (every fault field), for loading into the builder. */
+/** full saved profile, for loading into the builder */
 export interface FullProfile {
   name: string;
   seed: number;
@@ -439,9 +379,6 @@ export async function deleteProfile(name: string): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Compare (per-metric delta between two runs)
-// ---------------------------------------------------------------------------
 
 export interface MetricDelta {
   a: number | null;

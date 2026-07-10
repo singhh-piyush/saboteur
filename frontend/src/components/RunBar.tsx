@@ -11,24 +11,10 @@ const COUNT_TIP: Record<string, string> = {
   done: "Agents that ran to completion but had no success oracle to judge them",
 };
 
-/**
- * Run context bar at the top of the main card (live page only).
- * Holds everything that used to crowd the app header: run identity,
- * live survival ticker, per-state counts, and STOP RUN.
- *
- * `staticRun` renders the read-only variant used by the walkthrough demo: no
- * STOP RUN control (it fires a network `cancelRun`, meaningless for a bundled
- * replay) and a single, non-wrapping row so the bar's height never changes as
- * counts resolve or the run finishes - otherwise the finished-flip dropped the
- * STOP button and shoved the cohort grid up between tour beats.
- */
 export function RunBar({ staticRun = false }: { staticRun?: boolean } = {}) {
   const { state, activeRunId } = useRun();
   const counts = runCounts(state);
 
-  // Only show a survival % when at least one agent carries a real oracle verdict.
-  // A no-oracle run (success===null) has no survival rate - show "-", never a
-  // fabricated 0% or 100% (honesty, invariant #4; matches the scorecard's null).
   const hasVerdict = Object.values(state.agents).some((a) => a.success !== null);
   const survival = hasVerdict ? (counts.succeeded / counts.total) * 100 : null;
 
@@ -38,7 +24,6 @@ export function RunBar({ staticRun = false }: { staticRun?: boolean } = {}) {
         staticRun ? "flex-nowrap overflow-hidden" : "flex-wrap gap-y-1.5"
       }`}
     >
-      {/* Run identity */}
       <div className="flex min-w-0 items-baseline gap-2">
         {state.profile && (
           <span className="text-sm font-semibold text-ink">{state.profile}</span>
@@ -55,7 +40,6 @@ export function RunBar({ staticRun = false }: { staticRun?: boolean } = {}) {
 
       <div className="flex-1" />
 
-      {/* Live survival ticker */}
       {counts.total > 0 && (
         <Tooltip
           portal
@@ -74,7 +58,6 @@ export function RunBar({ staticRun = false }: { staticRun?: boolean } = {}) {
         </Tooltip>
       )}
 
-      {/* Per-state counts */}
       {counts.total > 0 && (
         <div className="hidden items-center gap-3 text-sm md:flex">
           <Count label="nominal" value={counts.healthy} className="text-ok" />
@@ -87,7 +70,7 @@ export function RunBar({ staticRun = false }: { staticRun?: boolean } = {}) {
         </div>
       )}
 
-      {/* Stop (live only - a bundled replay has no run to cancel) */}
+      {/* stop button hidden for bundled replays */}
       {!staticRun && !state.finished && activeRunId && (
         <button
           type="button"

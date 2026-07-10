@@ -1,17 +1,3 @@
-/**
- * TourOverlay - the guided-tour engine. For the active beat it runs the beat's
- * side effects (seek / pause / select agent / switch tab), spotlights the
- * target, and renders the coachmark callout with Back / Next / Skip controls.
- *
- * Interactive beats are two-phase: phase 1 spotlights an agent's CELL and asks
- * the viewer to click it; once they do (the real selection that opens the
- * drawer), phase 2 spotlights the drawer and explains the trace. An "Open
- * trace" button is the non-click fallback. Keyboard: left/right step beats,
- * Escape drops into free mode.
- *
- * When inactive (free mode) it renders nothing, leaving a fully interactive
- * grid + playback bar.
- */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -25,28 +11,25 @@ interface TourOverlayProps {
   active: boolean;
   beatIndex: number;
   onSetBeat: (index: number) => void;
-  /** Skip the tour: drop into interactive free mode (and resume playback). */
+  /** drop into free mode and resume playback */
   onExitTour: () => void;
-  /** Complete the tour (Finish / advance past the last beat): restart the replay. */
+  /** complete tour (advance past last beat): restarts replay */
   onFinishTour: () => void;
-  /** Navigate back to the marketing landing page. */
+  /** navigate back to the landing page */
   onExitToLanding: () => void;
-  /** Current agent selection - used to detect the interactive reveal click. */
+  /** current agent selection; used to detect the interactive reveal click */
   selectedAgent: number | null;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
-  /** Shell-provided fade-through seek: hides the grid pane for the instant of
-   * the jump so only the destination state is visible (no mid-run churn). */
+  /** fade-through seek: hides grid pane during jump so only destination state is visible */
   seekSmooth: (index: number) => void;
-  /** The OTHER family's display name; when set, the last beat offers a button
-   * that routes to that family's reveal + run. */
+  /** other family display name; when set, last beat offers a link to that family */
   otherFamilyLabel?: string;
-  /** Route to the other family (dip to black -> reveal -> run). */
+  /** route to the other family (dip to black → reveal → run) */
   onViewOtherFamily?: () => void;
-  /** Whether the side-by-side comparison overlay is open (face-off beat). */
+  /** whether the side-by-side comparison overlay is open */
   sideBySideOpen?: boolean;
-  /** Toggle the side-by-side comparison; rendered as a coachmark action on the
-   * face-off beat (the beat that carries a `compare` payload). */
+  /** toggle the side-by-side comparison from the face-off beat */
   onToggleSideBySide?: () => void;
 }
 
@@ -57,7 +40,6 @@ const BTN_PRIMARY =
 const BTN_RED =
   "whitespace-nowrap rounded-sm border border-crit/70 bg-crit/15 px-2.5 py-1 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/25";
 
-/** The id-th agent cell in the grid (ids are contiguous so DOM index === id). */
 function agentCell(id: number): HTMLElement | null {
   const grid = document.querySelector('[data-tour="grid"]');
   return grid?.querySelectorAll<HTMLElement>(".agent-cell-wrap")[id] ?? null;
@@ -84,24 +66,12 @@ export function TourOverlay({
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
 
-  // Which beat's interactive agent has been clicked open. Derived (not an
-  // effect-reset flag) so `revealed` is false the instant a new beat begins -
-  // no stale render where the target briefly resolves to the previous beat's
-  // timeline/agent before switching to this beat's cell (issue: coachmark
-  // catching the wrong agent).
   const [revealedBeat, setRevealedBeat] = useState<number | null>(null);
   const revealed = revealedBeat === beatIndex;
 
-  // Latest side-effect surface, captured in a ref so the per-beat effect runs
-  // exactly once per beat (not on every playback tick that re-memoizes seek).
-  // switchRun swaps the bundled run in place, so this overlay (and the
-  // coachmark it renders) stays mounted straight through the face-off beat.
   const ctxRef = useRef<TourCtx>({ seek, seekSmooth, pause, selectAgent, setTab, switchRun });
   ctxRef.current = { seek, seekSmooth, pause, selectAgent, setTab, switchRun };
 
-  // Run the beat's entrance side effects when the active beat changes. The
-  // target cell is scrolled into view by useSpotlightRect (synchronously, before
-  // it measures), so the spotlight glides straight to the final on-screen rect.
   useEffect(() => {
     if (!active || !beat) return;
     beat.onEnter(ctxRef.current);
@@ -109,8 +79,6 @@ export function TourOverlay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, beatIndex]);
 
-  // The interactive reveal: the viewer clicked the prompted agent (or "Open
-  // trace"). Uses the real selection, so it is genuine product interaction.
   useEffect(() => {
     if (!active || !beat?.interactive) return;
     if (selectedAgent === beat.interactive.agent) setRevealedBeat(beatIndex);
@@ -125,7 +93,6 @@ export function TourOverlay({
     if (beatIndex > 0) onSetBeat(beatIndex - 1);
   }, [beatIndex, onSetBeat]);
 
-  // Keyboard navigation.
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -144,7 +111,6 @@ export function TourOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [active, next, back, onExitTour]);
 
-  // Phase 1 = an interactive beat awaiting the click; spotlight the cell.
   const awaiting = !!beat?.interactive && !revealed;
   const target: TourTarget = awaiting
     ? { kind: "agent", id: beat!.interactive!.agent }
@@ -167,10 +133,7 @@ export function TourOverlay({
 
   return (
     <>
-      {/* The spotlight glides between every target (regions AND agent cells) so
-          the highlight morphs from the previous beat to this one. The correct
-          target resolves synchronously (the `revealed` derivation), so there is
-          no stale-cell catch to snap past - only a clean, eased move. */}
+      {/* spotlight glides between targets via eased position; correct target is resolved synchronously */}
       <Spotlight rect={rect} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">

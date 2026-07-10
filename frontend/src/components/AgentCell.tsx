@@ -39,35 +39,20 @@ interface Props {
   maxSteps: number;
   selected: boolean;
   onSelect: (id: number) => void;
-  /** True during a tour seek (many cells change at once): the card CROSSFADES
-   * from its old state to the new one (a fading ghost of the previous content)
-   * instead of snapping, and the one-shot state-flash is suppressed (and its seq
-   * change consumed, so it can't fire late). Default false = live behaviour:
-   * instant update + a flash on each genuine step. */
+  /** true during a tour seek (many cells change at once): the card crossfades from its old state to the new one (a fading ghost of the previous content) instead of snapping, and the one-shot state-flash is suppressed (and its seq change consumed, so it can't fire late). default false = live behaviour: instant update + a flash on each genuine step */
   morphing?: boolean;
 }
 
-/** Memoized: only re-renders when its OWN derived state changes. */
 export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, selected, onSelect, morphing = false }: Props) {
   const color = STATUS_COLOR[agent.status];
   const pending = agent.status === "pending";
 
-  // Flash only when seq advanced SINCE the last committed frame AND we are not
-  // morphing. `lastFlashSeq` records the seq every commit (even while
-  // suppressed), so a seek that jumps seq while morphing is consumed - it can't
-  // fire late (the source of the flash on beat settle). Live play flashes once
-  // per step.
   const lastFlashSeq = useRef(agent.seq);
   const doFlash = !morphing && agent.seq > 0 && agent.seq !== lastFlashSeq.current;
   useEffect(() => {
     lastFlashSeq.current = agent.seq;
   }, [agent.seq]);
 
-  // Crossfade ghost: on a state change WHILE morphing, capture the previous
-  // visible state as a fading-out overlay so the card dissolves old -> new (the
-  // border/bg colour morphs underneath via the .agent-cell CSS transition). The
-  // prevRef update is synchronous (not an effect) so the setState-during-render
-  // guard can't loop. Live play (morphing false) never makes a ghost = instant.
   const prevRef = useRef<{ agent: AgentState; color: string }>({ agent, color });
   const ghostSeq = useRef(0);
   const [ghost, setGhost] = useState<{ agent: AgentState; color: string; key: number } | null>(null);
@@ -111,7 +96,6 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
             opacity: pending ? 0.55 : 1,
           } as React.CSSProperties}
         >
-          {/* One-shot flash on a genuine (non-seek) state change */}
           {doFlash && (
             <span
               key={agent.seq}
@@ -123,7 +107,6 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
 
           <CellBody agent={agent} maxSteps={maxSteps} color={color} selected={selected} />
 
-          {/* Fading ghost of the previous state (crossfade during a tour seek). */}
           {ghost && (
             <div
               key={ghost.key}
@@ -146,8 +129,6 @@ export const AgentCell = React.memo(function AgentCellInner({ agent, maxSteps, s
   prev.selected === next.selected
 );
 
-/** The cell's inner rows (header / step / pill / progress). Extracted so the
- * live content and the fading crossfade ghost render identically. */
 function CellBody({
   agent,
   maxSteps,
@@ -165,7 +146,6 @@ function CellBody({
       : Math.min(agent.step / maxSteps, 1);
   return (
     <>
-      {/* Header: agent ID + status glyph (+ eye marker when inspected) */}
       <div className="flex items-start justify-between pt-0.5">
         <span className="text-sm font-semibold leading-none tracking-wide text-ink transition-colors duration-200 group-hover:text-white">
           {agentLabel(agent.id)}
@@ -176,7 +156,6 @@ function CellBody({
         </span>
       </div>
 
-      {/* Middle: step counter + fault info */}
       <div className="mt-3 flex items-end justify-between">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">
@@ -212,7 +191,6 @@ function CellBody({
         </div>
       </div>
 
-      {/* Status pill */}
       <div className="mt-2">
         <span
           className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest transition-colors duration-200"
@@ -225,7 +203,6 @@ function CellBody({
         </span>
       </div>
 
-      {/* Progress footer: step progress tinted by state (symmetric) */}
       <div className="mt-2.5 h-[3px] w-full overflow-hidden rounded-full bg-line-strong">
         <div
           className="h-full rounded-full"
@@ -240,8 +217,6 @@ function CellBody({
   );
 }
 
-/** Color + icon glyph - never color alone (accessibility). Same lucide icon set as
- * the landing cohort preview (HeroGrid). */
 function StatusGlyph({
   status,
   color,

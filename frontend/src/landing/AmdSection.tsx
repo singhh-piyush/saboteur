@@ -1,6 +1,5 @@
 import { CountUp, Eyebrow, Heading, Lede, Panel, Reveal, Section } from "./parts";
 
-/** Numeric stats count up; text stats (ROCm) render as-is. */
 const POINTS: { stat: string; countTo?: number; label: string; body: string }[] = [
   {
     stat: "50",

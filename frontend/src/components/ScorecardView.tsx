@@ -32,11 +32,9 @@ interface ScorecardData {
 }
 
 interface ScorecardViewProps {
-  /** When set (walkthrough face-off beat), each of the three headline tiles
-   * that moved versus this baseline scorecard shows an arrow + delta sub-line
-   * and a subtle highlight pulse. Undefined in the live console (no change). */
+  /** when set (walkthrough face-off beat), each of the three headline tiles that moved versus this baseline scorecard shows an arrow + delta sub-line and a subtle highlight pulse. undefined in the live console (no change) */
   baseline?: Scorecard | null;
-  /** Short label of the baseline model, e.g. "8B" (the "from" side). */
+  /** short label of the baseline model, e.g. "8b" (the "from" side) */
   baselineLabel?: string;
 }
 
@@ -57,9 +55,6 @@ export function ScorecardView({ baseline = null, baselineLabel }: ScorecardViewP
       if (activeRunId === null) return;
       try {
         const scorecard = await fetchScorecard(activeRunId);
-        // The scorecard is a pure function of the event streams (invariant
-        // #3) - so is everything extra we derive here, via the same reducer
-        // the live grid uses.
         const chaosEvents = await fetchAllEvents(activeRunId);
         let controlSurvival: number | null = null;
         if (scorecard.control_run_id) {
@@ -104,10 +99,6 @@ export function ScorecardView({ baseline = null, baselineLabel }: ScorecardViewP
 
   const { scorecard: sc, controlSurvival, series } = data;
 
-  // Guided highlight (walkthrough face-off): when a baseline model is supplied
-  // and this scorecard is a DIFFERENT run, annotate the moved headline metrics
-  // with an arrow + delta + subtle pulse. animKey = run_id so the pulse replays
-  // on each model switch. No baseline (live console) => every shift is undefined.
   const compareOn = baseline !== null && baseline.run_id !== sc.run_id;
   const makeShift = (
     current: number | null,
@@ -341,16 +332,13 @@ function reasonLabel(reason: string | null): string | undefined {
   return REASON_LABELS[reason] ?? reason.replace(/_/g, " ");
 }
 
-/** Guided-highlight annotation for a moved metric (walkthrough face-off). */
 interface Shift {
   fromText: string;
   toText: string;
   arrow: "▲" | "▼";
   deltaText: string;
   tone: "win" | "crit";
-  /** Short label of the baseline model (the "from" side), if known. */
   fromLabel?: string;
-  /** Changes on model switch so the pulse overlay replays. */
   animKey: string;
 }
 
@@ -372,14 +360,8 @@ function Tile({
   const shiftTone = shift ? (shift.tone === "win" ? "text-win" : "text-crit") : "";
   const pulseColor = shift?.tone === "win" ? "var(--color-win)" : "var(--color-crit)";
 
-  // Presence-manage the delta sub-line so it BOTH grows in (on the face-off
-  // beat) and collapses out (on leave) smoothly, instead of snapping the tile
-  // size. `expanded` drives grid-template-rows 0fr<->1fr; `renderShift` keeps
-  // the row mounted through the collapse, showing the last delta content.
   const hasShift = !!shift;
   const [renderShift, setRenderShift] = useState(hasShift);
-  // Starts collapsed so the delta line always grows in (the rAF below flips it
-  // open); on leave it flips back to false and collapses out.
   const [expanded, setExpanded] = useState(false);
   const lastShift = useRef<Shift | undefined>(shift);
   if (shift) lastShift.current = shift;
@@ -398,7 +380,7 @@ function Tile({
 
   return (
     <div className="relative overflow-hidden rounded-md border border-line bg-panel px-3 py-2.5">
-      {/* Subtle highlight overlay - replays via key on each model switch. */}
+      {/* highlight pulse replays on each model switch via key */}
       {shift ? (
         <span
           key={shift.animKey}
@@ -422,8 +404,6 @@ function Tile({
         {value}
       </div>
       {renderShift && shiftContent ? (
-        // Grow the delta line in AND collapse it out smoothly (grid-template-rows
-        // 0fr<->1fr drives a continuous reflow) so the tile eases between sizes.
         <div
           className="grid transition-[grid-template-rows,opacity] duration-[420ms] ease-out"
           style={{ gridTemplateRows: expanded ? "1fr" : "0fr", opacity: expanded ? 1 : 0 }}

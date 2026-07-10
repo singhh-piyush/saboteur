@@ -29,9 +29,6 @@ import {
 const SELECT_CLS =
   "rounded-sm border border-line bg-raised px-2 py-1 text-xs text-ink outline-none focus:border-accent/60 sb-select";
 
-// ---------------------------------------------------------------------------
-// Status badge display
-// ---------------------------------------------------------------------------
 
 const STATUS_STYLE: Record<string, { color: string; icon: React.ReactNode }> = {
   pending:  { color: "var(--color-ink-faint)",  icon: <DashedCircleIcon size={12} /> },
@@ -69,9 +66,6 @@ function SurvivalBadge({ pct }: { pct: number | null }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// RunsPage
-// ---------------------------------------------------------------------------
 
 export function RunsPage() {
   const { watchRun, navigate, startReplay } = useRun();
@@ -79,14 +73,10 @@ export function RunsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters (target / profile / status / date range).
   const [filters, setFilters] = useState<RunListFilters>({});
-  // Run ids selected for comparison (max 2; must have a scorecard).
   const [selected, setSelected] = useState<string[]>([]);
 
-  // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<RunListEntry | null>(null);
-  // Bulk delete confirm
   const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const refresh = useCallback(() => {
@@ -101,7 +91,6 @@ export function RunsPage() {
       });
   }, [filters]);
 
-  // Poll: fast while any run is active, slow otherwise.
   useEffect(() => {
     refresh();
     const hasActive = runs.some((r) => r.status === "running" || r.status === "pending");
@@ -110,7 +99,6 @@ export function RunsPage() {
     return () => clearInterval(id);
   }, [refresh, runs.length > 0 && runs.some((r) => r.status === "running" || r.status === "pending")]);
 
-  // Distinct filter option values (computed from whatever is loaded).
   const targetOptions = useMemo(
     () => Array.from(new Set(runs.map((r) => r.target))).sort(),
     [runs],
@@ -125,7 +113,7 @@ export function RunsPage() {
       cur.includes(runId)
         ? cur.filter((id) => id !== runId)
         : cur.length >= 2
-          ? [cur[1], runId] // keep most recent two
+          ? [cur[1], runId] 
           : [...cur, runId],
     );
   }
@@ -173,7 +161,6 @@ export function RunsPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Header bar */}
       <PanelHeader
         title="RUNS"
         right={
@@ -208,7 +195,6 @@ export function RunsPage() {
         }
       />
 
-      {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-2">
         <select
           value={filters.target ?? ""}
@@ -265,7 +251,6 @@ export function RunsPage() {
         )}
       </div>
 
-      {/* Run list */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading && runs.length === 0 && (
           <div className="flex h-40 items-center justify-center text-sm font-medium text-ink-faint">
@@ -297,7 +282,6 @@ export function RunsPage() {
                   key={run.run_id}
                   className="flex items-center gap-4 px-5 py-3 hover:bg-raised/40"
                 >
-                  {/* Compare select (scored runs only) */}
                   <input
                     type="checkbox"
                     className="sb-check shrink-0"
@@ -311,7 +295,6 @@ export function RunsPage() {
                     }
                   />
 
-                  {/* Profile + run id */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-display text-base font-semibold tracking-wide text-ink">
@@ -338,12 +321,10 @@ export function RunsPage() {
                     </div>
                   </div>
 
-                  {/* Survival badge */}
                   <div className="w-16 text-center">
                     <SurvivalBadge pct={run.survival_pct} />
                   </div>
 
-                  {/* Actions */}
                   <div className="flex items-center gap-1">
                     <ActionBtn
                       title="Open live grid"
@@ -388,7 +369,6 @@ export function RunsPage() {
         )}
       </div>
 
-      {/* Confirm dialogs */}
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Delete Run"
@@ -411,9 +391,6 @@ export function RunsPage() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function ActionBtn({
   title,

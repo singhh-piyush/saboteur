@@ -17,12 +17,10 @@ describe("FamilySelect smoke render", () => {
 
   it("renders the heading and both family cards with actual model names", () => {
     expect(html).toContain("Pick a model family");
-    // The actual bundled model names, derived from the run labels.
     expect(html).toContain("Llama 3.1 8B");
     expect(html).toContain("Llama 3.1 70B");
     expect(html).toContain("Gemma 26B-A4B MoE");
     expect(html).toContain("Gemma 31B dense");
-    // Cohort facts derive from the scorecard, never hand-typed.
     expect(html).toContain("hell_mode");
     expect(html).toContain("50 agents");
   });

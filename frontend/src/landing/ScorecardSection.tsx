@@ -1,10 +1,3 @@
-/**
- * A static example scorecard styled exactly like the live ScorecardView
- * (Tile / Panel / recharts BarChart). Every number derives from the bundled
- * demo run's scorecard (src/demo) - the same data the walkthrough replays -
- * so this section can never drift from the real artifact. No fetch, no live
- * data. Charts have animation disabled so the section is stable.
- */
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 

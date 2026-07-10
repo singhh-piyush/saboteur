@@ -1,44 +1,21 @@
-/**
- * Intro - a cinematic cold open that states the thesis, then brands it, before the
- * landing resolves:
- *   1. Two statements fade/stagger in (brand type, accent-lit key phrases):
- *      "You wouldn't ship a microservice without load testing."
- *      "Don't ship an agent without chaos testing."
- *   2. They cross-fade into a large "SABOTEUR" wordmark that glitches hard on
- *      entry, then settles clean (chaos resolving into something solid).
- *   3. The whole overlay fades out to reveal the landing (already painted beneath).
- *
- * Guardrails: instantly skippable (click / scroll / any key), and skipped entirely
- * under prefers-reduced-motion.
- */
 
 import { useEffect, useRef, useState } from "react";
 
 import { prefersReducedMotion } from "./parts";
 
-// In-memory, once-per-page-load. A full reload replays the intro (handy for live
-// demoing); in-app navigation (console -> back to landing) does not, since the module
-// stays resident. Swap to sessionStorage for once-per-tab-session behaviour.
 let introPlayed = false;
 
-/** Skip the intro entirely when it has already played this load, or motion is reduced. */
 export function introShouldSkip(): boolean {
   return introPlayed || prefersReducedMotion();
 }
 
-const FADE_MS = 1100; // slow, smooth fade-out to the landing
-const LINES_HOLD_MS = 5000; // statements on screen before they fade
-// A dramatic pause reads as intentional around half a second; much longer and
-// a black screen starts to read as "it broke".
+const FADE_MS = 1100; 
+const LINES_HOLD_MS = 5000; 
 const BLACK_MS = 600;
-// Entry glitch (1.2s) + a clean hold, then the fade. Long enough to register,
-// short enough that the logo never feels parked.
 const WORDMARK_MS = 2200;
 
 type Phase = "lines" | "black" | "wordmark";
 
-// Matches the hero tagline ("Chaos engineering for AI agents.") so the intro reads
-// as the same voice as the landing, just larger.
 const STATEMENT =
   "font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl md:text-4xl";
 
@@ -47,8 +24,6 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const [leaving, setLeaving] = useState(false);
   const doneRef = useRef(false);
 
-  // One-shot completion - guarded so the timers and a manual skip can never fire
-  // onDone more than once.
   const finish = () => {
     if (doneRef.current) return;
     doneRef.current = true;
@@ -56,9 +31,8 @@ export function Intro({ onDone }: { onDone: () => void }) {
     onDone();
   };
 
-  const dismiss = () => setLeaving(true); // skip or final fade-out
+  const dismiss = () => setLeaving(true); 
 
-  // Phase timeline: lines -> (fade to) black -> wordmark glitch -> fade out.
   useEffect(() => {
     const toBlack = window.setTimeout(() => setPhase("black"), LINES_HOLD_MS);
     const toWordmark = window.setTimeout(() => setPhase("wordmark"), LINES_HOLD_MS + BLACK_MS);
@@ -70,7 +44,6 @@ export function Intro({ onDone }: { onDone: () => void }) {
     };
   }, []);
 
-  // Global skip listeners.
   useEffect(() => {
     const skip = () => dismiss();
     window.addEventListener("keydown", skip);
@@ -83,8 +56,6 @@ export function Intro({ onDone }: { onDone: () => void }) {
     };
   }, []);
 
-  // Once the fade-out is underway, complete it after the transition. A deterministic
-  // timer (not bubbled transitionend, which the cross-fading children also emit).
   useEffect(() => {
     if (!leaving) return;
     const t = window.setTimeout(finish, FADE_MS + 60);

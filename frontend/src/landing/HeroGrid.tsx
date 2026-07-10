@@ -1,13 +1,3 @@
-/**
- * A small, looping cohort grid for the hero - a live-feeling preview of the
- * product. It reuses the console's `.agent-cell` CSS (border tint, glow,
- * state-flash) and the AgentCell visual language (label / status glyph / step
- * counter / progress footer), but is a self-contained presentational loop -
- * it never touches the reducer or real telemetry.
- *
- * Motion is gated on prefers-reduced-motion: when the user opts out, the grid
- * renders a static mixed-state snapshot and never animates.
- */
 
 import { useEffect, useMemo, useState } from "react";
 import { Activity, Flag, RefreshCw, X } from "lucide-react";
@@ -34,11 +24,9 @@ const COUNT = 12;
 interface Cell {
   status: Status;
   step: number;
-  /** Bumps on every change - keys the one-shot flash, like AgentCell.seq. */
   seq: number;
 }
 
-/** A plausible cohort seed: mostly healthy, a couple recovering, one done. */
 function seed(): Cell[] {
   const start: Status[] = [
     "succeeded", "healthy", "recovering", "healthy",
@@ -52,18 +40,15 @@ function seed(): Cell[] {
   }));
 }
 
-/** Where a cell goes next - a small, believable resilience state machine. */
 function advance(c: Cell): Cell {
-  const r = c.step; // deterministic-ish churn without an RNG dep
+  const r = c.step; 
   switch (c.status) {
     case "healthy":
       return { status: (r % 3 === 0 ? "recovering" : "healthy"), step: Math.min(c.step + 1, MAX_STEPS), seq: c.seq + 1 };
     case "recovering":
-      // recover most of the time, occasionally crash
       return { status: r % 4 === 0 ? "crashed" : r % 3 === 0 ? "succeeded" : "healthy", step: Math.min(c.step + 1, MAX_STEPS), seq: c.seq + 1 };
     case "crashed":
     case "succeeded":
-      // terminal cells respawn into a fresh run
       return { status: "healthy", step: 2, seq: c.seq + 1 };
   }
 }
@@ -80,7 +65,6 @@ export function HeroGrid() {
     const id = setInterval(() => {
       setCells((prev) => {
         const next = prev.slice();
-        // Churn 1–3 cells per tick so the grid feels alive, not frantic.
         const hits = 1 + (Date.now() % 3);
         for (let k = 0; k < hits; k++) {
           const i = (Date.now() + k * 7) % next.length;

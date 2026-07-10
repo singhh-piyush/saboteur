@@ -1,9 +1,8 @@
-/** Small formatting helpers shared by the views. */
 
 export function clockTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "--:--:--";
-  return d.toISOString().slice(11, 23); // HH:MM:SS.mmm (UTC)
+  return d.toISOString().slice(11, 23); 
 }
 
 export function pct(v: number | null | undefined, digits = 0): string {
@@ -30,7 +29,6 @@ export function agentLabel(id: number): string {
   return `A-${String(id).padStart(2, "0")}`;
 }
 
-/** Human-friendly relative time ("2 min ago", "3h ago", "just now"). */
 export function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "-";
   const ms = Date.now() - Date.parse(iso);
@@ -46,7 +44,6 @@ export function relativeTime(iso: string | null | undefined): string {
   return `${days}d ago`;
 }
 
-/** Format a date string to a compact local time string. */
 export function shortDateTime(iso: string | null | undefined): string {
   if (!iso) return "-";
   const d = new Date(iso);

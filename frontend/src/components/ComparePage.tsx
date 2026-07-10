@@ -16,7 +16,6 @@ const INPUT_CLS =
   "transition-colors duration-150 focus:border-accent/60 " +
   "focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--color-accent)_18%,transparent)]";
 
-// How each compared metric is labelled + formatted. Order = display order.
 const METRIC_META: { key: string; label: string; fmt: (v: number) => string }[] = [
   { key: "survival_rate", label: "Survival rate", fmt: (v) => pct(v) },
   { key: "deception_detection_rate", label: "Deception caught", fmt: (v) => pct(v) },

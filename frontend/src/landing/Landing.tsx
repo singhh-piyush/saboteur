@@ -1,13 +1,3 @@
-/**
- * SABOTEUR product landing page - a chrome-less, single-scrolling marketing
- * view that is visually indistinguishable from the chaos console: it reuses the
- * console's @theme tokens, fonts, primitives, and motion. Mounted as the default
- * top-level view; "Launch Console" flips the hash router to the live dashboard
- * with no reload (see App.tsx).
- *
- * The console app is fixed-height (`body { overflow: hidden }`), so this view
- * owns its own scroll container.
- */
 
 import { useState } from "react";
 import { Play } from "lucide-react";
@@ -33,9 +23,6 @@ export function Landing({ onLaunch, onWatch }: { onLaunch: () => void; onWatch: 
   const [leaving, setLeaving] = useState(false);
   const [black, setBlack] = useState(false);
 
-  // Dip to black before opening the demo so the landing -> walkthrough handoff is a
-  // smooth fade, not an instant cut. The walkthrough fades back in from black, so the
-  // screen stays dark across the page swap. Reduced motion navigates immediately.
   const handleWatch = () => {
     if (leaving) return;
     if (prefersReducedMotion()) {

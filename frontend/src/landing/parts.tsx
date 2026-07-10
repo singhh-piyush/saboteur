@@ -1,29 +1,14 @@
-/**
- * Shared landing-page primitives. Everything here is built from the console's
- * existing @theme tokens (index.css) - no new palette, type scale, or spacing.
- */
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-/** Wide, centered content column with the console's gutter rhythm. */
 export function Container({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`mx-auto w-full max-w-6xl px-5 sm:px-8 ${className}`}>{children}</div>;
 }
 
-/**
- * Smooth-scroll to an in-page section by id WITHOUT touching the URL hash -
- * the app is hash-routed, so a real `#anchor` link would be parsed as an
- * unknown route and bounce the user into the console. Use this for on-page nav.
- */
 export function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-/**
- * A page section: vertical breathing room + a centered content column. Motion
- * lives on the children now (per-element `<Reveal>` staggers), not on the
- * whole block - so the section just provides layout.
- */
 export function Section({
   id,
   children,
@@ -40,7 +25,6 @@ export function Section({
   );
 }
 
-/** Reveals once when the element scrolls into view. */
 export function useReveal<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [shown, setShown] = useState(false);
@@ -77,8 +61,6 @@ export function prefersReducedMotion(): boolean {
 
 type RevealDir = "up" | "left" | "right";
 
-/** Props to spread onto a semantic element (e.g. an `<li>`) so it reveals on
- * scroll without an extra wrapper div. Merge your own classes AFTER. */
 export function useRevealProps<T extends HTMLElement>(delay = 0, dir: RevealDir = "up") {
   const { ref, shown } = useReveal<T>();
   return {
@@ -89,11 +71,6 @@ export function useRevealProps<T extends HTMLElement>(delay = 0, dir: RevealDir 
   };
 }
 
-/**
- * Wrap any block so it fades + rises into view on scroll. `delay` (ms) staggers
- * siblings via the `--reveal-delay` CSS var; `dir` picks the slide axis. The
- * reveal CSS lives in index.css; reduced-motion shows it instantly.
- */
 export function Reveal({
   children,
   delay = 0,
@@ -118,11 +95,6 @@ export function Reveal({
   );
 }
 
-/**
- * Counts a number up from 0 to `to` (ease-out cubic, ~900ms) the first time it
- * scrolls into view. `format` turns the running value into display text. Starts
- * at 0 and is offscreen until revealed, so there is no visible jump.
- */
 export function CountUp({
   to,
   format,
@@ -161,7 +133,6 @@ export function CountUp({
   );
 }
 
-/** The console's micro-label recipe (accent tick + caps tracked label). */
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <div className="mb-4 flex items-center gap-2">
@@ -173,7 +144,6 @@ export function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
-/** Section heading - display font, primary ink, no hype. */
 export function Heading({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <h2 className={`font-display text-3xl font-bold leading-tight tracking-tight text-ink sm:text-4xl ${className}`}>
@@ -182,7 +152,6 @@ export function Heading({ children, className = "" }: { children: ReactNode; cla
   );
 }
 
-/** Body copy under a heading. */
 export function Lede({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <p className={`max-w-2xl text-base leading-relaxed text-ink-dim sm:text-lg ${className}`}>
@@ -191,27 +160,18 @@ export function Lede({ children, className = "" }: { children: ReactNode; classN
   );
 }
 
-/**
- * Shared card hover treatment: the border turns accent orange with a soft orange
- * glow. Border-color + box-shadow only (no transform) so it is safe even on the
- * scroll-reveal elements that already drive their own transform.
- */
 export const CARD_HOVER =
   "transition-[border-color,box-shadow] duration-200 hover:border-accent hover:shadow-[0_0_28px_-6px_color-mix(in_oklch,var(--color-accent)_40%,transparent)]";
 
-/** A floating panel card - the UI-v3 modular look (border-line + bg-panel). */
 export function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`rounded-lg border border-line bg-panel ${CARD_HOVER} ${className}`}>{children}</div>;
 }
 
-/** The SABOTEUR wordmark - `font-brand` only, with the console's accent glow. */
 export function Wordmark({
   className = "",
   glitch,
 }: {
   className?: string;
-  /** Rationed glitch treatment: "hover" bursts once per hover (header),
-   * "ambient" bursts briefly every 12s (hero). Omit for a plain wordmark. */
   glitch?: "hover" | "ambient";
 }) {
   const glitchCls =
@@ -235,11 +195,6 @@ type CTAProps = {
   className?: string;
 };
 
-/**
- * Call-to-action button. `primary` mirrors the console's launch button
- * (accent-outlined, accent-tinted, glow on hover); `ghost` is the neutral
- * bordered action used across the console nav.
- */
 export function CTAButton({ children, onClick, href, variant = "primary", size = "md", className = "" }: CTAProps) {
   const sizing = size === "sm" ? "px-3.5 py-1.5 text-xs" : "px-5 py-2.5 text-sm";
   const base = `inline-flex items-center justify-center gap-2 rounded-sm font-semibold tracking-wide transition-all duration-200 ${sizing}`;
@@ -263,7 +218,6 @@ export function CTAButton({ children, onClick, href, variant = "primary", size =
   );
 }
 
-/** A monospace code block on the console's raised surface. */
 export function CodeBlock({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <pre

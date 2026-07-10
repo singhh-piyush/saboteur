@@ -25,7 +25,7 @@ export function ChaosLog({ collapsed, onToggle }: Props) {
         }
       />
 
-      {/* Smooth collapse: grid-rows 1fr <-> 0fr */}
+      {/* smooth collapse via grid-rows: 1fr ↔ 0fr */}
       <div
         className="grid min-h-0 flex-1 transition-[grid-template-rows] duration-[250ms] ease-out"
         style={{ gridTemplateRows: collapsed ? "0fr" : "1fr" }}

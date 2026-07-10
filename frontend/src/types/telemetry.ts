@@ -1,8 +1,3 @@
-/**
- * Mirror of saboteur/telemetry/schema.py - the single event schema
- * (invariant #3). Do not add or rename fields here without changing the
- * backend schema first.
- */
 
 export type EventKind =
   | "step_start"
@@ -15,10 +10,10 @@ export type EventKind =
   | "run_finished";
 
 export interface TelemetryEvent {
-  /** ISO-8601 UTC timestamp (pydantic datetime serialization). */
+  /** iso-8601 utc timestamp (pydantic datetime serialization) */
   ts: string;
   run_id: string;
-  /** -1 marks run-lifecycle events (run_started / run_finished). */
+  /** -1 marks run-lifecycle events (run_started / run_finished) */
   agent_id: number;
   step: number | null;
   event: EventKind;

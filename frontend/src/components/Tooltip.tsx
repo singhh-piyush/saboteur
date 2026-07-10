@@ -1,12 +1,6 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-/**
- * When true, tooltips are suppressed for everything inside this provider's subtree.
- * Used by the walkthrough so hovering dimmed/greyed-out elements under the tour
- * spotlight doesn't pop tooltips over the demo. Default false - the live console
- * renders tooltips normally.
- */
 const TooltipSuppressionContext = createContext(false);
 
 export function TooltipSuppression({
@@ -24,17 +18,13 @@ export function TooltipSuppression({
 }
 
 interface TooltipProps {
-  /** Tooltip content - plain text or JSX */
+  /** tooltip content */
   label: React.ReactNode;
-  /** Which side of the trigger the tooltip appears on (default: "top") */
+  /** which side to appear on (default: "top") */
   side?: "top" | "bottom";
-  /** Extra classes on the wrapper div */
+  /** extra classes on the wrapper div */
   className?: string;
-  /**
-   * Render via a position:fixed portal instead of CSS-only absolute
-   * positioning. Use inside overflow:auto/hidden ancestors (e.g. the
-   * cohort grid) where the default variant would clip.
-   */
+  /** render via a fixed portal; use inside overflow:hidden ancestors to avoid clipping */
   portal?: boolean;
   children: React.ReactNode;
 }
@@ -42,12 +32,6 @@ interface TooltipProps {
 const CARD_CLS =
   "rounded-md border border-line-strong bg-raised px-2.5 py-1.5 text-xs leading-relaxed text-ink shadow-[0_8px_24px_-6px_rgb(0_0_0/80%)] whitespace-pre-line";
 
-/**
- * Lightweight tooltip with two modes:
- * - default: CSS-only via Tailwind group-hover (no JS state)
- * - portal:  measured on mouseenter, rendered into document.body with
- *   position:fixed - immune to ancestor overflow clipping
- */
 export function Tooltip({ label, side = "top", className = "", portal = false, children }: TooltipProps) {
   const suppressed = useContext(TooltipSuppressionContext);
 
@@ -65,24 +49,20 @@ export function Tooltip({ label, side = "top", className = "", portal = false, c
     <div className={`relative group ${className}`}>
       {children}
 
-      {/* Tooltip card (omitted entirely while suppressed - e.g. during the tour) */}
       {!suppressed && (
         <div
           aria-hidden
           className={[
             "pointer-events-none absolute left-1/2 -translate-x-1/2 z-[200]",
             "w-max max-w-[230px]",
-            /* fade + slide in */
             "opacity-0 translate-y-1",
             "group-hover:opacity-100 group-hover:translate-y-0",
             "transition-all duration-150 ease-out",
             isTop ? "bottom-full mb-2" : "top-full mt-2",
           ].join(" ")}
         >
-          {/* Card */}
           <div className={`relative ${CARD_CLS}`}>{label}</div>
 
-          {/* Caret */}
           <div
             className={[
               "absolute left-1/2 -translate-x-1/2 h-1.5 w-1.5 rotate-45 bg-raised border border-line-strong",
@@ -97,7 +77,7 @@ export function Tooltip({ label, side = "top", className = "", portal = false, c
   );
 }
 
-const GAP = 8; // px between trigger and card
+const GAP = 8; // px between trigger and floating card
 
 function PortalTooltip({
   label,
@@ -117,7 +97,6 @@ function PortalTooltip({
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    // Flip if too close to the viewport edge for the requested side.
     let top = side === "top";
     if (top && rect.top < 90) top = false;
     if (!top && window.innerHeight - rect.bottom < 90) top = true;

@@ -1,15 +1,6 @@
-/**
- * Inline model-family logos for the walkthrough's family selector and reveal
- * title card. SVG path data is inlined (no image fetches - the walkthrough
- * stays fully self-contained on a static deploy).
- *
- * Every gradient id is namespaced with `useId()` so a mark can render in two
- * places at once (selector card + reveal) without duplicate-id collisions.
- */
 
 import { useId } from "react";
 
-/** Google Gemma sparkle mark (official gradient). */
 export function GemmaMark({ size = 48 }: { size?: number }) {
   const uid = useId();
   const grad = `${uid}-gemma`;
@@ -31,7 +22,6 @@ export function GemmaMark({ size = 48 }: { size?: number }) {
   );
 }
 
-/** "Llama" wordmark (path outlines, tints via currentColor). */
 export function LlamaWordmark({ height = 24 }: { height?: number }) {
   return (
     <svg
@@ -59,7 +49,6 @@ interface MetaGrad {
   stops: MetaStop[];
 }
 
-/** Gradient defs for the Meta mark, indexed to match META_PATHS' `grad`. */
 const META_GRADS: MetaGrad[] = [
   { x1: "75.897%", x2: "26.312%", y1: "89.199%", y2: "12.194%", stops: [{ offset: ".06%", color: "#0867DF" }, { offset: "45.39%", color: "#0668E1" }, { offset: "85.91%", color: "#0064E0" }] },
   { x1: "21.67%", x2: "97.068%", y1: "75.874%", y2: "23.985%", stops: [{ offset: "13.23%", color: "#0064DF" }, { offset: "99.88%", color: "#0064E0" }] },
@@ -76,7 +65,6 @@ const META_GRADS: MetaGrad[] = [
   { x1: "32.254%", x2: "68.003%", y1: "19.719%", y2: "84.908%", stops: [{ offset: "27.65%", color: "#0867DF" }, { offset: "100%", color: "#0471E9" }] },
 ];
 
-/** Path data for the Meta mark; `grad` indexes META_GRADS, null = solid. */
 const META_PATHS: { d: string; grad: number | null }[] = [
   { d: "M6.897 4h-.024l-.031 2.615h.022c1.715 0 3.046 1.357 5.94 6.246l.175.297.012.02 1.62-2.438-.012-.019a48.763 48.763 0 00-1.098-1.716 28.01 28.01 0 00-1.175-1.629C10.413 4.932 8.812 4 6.896 4z", grad: 0 },
   { d: "M6.873 4C4.95 4.01 3.247 5.258 2.02 7.17a4.352 4.352 0 00-.01.017l2.254 1.231.011-.017c.718-1.083 1.61-1.774 2.568-1.785h.021L6.896 4h-.023z", grad: 1 },
@@ -95,7 +83,6 @@ const META_PATHS: { d: string; grad: number | null }[] = [
   { d: "M18.309 16.515c-.55-.642-1.232-1.712-2.303-3.44l-1.396-2.336-.011-.02-1.62 2.438.012.02.989 1.668c.959 1.61 1.74 2.774 2.493 3.585l.016.016 1.834-1.914a2.353 2.353 0 01-.014-.017z", grad: 12 },
 ];
 
-/** Meta infinity mark (official gradients). */
 export function MetaMark({ size = 48 }: { size?: number }) {
   const uid = useId();
   const gid = (i: number) => `${uid}-meta-${i}`;
@@ -117,7 +104,6 @@ export function MetaMark({ size = 48 }: { size?: number }) {
   );
 }
 
-/** The family's logo lockup: mark + wordmark/name, sized for a context. */
 export function FamilyLogo({
   family,
   markSize = 48,

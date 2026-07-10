@@ -35,9 +35,9 @@ interface EnvRow {
 }
 
 interface EditorState {
-  original: string | null; // null = creating; non-null = editing this name
+  original: string | null; 
   name: string;
-  cmd: string; // one argv token per line
+  cmd: string; 
   cwd: string;
   env: EnvRow[];
   oracleKind: OracleKind;
@@ -226,10 +226,6 @@ export function TargetsPage() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Capture-all: sabotage any agent by swapping one env var - no headers, no
-// registration. Starts a headerless capture run on the wire proxy.
-// ---------------------------------------------------------------------------
 
 function CaptureCard() {
   const { watchRun } = useRun();
@@ -397,7 +393,6 @@ function CaptureCard() {
   );
 }
 
-// ---------------------------------------------------------------------------
 
 function TargetRow({
   target,

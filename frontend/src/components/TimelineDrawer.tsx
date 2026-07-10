@@ -90,7 +90,7 @@ export function TimelineDrawer({ agentId, onClose }: Props) {
         )}
       </div>
 
-      {/* key={agentId}: re-run the feed-in entrance when switching agents */}
+      {/* key remounts the list + replays feed-in animation on agent switch */}
       <ol key={agentId} className="animate-feed-in min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {entries.length === 0 && (
           <p className="text-sm text-ink-faint">No activity yet.</p>
@@ -195,8 +195,6 @@ function TimelineEntry({ ev }: { ev: TelemetryEvent }) {
     case "recovery_action": {
       const kind = ev.recovery ?? "unknown";
       const after = ev.payload["after_fault"];
-      // A no_action stall is not a productive recovery - render it neutrally
-      // so it doesn't read as a green "win" in the timeline.
       const stalled = kind === "no_action";
       return (
         <li
@@ -239,9 +237,6 @@ function TimelineEntry({ ev }: { ev: TelemetryEvent }) {
         ev.event === "agent_crashed"
           ? "hard_exception"
           : String(ev.payload["outcome"] ?? "?");
-      // Honesty (invariant #4): no oracle verdict (null) + ran to completion →
-      // a neutral "done", neither a green pass nor a red fail. A real behavioral
-      // failure (timeout / hard_exception) still goes red.
       const kind: "ok" | "done" | "fail" =
         verdict === true
           ? "ok"

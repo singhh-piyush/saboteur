@@ -13,7 +13,6 @@ import { useRun } from "../state/RunContext";
 import { PanelHeader } from "./PanelHeader";
 import { Tooltip } from "./Tooltip";
 
-/** Shared input style applied to text, number, and select controls */
 const INPUT_CLS =
   "w-full rounded-sm border border-line bg-raised px-2 py-1.5 text-sm text-ink outline-none " +
   "transition-colors duration-150 " +
@@ -50,7 +49,6 @@ export function ControlPanel() {
 
   const profile = profiles.find((p) => p.name === profileName) ?? null;
   const busy = launching || state.conn === "connecting";
-  // BYO command targets run chaos-only - no control cohort in v1.
   const isByo = targetName !== "reference";
   const effectiveControl = isByo ? false : withControl;
 
@@ -82,7 +80,6 @@ export function ControlPanel() {
       <PanelHeader title="CHAOS CONTROL" />
 
       <div className="space-y-3 p-3">
-        {/* Target selector */}
         <Field
           label="target"
           tooltip={
@@ -110,7 +107,6 @@ export function ControlPanel() {
           </button>
         </Field>
 
-        {/* Profile selector */}
         <Field
           label="profile"
           tooltip="The chaos profile defines which faults are injected and at what probability"
@@ -135,7 +131,6 @@ export function ControlPanel() {
           </button>
         </Field>
 
-        {/* Profile description + fault chips */}
         {profile && (
           <div className="rounded-sm border border-line bg-panel px-2.5 py-2">
             <p className="text-sm font-medium leading-relaxed text-ink">
@@ -169,13 +164,12 @@ export function ControlPanel() {
           </div>
         )}
 
-        {/* Agents + Seed */}
         <div className="grid grid-cols-2 gap-3">
           <Field
             label="agents"
             tooltip={`Number of agents to run concurrently\n(1-8 local / up to 50 on MI300X)`}
           >
-            {/* Custom number stepper: hide native spinners, add +/- buttons */}
+            {/* native spinners hidden; replaced with +/- buttons */}
             <div className="relative flex">
               <input
                 type="number"
@@ -231,7 +225,6 @@ export function ControlPanel() {
           </Field>
         </div>
 
-        {/* Control cohort checkbox */}
         <Tooltip
           label={
             isByo
@@ -259,7 +252,6 @@ export function ControlPanel() {
           </label>
         </Tooltip>
 
-        {/* Launch */}
         <button
           type="button"
           onClick={() => void launch()}

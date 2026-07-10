@@ -1,9 +1,3 @@
-/**
- * Invariant #3, literally tested: the dashboard is a pure function of the
- * event stream, so replaying a recorded JSONL must produce *identical* view
- * state to live streaming - at every single event index, not just at the
- * end. The fixture is a real, unedited event log from an accepted N=8 run.
- */
 
 import { describe, expect, it } from "vitest";
 
@@ -19,7 +13,6 @@ import {
 } from "./reducer";
 import { survivalRate } from "./selectors";
 
-/** Strip internal/transport fields that don't affect visual rendering. */
 function view(state: RunViewState): Omit<RunViewState, "conn" | "_seen"> {
   const { conn: _conn, _seen: _s, ...rest } = state;
   return rest;
@@ -41,13 +34,9 @@ function ev(partial: Partial<TelemetryEvent>): TelemetryEvent {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Invariant #3: live ≡ replay
-// ---------------------------------------------------------------------------
 
 describe("live vs replay parity (invariant #3)", () => {
   it("replaying the recorded run reproduces the live state at every index", () => {
-    // Live path: events dispatched one by one as WS frames would arrive.
     const liveSnapshots: string[] = [];
     let live = initialState;
     for (const event of RUN_EVENTS) {
@@ -55,7 +44,6 @@ describe("live vs replay parity (invariant #3)", () => {
       liveSnapshots.push(JSON.stringify(view(live)));
     }
 
-    // Replay path: the ReplayDriver drives the same reducer.
     const replaySnapshots: string[] = [];
     let replayed = initialState;
     const dispatch = (action: Action) => {
@@ -83,8 +71,6 @@ describe("live vs replay parity (invariant #3)", () => {
   });
 
   it("reset rebuilds identically after a simulated reconnect backlog replay", () => {
-    // Stream half the events, "drop the connection", reset, stream all of
-    // them (the server replays the full backlog on reconnect).
     let interrupted = initialState;
     for (const event of RUN_EVENTS.slice(0, 50))
       interrupted = reduce(interrupted, { type: "event", event });
@@ -96,9 +82,6 @@ describe("live vs replay parity (invariant #3)", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Idempotent deduplication
-// ---------------------------------------------------------------------------
 
 describe("idempotent event deduplication", () => {
   it("duplicate events produce zero state changes (same reference)", () => {
@@ -114,15 +97,12 @@ describe("idempotent event deduplication", () => {
     }
     const after = state;
 
-    // Replay the same events - should get identical state back.
     for (const event of events) {
       const next = reduce(state, { type: "event", event });
-      // Duplicate events should return the SAME state reference.
       expect(next).toBe(state);
       state = next;
     }
 
-    // Final state unchanged.
     expect(view(state)).toEqual(view(after));
   });
 
@@ -142,27 +122,20 @@ describe("idempotent event deduplication", () => {
       ev({ event: "recovery_action", step: 3, recovery: "retry", ts: "2026-06-10T12:00:03+00:00" }),
     ];
 
-    // First pass: build state.
     let state = initialState;
     for (const e of events) state = reduce(state, { type: "event", event: e });
     const seqAfterFirst = state.agents[0]?.seq ?? 0;
 
-    // Simulate reconnect: DON'T reset (to test dedup without reset).
-    // Re-send all events - they should all be skipped.
     for (const e of events) {
       const next = reduce(state, { type: "event", event: e });
-      expect(next).toBe(state); // same reference = no re-render
+      expect(next).toBe(state); 
       state = next;
     }
 
-    // seq should NOT have changed.
     expect(state.agents[0]?.seq).toBe(seqAfterFirst);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Status transition rules
-// ---------------------------------------------------------------------------
 
 describe("agent status transitions", () => {
   it("run_started creates N pending agents", () => {
@@ -244,8 +217,8 @@ describe("agent status transitions", () => {
       );
     }
     const state = foldEvents(events);
-    expect(state.chaosLog).toHaveLength(200); // rendered feed stays capped
-    expect(state.faultCount).toBe(250); // the header counter does not
+    expect(state.chaosLog).toHaveLength(200); 
+    expect(state.faultCount).toBe(250); 
   });
 
   it("agent_done routes to succeeded or crashed on the verifier verdict", () => {
@@ -277,13 +250,9 @@ describe("agent status transitions", () => {
         }),
       ]).agents[0];
 
-    // Honesty (invariant #4): unjudged + ran to completion → neutral "done"
-    // (NOT green "succeeded" - we never fabricate an oracle verdict); success
-    // stays null so survivalRate stays null (matches the scorecard).
     const completed = doneNull("completed");
     expect(completed.status).toBe("done");
     expect(completed.success).toBeNull();
-    // Unjudged AND ended in a real behavioral failure outcome → crashed (red).
     expect(doneNull("timeout").status).toBe("crashed");
     expect(doneNull("hard_exception").status).toBe("crashed");
   });
@@ -295,7 +264,6 @@ describe("agent status transitions", () => {
       ev({ agent_id: 1, event: "agent_done", payload: { outcome: "completed", success: null }, ts: "2026-06-10T12:00:02+00:00" }),
     ]);
     expect(survivalRate(state)).toBeNull();
-    // But once an oracle verdict is present, it computes.
     const judged = foldEvents([
       ev({ agent_id: -1, event: "run_started", payload: { n_agents: 2 } }),
       ev({ event: "agent_done", payload: { outcome: "completed", success: true }, ts: "2026-06-10T12:00:01+00:00" }),
@@ -311,7 +279,7 @@ describe("agent status transitions", () => {
       ev({ event: "fault_injected", step: 5, fault: "timeout", ts: "2026-06-10T12:00:02+00:00" }),
     ]);
     expect(state.agents[0].status).toBe("crashed");
-    expect(state.agents[0].faultCount).toBe(1); // badge still counts
+    expect(state.agents[0].faultCount).toBe(1); 
   });
 
   it("seq bumps on every status change (drives the pulse animation)", () => {

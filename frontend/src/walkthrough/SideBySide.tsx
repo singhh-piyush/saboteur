@@ -1,10 +1,3 @@
-/**
- * SideBySide - the click-to-reveal model comparison for the face-off beat. A
- * focused two-column metric table (one column per model) with the metrics that
- * moved emphasized by an arrow + delta and a subtle highlight pulse. Portaled
- * above the tour dim as a small modal: backdrop click, the close button, or Esc
- * all dismiss it. Every number derives from the two bundled scorecards.
- */
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -62,7 +55,6 @@ export function SideBySide({
     return () => window.clearTimeout(t);
   }, [open, reduced, render]);
 
-  // Esc closes while mounted.
   useEffect(() => {
     if (!render) return;
     const onKey = (e: KeyboardEvent) => {
@@ -85,7 +77,7 @@ export function SideBySide({
 
   return createPortal(
     <div className="fixed inset-0 z-[125] flex items-center justify-center p-4">
-      {/* Backdrop - click to dismiss. */}
+      {/* backdrop: click to dismiss */}
       <div
         aria-hidden
         onClick={onClose}
@@ -95,7 +87,7 @@ export function SideBySide({
           opacity: shown ? 1 : 0,
         }}
       />
-      {/* Panel. */}
+      {/* panel */}
       <div
         role="dialog"
         aria-modal="true"
@@ -107,7 +99,7 @@ export function SideBySide({
           opacity: shown ? 1 : 0,
         }}
       >
-        {/* Header: title + the two model columns + close. */}
+        {/* header */}
         <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
           <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-accent" />
           <span className="text-[12px] font-bold uppercase tracking-[0.16em] text-ink">
@@ -124,7 +116,7 @@ export function SideBySide({
         </div>
 
         <div className="p-4">
-          {/* Column headers. */}
+          {/* column headers */}
           <div className="mb-1.5 grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 border-b border-line pb-1.5">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
               metric
@@ -146,7 +138,7 @@ export function SideBySide({
                   key={row.key}
                   className="relative grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 rounded-sm px-1 py-2"
                 >
-                  {/* Subtle pulse on changed rows, plays once when the panel opens. */}
+                  {/* pulse plays once on open for changed rows */}
                   {changed && !reduced ? (
                     <span
                       aria-hidden
@@ -184,7 +176,6 @@ export function SideBySide({
   );
 }
 
-/** Read a scorecard field as a number, or null. */
 function numeric(v: unknown): number | null {
   return typeof v === "number" ? v : null;
 }

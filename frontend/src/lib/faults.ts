@@ -1,11 +1,10 @@
-/** Display palette for the 8 fault types (CLAUDE.md fault taxonomy). */
 
 export interface FaultStyle {
-  /** Chip text + glow color. */
+  /** chip text + glow color */
   color: string;
-  /** Short human layer label. */
+  /** short human layer label */
   layer: "tool" | "transport" | "context";
-  /** One-line explanation shown in tooltips. */
+  /** one-line explanation shown in tooltips */
   description: string;
 }
 

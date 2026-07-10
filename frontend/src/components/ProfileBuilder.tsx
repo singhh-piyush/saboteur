@@ -31,7 +31,6 @@ const INPUT_CLS =
 const LABEL_CLS =
   "mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim";
 
-// Mirrors the backend BUILTIN_PROFILES set - UX only; the server enforces it.
 const BUILTIN_PROFILES = new Set([
   "calm_seas",
   "flaky_friday",
@@ -42,13 +41,12 @@ const BUILTIN_PROFILES = new Set([
 
 const NAME_RE = /^[A-Za-z0-9_-]+$/;
 
-// The reference agent's tool names, offered as quick chips for target_tools.
 const REFERENCE_TOOLS = ["weather", "calculator", "web_search", "file_report"];
 
 interface BuilderFault {
   type: string;
   probability: number;
-  targetTools: string; // comma list; "" = all tools
+  targetTools: string; 
   params: Record<string, unknown>;
 }
 
@@ -118,7 +116,6 @@ export function ProfileBuilder() {
   );
   const draftKey = JSON.stringify({ seed, faults: draft.faults });
 
-  // Live validation, debounced. Name is validated client-side (it's a filename).
   useEffect(() => {
     const id = setTimeout(() => {
       validateProfile({ ...draft, name: "validate" })
@@ -213,9 +210,7 @@ export function ProfileBuilder() {
       />
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[1.7fr_1fr]">
-        {/* Builder column */}
         <div className="space-y-4">
-          {/* Meta */}
           <section className="rounded-md border border-line bg-panel p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="sm:col-span-2">
@@ -258,7 +253,6 @@ export function ProfileBuilder() {
             </div>
           </section>
 
-          {/* Faults */}
           <section className="rounded-md border border-line bg-panel">
             <PanelHeader
               title={`FAULTS (${faults.length})`}
@@ -291,7 +285,6 @@ export function ProfileBuilder() {
           </section>
         </div>
 
-        {/* Sidebar column */}
         <div className="space-y-4">
           <section className="rounded-md border border-line bg-panel">
             <PanelHeader title="VALIDATION" />
@@ -369,7 +362,6 @@ export function ProfileBuilder() {
   );
 }
 
-// ---------------------------------------------------------------------------
 
 function AddFaultMenu({
   catalog,
@@ -555,7 +547,6 @@ function ParamField({
     );
   }
 
-  // int | float
   return (
     <div>
       <span className={LABEL_CLS}>{label}</span>

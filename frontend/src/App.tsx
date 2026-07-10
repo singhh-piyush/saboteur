@@ -18,7 +18,6 @@ import { RunProvider, useRun } from "./state/RunContext";
 
 type Tab = "grid" | "scorecard";
 
-/** Shared card framing for the modular gapped shell. */
 const CARD = "rounded-lg border border-line bg-panel";
 
 export default function App() {
@@ -33,8 +32,6 @@ function Shell() {
   const { state, page, navigate } = useRun();
   const [tab, setTab] = useState<Tab>("grid");
   const [selectedAgent, setSelectedAgent] = useState<number | null>(null);
-  // Last non-null selection: keeps the drawer content rendered while its
-  // width animates closed.
   const [lastAgent, setLastAgent] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedCollapsed, setFeedCollapsed] = useState(false);
@@ -44,13 +41,10 @@ function Shell() {
     setSelectedAgent(id);
   };
 
-  // The static, backend-free demo walkthrough - its own top-level view.
   if (page.kind === "walkthrough") {
     return <WalkthroughView onExit={() => navigate({ kind: "landing" })} />;
   }
 
-  // The landing page is a chrome-less full-page marketing view. Launching the
-  // console flips `page` in place (no reload) via the same hash router.
   if (page.kind === "landing") {
     return (
       <Landing
@@ -66,19 +60,14 @@ function Shell() {
     state.agents[selectedAgent] !== undefined &&
     page.kind === "live";
 
-  // The launcher sidebar (ControlPanel + chaos feed) belongs to the run views.
-  // The management pages (targets / profiles / compare) render full-width.
   const showSidebar = page.kind === "runs" || page.kind === "live";
 
   return (
     <div className="flex h-screen flex-col gap-2 bg-void p-2">
-      {/* ---------------------------------------------------------------- */}
-      {/* Header card: brand + connection only. Run context lives in RunBar. */}
       <header
         className={`${CARD} flex items-center gap-4 px-4 py-2.5`}
         style={{ animation: "card-in 0.3s ease-out backwards" }}
       >
-        {/* Sidebar toggle for tablet/mobile (run views only) */}
         {showSidebar && (
           <button
             type="button"
@@ -105,7 +94,6 @@ function Shell() {
           </span>
         </button>
 
-        {/* Console section nav */}
         <nav className="ml-4 hidden items-center gap-1 sm:flex">
           <NavLink active={page.kind === "runs" || page.kind === "live"} onClick={() => navigate({ kind: "runs" })}>
             RUNS
@@ -126,10 +114,8 @@ function Shell() {
         </div>
       </header>
 
-      {/* ---------------------------------------------------------------- */}
       <div className="relative flex min-h-0 flex-1 gap-2 overflow-hidden">
-        {/* Sidebar - two stacked cards; off-canvas on mobile, visible on xl.
-            Run views only; management pages render full-width. */}
+        {/* off-canvas sidebar on mobile, visible on xl; run views only */}
         {showSidebar && (
           <aside
             className={`absolute inset-y-0 left-0 z-40 w-80 shrink-0 flex-col gap-2 transition-transform xl:relative xl:flex xl:translate-x-0 ${
@@ -155,7 +141,6 @@ function Shell() {
           </aside>
         )}
 
-        {/* Backdrop for mobile sidebar */}
         {showSidebar && sidebarOpen && (
           <div
             className="fixed inset-0 z-30 bg-void/50 xl:hidden"
@@ -164,7 +149,6 @@ function Shell() {
           />
         )}
 
-        {/* Main card */}
         <main
           className={`${CARD} flex min-w-0 flex-1 flex-col overflow-hidden`}
           style={{ animation: "card-in 0.3s ease-out 120ms backwards" }}
@@ -204,7 +188,7 @@ function Shell() {
                 </button>
               </nav>
 
-              {/* key={tab}: fade content in on tab switch */}
+              {/* key forces remount + fade animation on tab switch */}
               <div key={tab} className="animate-feed-in min-h-0 flex-1">
                 {tab === "grid" ? (
                   <CohortGrid
@@ -221,10 +205,7 @@ function Shell() {
           )}
         </main>
 
-        {/* Timeline drawer - slides in over the grid via transform (GPU-composited),
-            so the cohort grid never reflows on open/close. Full-screen on mobile,
-            right-side panel on desktop. Content stays mounted (lastAgent) during the
-            close slide. */}
+        {/* transform slide keeps grid layout stable (no reflow); content stays mounted during close */}
         <div
           className={`absolute inset-y-0 right-0 z-30 w-[20.5rem] pl-2 xl:w-[23rem] max-sm:inset-0 max-sm:w-full max-sm:pl-0 transition-transform duration-[280ms] ease-[cubic-bezier(0.25,1,0.3,1)] will-change-transform ${
             drawerOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
@@ -288,7 +269,6 @@ function TabButton({
       }`}
     >
       {children}
-      {/* Animated accent underline */}
       <span
         className="absolute inset-x-0 -bottom-px h-[2px] bg-accent transition-all duration-200"
         style={{ opacity: active ? 1 : 0, transform: active ? "scaleX(1)" : "scaleX(0.3)" }}

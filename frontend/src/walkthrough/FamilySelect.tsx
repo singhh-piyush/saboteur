@@ -1,15 +1,3 @@
-/**
- * FamilySelect - the walkthrough's front door. "Watch the demo" lands here:
- * two model-family cards (their real logos, their actual bundled models), on
- * pure black so the landing's dip-to-black hands off seamlessly. Picking a
- * card starts the branded reveal for that family.
- *
- * Entrance is ONE smooth popup on the whole block (`pop-in`), with a gentle
- * inner stagger for the cards. The popup starts ~350ms after mount so the
- * browser has finished tearing down the landing DOM before the first animated
- * frame - starting earlier drops frames and reads as a stutter. All copy is
- * short and derived from the bundled data - no hardcoded run numbers.
- */
 
 import { useEffect, useRef, useState } from "react";
 
@@ -17,14 +5,10 @@ import type { DemoFamily } from "../demo";
 import { prefersReducedMotion } from "../landing/parts";
 import { FamilyLogo } from "./logos";
 
-/** The Intro's settle curve - one shared easing across the cold-open pieces. */
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
-/** Fade the selector out before handing off to the branded reveal, so the
- * pick dissolves to black instead of cutting instantly. */
 const LEAVE_MS = 460;
 
-/** Run label without the hardware suffix - the model name itself. */
 function modelName(label: string): string {
   return label.replace(/ on MI300X$/, "");
 }
@@ -38,11 +22,8 @@ export function FamilySelect({
   onSelect: (index: number) => void;
   onExit: () => void;
 }) {
-  // Derived, not typed: every bundled run shares the profile / cohort size.
   const sc = families[0]?.runs[0]?.scorecard;
 
-  // Fade the whole block out on a pick, then hand off to the reveal. The reveal
-  // opens on black too, so the dissolve is seamless. Reduced motion skips it.
   const [leaving, setLeaving] = useState(false);
   const leaveTimer = useRef<number | null>(null);
   useEffect(

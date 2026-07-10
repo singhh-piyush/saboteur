@@ -10,10 +10,6 @@ interface ConfirmDialogProps {
   destructive?: boolean;
 }
 
-/**
- * Native <dialog> confirm component. Uses showModal() for proper focus
- * trapping and backdrop. Baseline since 2022 - no polyfill needed.
- */
 export function ConfirmDialog({
   open,
   title,
@@ -35,7 +31,6 @@ export function ConfirmDialog({
     }
   }, [open]);
 
-  // Handle Escape key (native dialog behavior) and backdrop click.
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -44,7 +39,7 @@ export function ConfirmDialog({
       onCancel();
     };
     const handleClick = (e: MouseEvent) => {
-      if (e.target === dialog) onCancel(); // backdrop click
+      if (e.target === dialog) onCancel(); 
     };
     dialog.addEventListener("cancel", handleCancel);
     dialog.addEventListener("click", handleClick);

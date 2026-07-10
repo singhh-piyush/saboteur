@@ -1,9 +1,3 @@
-/**
- * The guided tour over the REAL bundled demo runs, per model family: manifest
- * shape, the face-off beat's placement and data binding, run-binding
- * monotonicity, and copy rules (no em dashes; comparison numbers interpolated
- * from the scorecards, never hardcoded prose).
- */
 
 import { describe, expect, it } from "vitest";
 
@@ -116,9 +110,6 @@ describe.each(DEMO_FAMILIES.map((family) => [family.id, family] as const))(
       const close = beats.find((b) => b.id === "close")!;
       expect(close.finishLabel).toBe("Watch the full run");
       expect(close.actions?.some((a) => a.kind === "exit")).toBe(true);
-      // The close beat must not swap the canvas: it stays on the scorecard tab
-      // the face-off already shows (the grid only appears when the viewer picks
-      // "Watch the full run").
       const tabs: string[] = [];
       close.onEnter({
         seek: () => {},

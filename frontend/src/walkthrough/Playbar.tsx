@@ -1,9 +1,3 @@
-/**
- * Playbar - the walkthrough's playback transport. Richer than the live
- * ReplayBar: a draggable scrubber (seek to any event index, re-deriving state)
- * and a 0.5x / 1x / 2x / 4x speed selector. Same flight-ops look as the rest of
- * the console.
- */
 
 import { PauseIcon, PlayIcon, RestartIcon } from "../components/Icons";
 import type { DemoRun } from "../demo";
@@ -12,17 +6,14 @@ import { useWalkthrough } from "./WalkthroughProvider";
 const SPEEDS = [0.5, 1, 2, 4];
 
 interface PlaybarProps {
-  /** The active family's runs - the sibling switcher flips within these only
-   * (cross-family switching lives on the family selector). */
+  /** the active family's runs; sibling switcher flips within these only */
   runs: DemoRun[];
-  /** Restart the guided tour (shown only in free mode). */
+  /** restart the guided tour (shown only in free mode) */
   onReplayTour?: () => void;
   showReplayTour: boolean;
-  /** Sibling-run switcher (rendered only when the family bundles >1 run). */
   runIndex: number;
   onSwitchRun: (index: number) => void;
-  /** True while the guided tour is active - the tour owns the run then, so the
-   * switcher renders dimmed and inert. Fully usable in free mode. */
+  /** true while the guided tour is active - switcher renders dimmed and inert */
   switcherDisabled?: boolean;
 }
 
@@ -41,7 +32,7 @@ export function Playbar({
     <div className="flex flex-wrap items-center gap-3 border-t border-line bg-panel px-3 py-2">
       <span className="font-display text-xs font-semibold tracking-widest text-win">REPLAY</span>
 
-      {/* Sibling-run switcher - swaps the family's runs in place. */}
+      {/* sibling-run switcher */}
       {runs.length > 1 && (
         <div className="flex gap-1">
           {runs.map((run, i) => (
@@ -92,7 +83,7 @@ export function Playbar({
         </button>
       )}
 
-      {/* Scrubber - drag backward or forward; state re-derives from a fresh fold. */}
+      {/* scrubber: re-derives state from a fresh fold on drag */}
       <input
         type="range"
         min={0}
