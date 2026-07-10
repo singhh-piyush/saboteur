@@ -1,4 +1,4 @@
-"""Harness tests — LLM-free, driven by FakeAgents through the factory seam.
+"""Harness tests — driven by FakeAgents through the factory seam.
 
 Covers the WP5 acceptance criteria:
   1. Crash isolation — one agent raising never affects the others.
@@ -216,7 +216,7 @@ async def test_one_crashing_agent_never_affects_others() -> None:
     assert report.events[-1].event == "run_finished"
     assert report.events[-1].payload["outcomes"]["hard_exception"] == 1
 
-    # The crash surfaces in the scorecard's failure-mode histogram.
+
     card = score(report.events, report.events, run_id=RUN_ID, profile="test_chaos")
     assert card.n_agents == 4
     assert card.failure_modes == {"hard_exception": 1}
@@ -265,11 +265,11 @@ def test_scoring_exact_math() -> None:
 
     assert card.n_agents == 3
     assert card.survival_rate == pytest.approx(2 / 3)
-    assert card.mttr_steps == pytest.approx(2.0)  # fault step 2 → recovery step 4
+    assert card.mttr_steps == pytest.approx(2.0)
     assert card.recovery_breakdown == {"retry": 1}
     assert card.waste_factor == pytest.approx(4000 / 3000)
-    assert card.deception_detection_rate == 0.0  # the one lied-to agent failed
-    assert card.failure_modes == {}  # all outcomes were "completed"
+    assert card.deception_detection_rate == 0.0
+    assert card.failure_modes == {}
     assert card.per_agent[0]["faults"] == ["api_error"]
     assert card.per_agent[0]["recoveries"] == ["retry"]
     assert card.per_agent[1]["faults"] == ["silent_lie"]
@@ -323,8 +323,8 @@ def test_calm_seas_control_gives_waste_factor_one() -> None:
 
     assert card.waste_factor == 1.0
     assert card.survival_rate == 1.0
-    assert card.mttr_steps is None  # no faults
-    assert card.deception_detection_rate is None  # no silent_lie injected
+    assert card.mttr_steps is None
+    assert card.deception_detection_rate is None
     assert card.recovery_breakdown == {}
     assert card.failure_modes == {}
 
@@ -421,7 +421,7 @@ async def test_orchestrate_replay_parity(tmp_path: Path) -> None:
         control_run_id=scorecard.control_run_id,
     )
     assert replayed == scorecard
-    # Both cohorts ran identical fakes → waste factor exactly 1.0.
+
     assert scorecard.waste_factor == 1.0
     assert scorecard.survival_rate == 1.0
 
@@ -445,7 +445,7 @@ def test_adapter_fault_lifts_fault_field() -> None:
 
 
 def test_adapter_fault_lifts_latency_ms() -> None:
-    """latency/timeout faults populate latency_ms from their drawn params."""
+    # latency/timeout faults populate latency_ms from their drawn params.
     lat = to_telemetry(
         AgentEvent(0, 1, "fault", {"fault": "latency", "detail": {"delay_s": 2.5}}),
         RUN_ID,

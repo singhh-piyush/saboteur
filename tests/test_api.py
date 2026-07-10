@@ -1,4 +1,4 @@
-"""Acceptance tests for the FastAPI routes (LLM-free via FakeAgent injection).
+"""Acceptance tests for the FastAPI routes.
 
 Coverage:
   1. OpenAPI schema renders.
@@ -58,7 +58,7 @@ def _fake_factory(agent_id, profile, store, on_event, oracle=None):
 
 @pytest.fixture()
 def tmp_runs(tmp_path: Path, monkeypatch):
-    """Redirect all JSONL/scorecard writes — and the SQLite index — to tmp."""
+    # Redirect all JSONL/scorecard writes — and the SQLite index — to tmp.
     import saboteur.api.runs as runs_mod
     import saboteur.api.replay as replay_mod
     import saboteur.telemetry.ws as ws_mod
@@ -76,7 +76,7 @@ def tmp_runs(tmp_path: Path, monkeypatch):
 
 @pytest.fixture()
 def clean_registry(monkeypatch):
-    """Fresh RunRegistry isolated from other tests."""
+    # Fresh RunRegistry isolated from other tests.
     from saboteur.api.state import RunRegistry
     import saboteur.api.state as state_mod
     import saboteur.api.runs as runs_mod
@@ -89,7 +89,7 @@ def clean_registry(monkeypatch):
 
 @pytest.fixture()
 def fake_factory(monkeypatch):
-    """Swap the LLM-backed agent factory for a FakeAgent."""
+
     import saboteur.api.runs as runs_mod
 
     monkeypatch.setattr(runs_mod, "_agent_factory", _fake_factory)
@@ -157,7 +157,7 @@ def test_list_profiles_have_required_fields():
 
 
 def test_run_lifecycle_and_scorecard(tmp_runs, clean_registry, fake_factory):
-    """POST /runs → poll until finished → GET scorecard."""
+    # POST /runs → poll until finished → GET scorecard.
     from saboteur.api import app
 
     with TestClient(app) as client:
@@ -168,7 +168,6 @@ def test_run_lifecycle_and_scorecard(tmp_runs, clean_registry, fake_factory):
         assert resp.status_code == 202
         run_id = resp.json()["run_id"]
 
-        # FakeAgent is instant; poll up to 2 s.
         for _ in range(20):
             status_resp = client.get(f"/runs/{run_id}")
             assert status_resp.status_code == 200
@@ -314,7 +313,7 @@ def test_events_after_ts_filter(tmp_runs, clean_registry):
     base = datetime(2026, 1, 1, tzinfo=timezone.utc)
     events = _write_events(tmp_runs / f"{run_id}.jsonl", run_id, 5, base)
 
-    # after_ts == events[1].ts excludes steps 0 and 1; keeps 2, 3, 4.
+
     cutoff = events[1].ts.isoformat()
     with TestClient(app) as client:
         resp = client.get(f"/runs/{run_id}/events", params={"after_ts": cutoff})
@@ -396,7 +395,7 @@ def test_archived_run_events_and_scorecard_served_from_disk(tmp_runs, clean_regi
 
 
 def test_replay_ws_receives_events(tmp_runs):
-    """POST /replay with speed=0 → connect WS → receive all events via backlog."""
+    # POST /replay with speed=0 → connect WS → receive all events via backlog.
     from saboteur.api import app
 
     source_run = "replay-source-001"
@@ -421,11 +420,6 @@ def test_replay_ws_receives_events(tmp_runs):
         assert resp.status_code == 202
         run_id = resp.json()["run_id"]
 
-        # Give the background stream task time to emit and close the bus.
-        time.sleep(0.5)
-
-        # By now the replay is done and the JSONL has been written.
-        # The WS endpoint will replay the backlog.
         with client.websocket_connect(f"/ws/{run_id}") as ws:
             received = []
             for _ in range(3):
@@ -457,7 +451,7 @@ def test_replay_non_jsonl_returns_422():
 
 
 def test_delete_running_run_returns_409(tmp_runs, clean_registry):
-    """DELETE a RUNNING run must return 409 — never touch active run files."""
+    # DELETE a RUNNING run must return 409 — never touch active run files.
     from saboteur.api import app
     from saboteur.api.state import RunState, RunStatus
 
@@ -471,7 +465,6 @@ def test_delete_running_run_returns_409(tmp_runs, clean_registry):
             status=RunStatus.RUNNING,
         )
     )
-    # Write a JSONL so it exists on disk — must NOT be deleted.
     (tmp_runs / f"{run_id}.jsonl").write_text('{"run_id":"x"}\n')
 
     with TestClient(app) as client:
@@ -482,7 +475,7 @@ def test_delete_running_run_returns_409(tmp_runs, clean_registry):
 
 
 def test_delete_finished_run_removes_files(tmp_runs, clean_registry):
-    """DELETE a finished run removes JSONL and scorecard from disk."""
+    # DELETE a finished run removes JSONL and scorecard from disk.
     from saboteur.api import app
     from saboteur.api.state import RunState, RunStatus
 
@@ -510,7 +503,7 @@ def test_delete_finished_run_removes_files(tmp_runs, clean_registry):
 
 
 def test_bulk_delete_skips_running_runs(tmp_runs, clean_registry):
-    """DELETE /runs?status=finished removes finished runs but leaves running ones."""
+    # DELETE /runs?status=finished removes finished runs but leaves running ones.
     from saboteur.api import app
     from saboteur.api.state import RunState, RunStatus
 
@@ -548,7 +541,7 @@ def test_bulk_delete_skips_running_runs(tmp_runs, clean_registry):
 
 
 def test_bulk_delete_catches_scorecard_only_runs(tmp_runs, clean_registry):
-    """A run left with only a scorecard (JSONL removed out-of-band) is deleted too."""
+    # A run left with only a scorecard (JSONL removed out-of-band) is deleted too.
     from saboteur.api import app
 
     (tmp_runs / "bulk-orphan.scorecard.json").write_text('{"run_id":"x"}')
@@ -568,7 +561,7 @@ def test_bulk_delete_catches_scorecard_only_runs(tmp_runs, clean_registry):
 
 @pytest.fixture()
 def byo_seam(monkeypatch, tmp_path):
-    """A registered command target + a recording stub for the spawner."""
+    # A registered command target + a recording stub for the spawner.
     import saboteur.api.runs as runs_mod
     from saboteur.harness.targets import Target, TargetStore
     from saboteur.storage.db import Database
@@ -587,7 +580,7 @@ def byo_seam(monkeypatch, tmp_path):
 
 
 def test_run_reference_target_unchanged(tmp_runs, clean_registry, fake_factory, byo_seam):
-    """Default target='reference' runs the smolagents path; spawner untouched."""
+
     from saboteur.api import app
 
     with TestClient(app) as client:
@@ -601,7 +594,7 @@ def test_run_reference_target_unchanged(tmp_runs, clean_registry, fake_factory, 
                 break
             time.sleep(0.1)
 
-    assert byo_seam == []  # the BYO spawner was never invoked
+    assert byo_seam == []
 
 
 def test_run_byo_target_invokes_spawner(tmp_runs, clean_registry, byo_seam):
@@ -635,7 +628,7 @@ def test_run_unknown_target_returns_404(tmp_runs, clean_registry, byo_seam):
 
 
 def test_run_non_command_target_returns_400(tmp_runs, clean_registry, monkeypatch):
-    """A registered target that isn't a command kind → 400 (defensive)."""
+    # A registered target that isn't a command kind → 400 (defensive).
     import saboteur.api.runs as runs_mod
     from saboteur.harness.targets import Target
 
@@ -679,7 +672,7 @@ def _scorecard_dict(run_id: str, profile: str, n_agents: int, **metrics) -> dict
 def _write_run_files(
     runs_dir: Path, run_id: str, profile: str, n_agents: int, scorecard: dict | None
 ) -> None:
-    """A minimal JSONL (one run_started) + optional scorecard, on disk."""
+    # A minimal JSONL (one run_started) + optional scorecard, on disk.
     started = run_id.rsplit("-", 2)[1]  # YYYYmmddTHHMMSS
     iso = datetime.strptime(started, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
     line = {
@@ -712,14 +705,12 @@ def test_runs_filterable(tmp_runs, clean_registry):
         only_calm = client.get("/runs", params={"profile": "calm_seas"}).json()
         assert {r["run_id"] for r in only_calm} == {a}
 
-        # Both are historical (archived) and reference-target.
         both_ref = client.get("/runs", params={"target": "reference"}).json()
         assert {a, b} <= {r["run_id"] for r in both_ref}
         archived = client.get("/runs", params={"status": "archived"}).json()
         assert {a, b} <= {r["run_id"] for r in archived}
         assert client.get("/runs", params={"status": "running"}).json() == []
 
-        # Date filter on started_at (run_id stamp).
         late = client.get("/runs", params={"date_from": "2026-01-02"}).json()
         assert {r["run_id"] for r in late} == {b}
 
@@ -747,9 +738,7 @@ def test_compare_flags_regression(tmp_runs, clean_registry):
     assert m["survival_rate"]["delta"] == -0.5 and m["survival_rate"]["regressed"] is True
     assert m["crash_rate"]["delta"] == 0.3 and m["crash_rate"]["regressed"] is True
     assert m["mttr_steps"]["delta"] == 3.0 and m["mttr_steps"]["regressed"] is True
-    # waste_factor moved +0.05, under the 0.10 threshold → not a regression.
     assert m["waste_factor"]["regressed"] is False
-    # null metrics never regress.
     assert m["latency_degradation"]["delta"] is None
     assert m["latency_degradation"]["regressed"] is False
 
@@ -779,25 +768,22 @@ def test_compare_run_without_scorecard_409(tmp_runs, clean_registry):
 
 
 def test_runs_survive_restart_and_db_drop(tmp_runs, clean_registry):
-    """Runs survive a restart; deleting the DB and restarting rebuilds it."""
+    # Runs survive a restart; deleting the DB and restarting rebuilds it.
     from saboteur.api import app
 
     rid = "flaky_friday-20260101T000000-aaaaaa"
     _write_run_files(tmp_runs, rid, "flaky_friday", 3, _scorecard_dict(rid, "flaky_friday", 3, survival_rate=0.66))
 
-    # First server life: startup indexes it; it's listed.
     with TestClient(app) as client:
         assert rid in {r["run_id"] for r in client.get("/runs").json()}
 
-    # Simulate a crash + DB loss: delete the SQLite file outright.
     db_path = tmp_runs / "saboteur.db"
     assert db_path.exists()
     db_path.unlink()
     for sidecar in ("saboteur.db-wal", "saboteur.db-shm"):
         (tmp_runs / sidecar).unlink(missing_ok=True)
 
-    # Next server life (fresh registry): startup_index rebuilds from JSONL alone.
-    clean_registry  # registry is empty (no live runs survive a restart)
+    clean_registry
     with TestClient(app) as client:
         listed = {r["run_id"]: r for r in client.get("/runs").json()}
         assert rid in listed

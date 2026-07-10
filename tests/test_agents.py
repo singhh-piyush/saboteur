@@ -1,6 +1,5 @@
 """Tests for mock tools, task constants, and the programmatic verifier.
 
-All tests run without a live LLM (CLAUDE.md invariant #4).
 The integration test at the bottom proves silent_lie corruption is
 detectable end-to-end through the real ChaosEngine.
 """
@@ -53,7 +52,6 @@ class TestWeatherTool:
         result = self.tool.forward("Atlantis")
         assert result.startswith("Error:")
         assert "Atlantis" in result
-        # Lists known cities so the agent knows its options.
         assert "Tokyo" in result
 
     def test_returns_string(self) -> None:
@@ -79,13 +77,11 @@ class TestCalculatorTool:
         assert self.tool.forward("1 / 3") == "0.3333"
 
     def test_integer_result_no_decimal(self) -> None:
-        # 10 / 2 = 5.0 → should display as "5"
         assert self.tool.forward("10 / 2") == "5"
 
     def test_rejects_import_expression(self) -> None:
         result = self.tool.forward("__import__('os').system('echo hi')")
         assert result.startswith("Error:")
-        # Must not raise; must not execute.
 
     def test_rejects_variable_name(self) -> None:
         result = self.tool.forward("x + 1")
@@ -177,7 +173,6 @@ class TestBuildTools:
         store: ReportStore = {}
         t_a = build_tools(0, store)
         t_b = build_tools(1, store)
-        # Different object identities.
         for ta, tb in zip(t_a, t_b):
             assert ta is not tb
 
@@ -227,13 +222,10 @@ class TestVerifier:
 
     def test_custom_expected_and_tolerance(self) -> None:
         store = self._store_with(0, "Value: 100.0")
-        # Exact match with custom expected.
         assert verify(store, 0, expected=100.0, tol=0.1).success is True
-        # Outside tolerance.
         assert verify(store, 0, expected=98.0, tol=0.5).success is False
 
     def test_multiple_reports_closest_wins(self) -> None:
-        # Agent filed two reports; second is correct.
         store: ReportStore = {
             7: [
                 FiledReport("Bad", "Temperature: 53.0°F"),
@@ -275,22 +267,18 @@ class TestSilentLieIntegration:
         engine = ChaosEngine(profile, agent_id=0)
         engine.sabotage_tool(tool_map["calculator"])
 
-        # Call the sabotaged calculator with the correct C→F expression.
         lied_result = tool_map["calculator"].forward("22.0 * 9 / 5 + 32")
 
-        # File the corrupted result — the agent "believes" this is correct.
         tool_map["file_report"].forward(str(lied_result))
 
-        # Verify: the lie shifts the number by ≥10, so it's always WRONG_VALUE.
         result = verify(store, agent_id=0)
         assert result.success is False
         assert result.failure_reason is FailureReason.WRONG_VALUE
-        # The lied value must differ from the truth by more than the tolerance.
         assert result.found_value is not None
         assert abs(result.found_value - GROUND_TRUTH["tokyo_f"]) > 0.5
 
     def test_no_lie_gives_success(self) -> None:
-        """Control: the same flow without the chaos engine succeeds."""
+        # Control: the same flow without the chaos engine succeeds.
         store: ReportStore = {}
         tools = build_tools(agent_id=1, store=store)
         tool_map = {t.name: t for t in tools}
@@ -303,10 +291,6 @@ class TestSilentLieIntegration:
         assert result.success is True
 
     def test_silent_lie_on_weather_preserves_celsius_corrupts_fahrenheit(self) -> None:
-        """The two-unit weather reading is the deception surface (H1): the lie
-        must leave the Celsius value true and corrupt only the derived
-        Fahrenheit, so the pair is internally inconsistent and an agent that
-        recomputes from Celsius can resist it."""
         import re
 
         profile = ChaosProfile(
@@ -326,5 +310,5 @@ class TestSilentLieIntegration:
 
         out = tool_map["weather"].forward("Tokyo")
         nums = [float(x) for x in re.findall(r"-?\d+(?:\.\d+)?", out)]
-        assert nums[0] == 22.0  # Celsius untouched (the trustworthy source)
-        assert abs(nums[1] - 71.6) >= 10  # Fahrenheit shifted by the offset lie
+        assert nums[0] == 22.0
+        assert abs(nums[1] - 71.6) >= 10

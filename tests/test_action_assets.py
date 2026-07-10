@@ -27,23 +27,22 @@ def test_action_is_composite_with_documented_inputs():
 
 
 def test_action_steps_cover_gate_artifact_comment_enforce():
-    # Sanity that it's valid YAML, then assert the wiring against the raw text.
     assert _load(_ACTION)["runs"]["steps"]
     raw = _ACTION.read_text(encoding="utf-8")
     assert "docker build" in raw
     assert 'entrypoint.sh" gate' in raw
     assert "actions/upload-artifact" in raw
     assert 'entrypoint.sh" compare' in raw
-    assert "gate.outputs.gate_exit" in raw  # final step fails on non-zero exit
-    assert "pull_request" in raw  # comment step is PR-gated
+    assert "gate.outputs.gate_exit" in raw
+    assert "pull_request" in raw
 
 
 def test_entrypoint_has_gate_and_compare():
     src = _ENTRY.read_text(encoding="utf-8")
     assert "cmd_gate" in src and "cmd_compare" in src
-    assert "saboteur-resilience" in src  # the PR-comment upsert marker
-    assert "gh run download" in src  # fetch the base branch's last scorecard
-    assert "docker_run compare" in src  # uses the in-container compare endpoint
+    assert "saboteur-resilience" in src
+    assert "gh run download" in src
+    assert "docker_run compare" in src
 
 
 def test_workflow_triggers_and_permissions():

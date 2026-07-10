@@ -1,4 +1,4 @@
-"""SQLite index tests — LLM-free, temp-path Database.
+"""SQLite index tests — temp-path Database.
 
 The contract (invariant #3): the index is a *cache* over ``runs/*.jsonl`` +
 ``*.scorecard.json``. Everything here is reconstructable from those files alone
@@ -55,7 +55,7 @@ def _write_run(
     finished: datetime | None = None,
     scorecard: dict | None = None,
 ) -> list[TelemetryEvent]:
-    """Write a run's JSONL (run_started [+ a done] [+ run_finished]) + scorecard."""
+    # Write a run's JSONL (run_started [+ a done] [+ run_finished]) + scorecard.
     runs_dir.mkdir(parents=True, exist_ok=True)
     events: list[TelemetryEvent] = [
         _ev(
@@ -186,7 +186,7 @@ def test_reconcile_indexes_and_prunes(tmp_path):
 
 
 def test_reconcile_skips_replay_sessions(tmp_path):
-    """replay-* JSONLs are dashboard re-emissions, never indexed as runs."""
+    # replay-* JSONLs are dashboard re-emissions, never indexed as runs.
     db = Database(tmp_path / "saboteur.db")
     replay_id = "replay-20260101T000000-cccccc"
     _write_run(
@@ -274,7 +274,7 @@ def test_drop_db_and_rebuild_from_disk(tmp_path):
 
 
 def test_scoring_is_independent_of_index(tmp_path):
-    """Re-scoring the JSONL == the on-disk scorecard == what the index caches."""
+    # Re-scoring the JSONL == the on-disk scorecard == what the index caches.
     runs_dir = tmp_path / "runs"
     run_id = "calm_seas-20260101T000000-dddddd"
     events = _write_run(

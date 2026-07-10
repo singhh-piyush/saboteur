@@ -49,7 +49,7 @@ def _bound_bus() -> TelemetryBus:
 # ---------------------------------------------------------------------------
 
 async def test_thread_emit_arrives_in_order() -> None:
-    """Events emitted from worker threads arrive at the async subscriber in order."""
+    # Events emitted from worker threads arrive at the async subscriber in order.
     bus = _bound_bus()
     n = 20
 
@@ -79,7 +79,7 @@ async def test_thread_emit_arrives_in_order() -> None:
 
 
 async def test_subscriber_stops_after_close() -> None:
-    """Bus.close() terminates all subscriber iterators."""
+    # Bus.close() terminates all subscriber iterators.
     bus = _bound_bus()
 
     received: list[TelemetryEvent] = []
@@ -116,7 +116,7 @@ async def test_multiple_subscribers_each_receive_all_events() -> None:
         results.append(got)
 
     tasks = [asyncio.create_task(sub()) for _ in range(3)]
-    await asyncio.sleep(0)  # let all subscribers register
+    await asyncio.sleep(0)
 
     for i in range(n):
         bus.emit(_event(step=i))
@@ -132,9 +132,9 @@ async def test_multiple_subscribers_each_receive_all_events() -> None:
 
 
 async def test_raising_subscriber_is_isolated_from_others_and_the_bus() -> None:
-    """Crash isolation at the telemetry layer (invariant #2): a subscriber whose
-    consumer raises mid-stream must not affect a healthy subscriber or the bus —
-    events emitted *after* the crash still reach the survivor."""
+    # Crash isolation at the telemetry layer (invariant #2): a subscriber whose
+    # consumer raises mid-stream must not affect a healthy subscriber or the bus —
+    # events emitted *after* the crash still reach the survivor.
     bus = _bound_bus()
 
     healthy: list[TelemetryEvent] = []
@@ -153,13 +153,13 @@ async def test_raising_subscriber_is_isolated_from_others_and_the_bus() -> None:
 
     h = asyncio.create_task(healthy_sub())
     r = asyncio.create_task(raising_sub())
-    await asyncio.sleep(0)  # both register
+    await asyncio.sleep(0)
 
-    bus.emit(_event(step=0))  # both see it; the raising subscriber dies here
+    bus.emit(_event(step=0))
     await asyncio.sleep(0)
     await asyncio.sleep(0)
     with pytest.raises(RuntimeError):
-        await r  # the exception stayed inside its own task
+        await r
 
     # Emit more AFTER the crash — the healthy subscriber must still receive them.
     bus.emit(_event(step=1))
@@ -169,12 +169,12 @@ async def test_raising_subscriber_is_isolated_from_others_and_the_bus() -> None:
     bus.close()
     await asyncio.wait_for(h, timeout=1.0)
 
-    assert crashed_at == [0]  # raising sub saw exactly one event, then died
-    assert [e.step for e in healthy] == [0, 1, 2]  # survivor unaffected
+    assert crashed_at == [0]
+    assert [e.step for e in healthy] == [0, 1, 2]
 
 
 async def test_disconnect_subscriber_does_not_affect_others() -> None:
-    """Exiting one subscriber context must not starve other subscribers."""
+    # Exiting one subscriber context must not starve other subscribers.
     bus = _bound_bus()
 
     received_b: list[TelemetryEvent] = []
@@ -212,7 +212,7 @@ async def test_disconnect_subscriber_does_not_affect_others() -> None:
 # ---------------------------------------------------------------------------
 
 async def test_jsonl_written_and_flushed(tmp_path: Path) -> None:
-    """Writer produces a valid JSONL file with one line per event."""
+    # Writer produces a valid JSONL file with one line per event.
     bus = _bound_bus()
     writer = JsonlWriter(bus, RUN_ID, runs_dir=tmp_path)
     write_task = asyncio.create_task(writer.run())
@@ -237,7 +237,7 @@ async def test_jsonl_written_and_flushed(tmp_path: Path) -> None:
 
 
 async def test_jsonl_survives_partial_run(tmp_path: Path) -> None:
-    """Events already written are readable even before the bus closes."""
+    # Events already written are readable even before the bus closes.
     bus = _bound_bus()
     writer = JsonlWriter(bus, RUN_ID, runs_dir=tmp_path)
     write_task = asyncio.create_task(writer.run())
@@ -250,14 +250,14 @@ async def test_jsonl_survives_partial_run(tmp_path: Path) -> None:
     # Read the file while the run is still "in progress".
     log = tmp_path / f"{RUN_ID}.jsonl"
     events = read_jsonl(log)
-    assert len(events) >= 1  # at least one has been flushed
+    assert len(events) >= 1
 
     bus.close()
     await asyncio.wait_for(write_task, timeout=2.0)
 
 
 async def test_read_jsonl_round_trips(tmp_path: Path) -> None:
-    """read_jsonl parses every field correctly."""
+    # read_jsonl parses every field correctly.
     bus = _bound_bus()
     original = TelemetryEvent(
         run_id="r1",
@@ -294,7 +294,7 @@ async def test_read_jsonl_round_trips(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def _make_app(reg: BusRegistry):
-    """Build a minimal FastAPI app with the WS router wired to *reg*."""
+    # Build a minimal FastAPI app with the WS router wired to *reg*.
     from fastapi import FastAPI
     from saboteur.telemetry import ws as ws_mod
 
@@ -312,7 +312,7 @@ def _make_app(reg: BusRegistry):
 
 @pytest.fixture()
 def tmp_runs(tmp_path: Path, monkeypatch):
-    """Point ws._RUNS_DIR at a temp directory for the duration of the test."""
+    # Point ws._RUNS_DIR at a temp directory for the duration of the test.
     import saboteur.telemetry.ws as ws_mod
 
     monkeypatch.setattr(ws_mod, "_RUNS_DIR", tmp_path)
@@ -320,7 +320,7 @@ def tmp_runs(tmp_path: Path, monkeypatch):
 
 
 def test_ws_replay_only(tmp_runs: Path) -> None:
-    """A completed run: client receives the JSONL backlog then a control frame."""
+    # A completed run: client receives the JSONL backlog then a control frame.
 
     run_id = "ws-test-replay"
     # Write two events to JSONL manually.
@@ -330,7 +330,7 @@ def test_ws_replay_only(tmp_runs: Path) -> None:
         for ev in events:
             f.write(ev.model_dump_json() + "\n")
 
-    reg = BusRegistry()  # no live bus registered → replay only
+    reg = BusRegistry()
     app = _make_app(reg)
 
     with TestClient(app) as client:
@@ -346,12 +346,11 @@ def test_ws_replay_only(tmp_runs: Path) -> None:
 
 
 def test_ws_backlog_then_live(tmp_runs: Path) -> None:
-    """Active run: client receives JSONL backlog then a live event.
-
-    TestClient (Starlette) runs the ASGI app in a background thread with its
-    own anyio event loop. We capture that loop from a FastAPI lifespan so that
-    bus.emit() can call_soon_threadsafe onto it from the main thread.
-    """
+    # Active run: client receives JSONL backlog then a live event.
+    #
+    # TestClient (Starlette) runs the ASGI app in a background thread with its
+    # own anyio event loop. We capture that loop from a FastAPI lifespan so that
+    # bus.emit() can call_soon_threadsafe onto it from the main thread.
     import saboteur.telemetry.ws as ws_mod
     from contextlib import asynccontextmanager
     from fastapi import FastAPI
@@ -382,15 +381,12 @@ def test_ws_backlog_then_live(tmp_runs: Path) -> None:
         with TestClient(app) as client:
             # Lifespan has run; bus is now bound to the anyio loop.
             with client.websocket_connect(f"/ws/{run_id}") as ws:
-                # 1. Receive the backlog (historical) event.
                 backlog = ws.receive_json()
 
-                # 2. Emit a live event from the main thread. call_soon_threadsafe
-                #    schedules dispatch on the anyio background loop, which then
-                #    puts it in the subscriber queue so the WS handler sends it.
+                # call_soon_threadsafe schedules dispatch on the anyio background
+                # loop, which then puts it in the subscriber queue so the WS handler sends it.
                 bus.emit(_event(run_id=run_id, step=1))
 
-                # 3. Receive the live event.
                 live = ws.receive_json()
 
     finally:
@@ -406,9 +402,9 @@ def test_ws_backlog_then_live(tmp_runs: Path) -> None:
 
 
 def test_ws_finished_run_sends_control_frame_and_close_1000(tmp_runs: Path) -> None:
-    """Finished run (no live bus): backlog replayed, then control frame sent,
-    then socket closed with code 1000.  The control frame must never appear in
-    the JSONL (invariant #3)."""
+    # Finished run (no live bus): backlog replayed, then control frame sent,
+    # then socket closed with code 1000.  The control frame must never appear in
+    # the JSONL (invariant #3).
     run_id = "ws-test-complete-finished"
     events = [_event(run_id=run_id, step=i) for i in range(3)]
     log = tmp_runs / f"{run_id}.jsonl"
@@ -416,7 +412,7 @@ def test_ws_finished_run_sends_control_frame_and_close_1000(tmp_runs: Path) -> N
         for ev in events:
             f.write(ev.model_dump_json() + "\n")
 
-    reg = BusRegistry()  # finished run — no live bus
+    reg = BusRegistry()
     app = _make_app(reg)
 
     received = []
@@ -435,8 +431,8 @@ def test_ws_finished_run_sends_control_frame_and_close_1000(tmp_runs: Path) -> N
 
 
 def test_ws_live_run_sends_control_frame_after_bus_closes(tmp_runs: Path) -> None:
-    """Live run: after the bus closes (run_finished), the control frame arrives
-    and the connection closes cleanly with code 1000."""
+    # Live run: after the bus closes (run_finished), the control frame arrives
+    # and the connection closes cleanly with code 1000.
     import saboteur.telemetry.ws as ws_mod
     from contextlib import asynccontextmanager
     from fastapi import FastAPI
@@ -464,16 +460,13 @@ def test_ws_live_run_sends_control_frame_after_bus_closes(tmp_runs: Path) -> Non
 
         with TestClient(app) as client:
             with client.websocket_connect(f"/ws/{run_id}") as ws:
-                # 1. Receive historical backlog event.
                 backlog_ev = ws.receive_json()
                 assert backlog_ev["step"] == 0
 
-                # 2. Emit a live event then close the bus to simulate run_finished.
                 bus.emit(_event(run_id=run_id, step=1))
                 live_ev = ws.receive_json()
                 assert live_ev["step"] == 1
 
-                # 3. Close the bus — server should now send control frame.
                 bus.close()
                 control = ws.receive_json()
 

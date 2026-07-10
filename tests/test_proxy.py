@@ -1,8 +1,8 @@
-"""Wire-proxy tests — LLM-free, with a stubbed upstream.
+"""Wire-proxy tests — with a stubbed upstream.
 
 The upstream (real llama.cpp) is replaced by monkeypatching the proxy's
 ``forward`` functions with a fake that records the forwarded body and returns a
-canned OpenAI response. Covers:
+canned response. Covers:
 
 - transparency contract: calm_seas / no-fault forwards the body unchanged
   (non-streaming and streaming);
@@ -51,7 +51,7 @@ _CANNED_BYTES = json.dumps(_CANNED).encode("utf-8")
 
 
 class FakeUpstream:
-    """Records forwarded bodies; returns a canned completion."""
+    # Records forwarded bodies; returns a canned completion.
 
     def __init__(self) -> None:
         self.bodies: list[bytes] = []
@@ -78,8 +78,8 @@ def _profile(*faults: dict[str, Any], seed: int = 7, name: str = "probe") -> Cha
 
 
 async def _make_run(profile: ChaosProfile, *, n_agents: int = 1, tmp: Path) -> ProxyRun:
-    """A ProxyRun with an unbound bus (events still captured in run.events)."""
-    bus = TelemetryBus()  # unbound: emit() is a silent no-op, run.events still fills
+    # A ProxyRun with an unbound bus (events still captured in run.events).
+    bus = TelemetryBus()
 
     async def _noop() -> None:
         return None
@@ -178,7 +178,7 @@ async def test_passthrough_streaming_preserved(monkeypatch, tmp_path):
 
 
 async def test_streaming_usage_chunk_counted(monkeypatch, tmp_path):
-    """A trailing usage chunk (stream_options.include_usage) feeds waste_factor."""
+    # A trailing usage chunk (stream_options.include_usage) feeds waste_factor.
     fake = FakeUpstream().install(monkeypatch)
 
     async def stream_with_usage(subpath, headers, body):
@@ -192,7 +192,7 @@ async def test_streaming_usage_chunk_counted(monkeypatch, tmp_path):
     raw, parsed = _chat(_basic_messages(), stream=True)
 
     resp = await _send(run, 0, raw, parsed)
-    body = await _read_stream(resp)  # drain — bytes still passthrough-identical
+    body = await _read_stream(resp)
 
     assert b"[DONE]" in body
     assert run.session(0).tokens == 17
@@ -211,7 +211,7 @@ async def test_api_error_returns_5xx_without_forwarding(monkeypatch, tmp_path):
     resp = await _send(run, 0, raw, parsed)
 
     assert resp.status_code in (500, 503)
-    assert fake.bodies == []  # never forwarded
+    assert fake.bodies == []
     assert "api_error" in _faults(run)
 
 
@@ -270,7 +270,7 @@ async def test_latency_sleeps_then_forwards(monkeypatch, tmp_path):
 
     assert resp.status_code == 200
     assert slept and slept[0] >= 0.5
-    assert fake.bodies == [raw]  # still forwarded, unchanged
+    assert fake.bodies == [raw]
     assert "latency" in _faults(run)
     # The drawn delay is lifted onto the event's latency_ms field.
     lat = next(e for e in run.events if e.fault == "latency")
@@ -285,9 +285,9 @@ async def test_malformed_truncates_response(monkeypatch, tmp_path):
     resp = await _send(run, 0, raw, parsed)
 
     assert resp.status_code == 200
-    assert len(resp.body) < len(_CANNED_BYTES)  # truncated
+    assert len(resp.body) < len(_CANNED_BYTES)
     with pytest.raises(json.JSONDecodeError):
-        json.loads(resp.body)  # broken JSON
+        json.loads(resp.body)
     assert "malformed" in _faults(run)
 
 
@@ -304,8 +304,8 @@ async def test_silent_lie_perturbs_request_tool_result(monkeypatch, tmp_path):
     assert resp.status_code == 200
     forwarded = json.loads(fake.bodies[0])
     lied = forwarded["messages"][-1]["content"]
-    assert lied != "22.0°C (71.6°F)"  # the reading was perturbed
-    assert "22.0" in lied  # only the LAST number (°F) is lied; °C stays true
+    assert lied != "22.0°C (71.6°F)"
+    assert "22.0" in lied
     assert "silent_lie" in _faults(run)
 
 
@@ -315,14 +315,14 @@ async def test_context_drop_drops_messages(monkeypatch, tmp_path):
         _profile({"type": "context_drop", "probability": 1.0, "drop_last_k": 2}),
         tmp=tmp_path,
     )
-    raw, parsed = _chat(_basic_messages())  # 4 messages
+    raw, parsed = _chat(_basic_messages())
 
     resp = await _send(run, 0, raw, parsed)
 
     assert resp.status_code == 200
     forwarded = json.loads(fake.bodies[0])
-    assert len(forwarded["messages"]) == 2  # 4 - 2 dropped
-    assert forwarded["messages"][0]["role"] == "system"  # system preserved
+    assert len(forwarded["messages"]) == 2
+    assert forwarded["messages"][0]["role"] == "system"
     assert "context_drop" in _faults(run)
 
 
@@ -368,7 +368,7 @@ async def test_determinism_same_seed_same_fault_sequence(monkeypatch, tmp_path):
     first = await run_once()
     second = await run_once()
     assert first == second
-    assert first  # at p=0.5 over 20 calls, at least one fired
+    assert first
 
 
 # ---------------------------------------------------------------------------
@@ -385,10 +385,10 @@ async def test_recovery_retry_reformulate_fallback(monkeypatch, tmp_path):
         return [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}, call]
 
     seq = [
-        _assistant_call("weather", {"city": "Tokyo"}),       # step1: fault
-        _assistant_call("weather", {"city": "Tokyo"}),       # step2: same → retry
-        _assistant_call("weather", {"city": "Kyoto"}),       # step3: new args → reformulate
-        _assistant_call("web_search", {"q": "Tokyo temp"}),  # step4: new tool → fallback_tool
+        _assistant_call("weather", {"city": "Tokyo"}),
+        _assistant_call("weather", {"city": "Tokyo"}),
+        _assistant_call("weather", {"city": "Kyoto"}),
+        _assistant_call("web_search", {"q": "Tokyo temp"}),
     ]
     for call in seq:
         raw, parsed = _chat(msgs_with(call))
@@ -465,7 +465,7 @@ async def test_finish_emits_terminals_and_is_idempotent(monkeypatch, tmp_path):
     raw, parsed = _chat(_basic_messages())
     await _send(run, 0, raw, parsed)
     await run.finish()
-    await run.finish()  # idempotent — no double terminals
+    await run.finish()
 
     done = [e for e in run.events if e.event == "agent_done"]
     run_finished = [e for e in run.events if e.event == "run_finished"]
@@ -481,13 +481,13 @@ async def test_finish_emits_terminals_and_is_idempotent(monkeypatch, tmp_path):
 
 @pytest.fixture()
 def clean_capture():
-    """The manager is a module singleton — never leak capture state across tests."""
+    # The manager is a module singleton — never leak capture state across tests.
     yield
     manager._capture_run = None
 
 
 def _start_messages() -> list[dict[str, Any]]:
-    """A conversation-start request: no assistant turn yet."""
+    # A conversation-start request: no assistant turn yet.
     return [
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "task"},
@@ -531,7 +531,7 @@ async def test_capture_run_absorbs_headerless_and_faults_fire(
 
     raw, _ = _chat(_basic_messages())
     with TestClient(app) as client:
-        resp = client.post("/v1/chat/completions", content=raw)  # NO headers
+        resp = client.post("/v1/chat/completions", content=raw)
     assert resp.status_code == 200
 
     # The fault fired inside the capture run, on the forwarded body.
@@ -627,7 +627,7 @@ async def test_finish_clears_capture(monkeypatch, tmp_path, clean_capture):
 
 
 async def test_capture_replay_parity(monkeypatch, tmp_path, clean_capture):
-    """A captured headerless cohort re-scores from its JSONL identically."""
+    # A captured headerless cohort re-scores from its JSONL identically.
     FakeUpstream().install(monkeypatch)
     profile = _profile(
         {"type": "api_error", "probability": 0.4},
@@ -688,7 +688,7 @@ def test_capture_status_endpoint(http_env, clean_capture):
 
 @pytest.fixture()
 def http_env(monkeypatch, tmp_path):
-    """Stub the upstream and redirect run artifacts to a temp dir."""
+    # Stub the upstream and redirect run artifacts to a temp dir.
     import saboteur.api.runs as runs_mod
     import saboteur.proxy.router as router_mod
 
@@ -708,7 +708,7 @@ def test_http_passthrough_no_run_header(http_env):
         resp = client.post("/v1/chat/completions", content=raw)
 
     assert resp.status_code == 200
-    assert resp.content == _CANNED_BYTES  # transparent passthrough
+    assert resp.content == _CANNED_BYTES
     assert http_env.bodies == [raw]
 
 

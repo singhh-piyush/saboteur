@@ -1,4 +1,4 @@
-"""MCP shim tests — LLM-free, offline, with a stubbed/trivial upstream.
+"""MCP shim tests — offline, with a stubbed/trivial upstream.
 
 Two layers, mirroring ``test_proxy.py``:
 
@@ -50,7 +50,7 @@ def _upstream_result(text: str = _READING) -> dict[str, Any]:
 
 
 class FakeUpstream:
-    """Returns a canned tool result; counts calls (to prove non-forwarding)."""
+    # Returns a canned tool result; counts calls (to prove non-forwarding).
 
     def __init__(self, text: str = _READING) -> None:
         self.text = text
@@ -99,11 +99,11 @@ async def test_passthrough_calm_seas_unchanged():
     up = FakeUpstream()
     env = await _call(_session(_profile()), emitter, upstream=up)
 
-    assert env["result"] == _upstream_result()  # content-identical to upstream
+    assert env["result"] == _upstream_result()
     assert env["jsonrpc"] == "2.0" and env["id"] == 1
     assert _faults(emitter) == []
     assert up.calls == 1
-    # A clean tool_call (not sabotaged, not errored) is reported.
+
     tc = [e for e in emitter.events if e.event == "tool_call"][0]
     assert tc.payload["sabotaged"] is False and tc.payload["errored"] is False
 
@@ -129,7 +129,7 @@ async def test_latency_sleeps_then_forwards(monkeypatch):
     )
 
     assert slept and slept[0] >= 0.5
-    assert env["result"] == _upstream_result()  # still forwarded, unchanged
+    assert env["result"] == _upstream_result()
     assert up.calls == 1
     assert "latency" in _faults(emitter)
 
@@ -145,7 +145,7 @@ async def test_rate_limit_returns_error_without_forwarding():
 
     assert env["result"]["isError"] is True
     assert "Retry after" in _result_text(env)
-    assert up.calls == 0  # never forwarded
+    assert up.calls == 0
     assert "rate_limit" in _faults(emitter)
 
 
@@ -163,13 +163,13 @@ async def test_tool_vanish_errors_and_is_sticky():
     assert session.vanish is not None and session.vanish.is_vanished("get_weather")
     assert up.calls == 0
 
-    # Sticky: a second call short-circuits before any draw.
+
     env2 = await _call(session, emitter, jid=2, upstream=up)
     assert env2["result"]["isError"] is True
     sticky = [e for e in emitter.events if e.fault == "tool_vanish"][-1]
     assert sticky.payload["detail"] == {"sticky": True}
 
-    # tools/list reflects the vanish.
+
     listed = inject.handle_tools_list(
         session, {"tools": [{"name": "get_weather"}, {"name": "add"}]}
     )
@@ -184,7 +184,7 @@ async def test_malformed_truncates_result_text():
     )
 
     text = _result_text(env)
-    assert len(text) < len(_READING)  # truncated
+    assert len(text) < len(_READING)
     # The MCP result still claims success (isError False) — malformed is garbage
     # content that *looks* normal; the sabotage is visible only in telemetry.
     assert env["result"]["isError"] is False
@@ -203,9 +203,9 @@ async def test_silent_lie_perturbs_last_number_only():
     )
 
     text = _result_text(env)
-    assert text != _READING  # the reading was perturbed
-    assert "22.0" in text  # only the LAST number (°F) is lied; °C stays true
-    assert env["result"]["isError"] is False  # well-formed, just wrong
+    assert text != _READING
+    assert "22.0" in text
+    assert env["result"]["isError"] is False
     assert "silent_lie" in _faults(emitter)
 
 
@@ -227,7 +227,7 @@ async def test_determinism_same_seed_same_fault_sequence():
     first = await run_once()
     second = await run_once()
     assert first == second
-    assert first  # at p=0.5 over 20 calls, at least one fires
+    assert first
 
 
 async def test_isolation_vanish_state_per_session():
@@ -252,10 +252,10 @@ async def test_recovery_retry_reformulate_fallback():
     session = _session(_profile({"type": "rate_limit", "probability": 1.0, "retry_after_s": [1.0, 2.0]}))
 
     seq = [
-        ("get_weather", {"city": "Tokyo"}),  # step1: fault
-        ("get_weather", {"city": "Tokyo"}),  # step2: same → retry
-        ("get_weather", {"city": "Kyoto"}),  # step3: new args → reformulate
-        ("add", {"a": 1, "b": 2}),           # step4: new tool → fallback_tool
+        ("get_weather", {"city": "Tokyo"}),
+        ("get_weather", {"city": "Tokyo"}),
+        ("get_weather", {"city": "Kyoto"}),
+        ("add", {"a": 1, "b": 2}),
     ]
     for i, (name, args) in enumerate(seq):
         await _call(session, emitter, name=name, args=args, jid=i)
@@ -337,7 +337,7 @@ def test_http_run_ingest_and_scorecard(http_env):
         resp = client.post(f"/mcp/runs/{run_id}/events", json=ev.model_dump(mode="json"))
         assert resp.status_code == 202
 
-        # The event was re-emitted on the run and rebuilt into a shadow session.
+
         run = manager.get(run_id)
         assert any(e.event == "tool_call" for e in run.events)
         assert len(run.session(0).history) == 1
@@ -401,8 +401,8 @@ def _weather_call(jid: int) -> dict[str, Any]:
 def test_e2e_stdio_calm_seas_passthrough():
     responses = _shim_exchange("calm_seas", [_INIT, _INITED, _weather_call(2)])
     by_id = {r["id"]: r for r in responses}
-    assert by_id[1]["result"]["serverInfo"]["name"] == "mcp-min"  # transparent init
-    assert by_id[2]["result"]["content"][0]["text"] == _READING  # faithful passthrough
+    assert by_id[1]["result"]["serverInfo"]["name"] == "mcp-min"
+    assert by_id[2]["result"]["content"][0]["text"] == _READING
 
 
 def test_e2e_stdio_silent_lie_corrupts(tmp_path):
@@ -414,4 +414,4 @@ def test_e2e_stdio_silent_lie_corrupts(tmp_path):
     responses = _shim_exchange(str(profile), [_INIT, _INITED, _weather_call(2)])
     by_id = {r["id"]: r for r in responses}
     text = by_id[2]["result"]["content"][0]["text"]
-    assert text != _READING and "22.0" in text  # °F lied, °C intact
+    assert text != _READING and "22.0" in text

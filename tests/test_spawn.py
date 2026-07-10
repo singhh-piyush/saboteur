@@ -1,7 +1,7 @@
-"""BYO cohort spawner tests — LLM-free, real (but trivial) subprocesses.
+"""BYO cohort spawner tests — real (but trivial) subprocesses.
 
 The agent source is replaced by tiny ``python -c`` / script subprocesses that
-never touch an LLM or the proxy wire, so we can exercise the spawner's contract
+never touch the proxy wire, so we can exercise the spawner's contract
 directly: env wiring, per-agent terminal outcomes, crash isolation, the
 wall-clock kill, the oracle freeze, and replay parity. Each test uses a unique
 run id (the proxy ``manager`` + ``run_registry`` are module singletons).
@@ -97,7 +97,7 @@ async def test_clean_exit_is_completed(tmp_path):
     for i in (0, 1):
         done = _done(run, i)
         assert done.payload["outcome"] == "completed"
-        assert done.payload["success"] is None  # no oracle
+        assert done.payload["success"] is None
         assert done.payload["exit_code"] == 0
 
 
@@ -124,12 +124,11 @@ async def test_timeout_kill_is_bounded(tmp_path):
 
 
 async def test_timeout_never_scores_as_success_even_with_lenient_oracle(tmp_path):
-    """Regression (MI300X run): a SIGKILL'd agent must freeze success=False.
-
-    The oracle is not consulted on a wall-clock kill — a lenient one (here a
-    match-anything regex) would otherwise pass the partial output of a process
-    that never completed the task.
-    """
+    # A SIGKILL'd agent must freeze success=False.
+    #
+    # The oracle is not consulted on a wall-clock kill — a lenient one (here a
+    # match-anything regex) would otherwise pass the partial output of a process
+    # that never completed the task.
     run_id = _rid("timeout-oracle")
     sleeper = [sys.executable, "-c", "import time; time.sleep(30)"]
     lenient = OracleConfig(kind="regex", pattern=".*")
@@ -176,8 +175,8 @@ async def test_crash_isolation_one_hang_others_complete(tmp_path):
         concurrency_limit=8,
     )
     run = manager.get(run_id)
-    assert _done(run, 0).payload["outcome"] == "timeout"  # the hung one, killed
-    assert _done(run, 1).payload["outcome"] == "completed"  # siblings unaffected
+    assert _done(run, 0).payload["outcome"] == "timeout"
+    assert _done(run, 1).payload["outcome"] == "completed"
     assert _done(run, 2).payload["outcome"] == "completed"
 
 
@@ -210,8 +209,8 @@ async def test_regex_oracle_freezes_success_and_gates_survival(tmp_path):
     card = Scorecard.model_validate_json(
         (tmp_path / f"{run_id}.scorecard.json").read_text()
     )
-    assert card.survival_rate == 1.0  # both agents matched the oracle
-    assert card.deception_detection_rate is None  # BYO oracle isn't deception-aware
+    assert card.survival_rate == 1.0
+    assert card.deception_detection_rate is None
     assert card.deception_detection_rate_reason == "deception_requires_reference_oracle"
 
 
@@ -242,7 +241,7 @@ async def test_replay_parity_rescore_equals_persisted(tmp_path):
         read_jsonl(tmp_path / f"{run_id}.jsonl"),
         [],
         run_id=run_id,
-        profile="probe",  # ProxyRun.finish scores with the chaos profile name
+        profile="probe",
     )
     assert rescored.model_dump() == persisted.model_dump()
     assert persisted.n_agents == 3

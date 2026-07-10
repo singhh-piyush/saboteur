@@ -8,7 +8,7 @@ Covers the routes the dashboard's new management pages depend on:
 - ``DELETE /profiles/{name}`` — delete a custom profile (built-ins protected).
 - ``PUT  /targets/{name}``    — edit a command target (+ oracle-config validation).
 
-All LLM-free. Profile tests redirect ``_PROFILES_DIR`` to a temp dir; target
+Profile tests redirect ``_PROFILES_DIR`` to a temp dir; target
 tests redirect the store to a temp-path :class:`Database`.
 """
 
@@ -114,12 +114,12 @@ def test_save_custom_profile_roundtrips(tmp_profiles):
         assert created.status_code == 201
         assert created.json()["name"] == "my_chaos"
 
-        # Written to disk and visible immediately via GET /profiles.
+
         listed = {p["name"]: p for p in client.get("/profiles").json()}
         assert "my_chaos" in listed
         assert listed["my_chaos"]["seed"] == 99
 
-    # The saved YAML is a valid profile the loader can read back.
+
     from saboteur.chaos.profile import load_profile
 
     profile = load_profile(tmp_profiles / "my_chaos.yaml")
@@ -143,7 +143,7 @@ def test_get_full_profile_roundtrips_params(tmp_profiles):
         assert body["seed"] == 5
         fault = body["faults"][0]
         assert fault["type"] == "rate_limit"
-        # The full profile carries every fault param (not just the summary).
+
         assert fault["retry_after_s"] == [3.0, 9.0]
 
         assert client.get("/profiles/missing").status_code == 404
@@ -243,9 +243,9 @@ def test_create_and_update_reject_bad_oracle(http_targets):
         "oracle": {"kind": "regex"},  # missing 'pattern'
     }
     with TestClient(app) as client:
-        # Create with a bad oracle config → 400.
+
         assert client.post("/targets", json=bad).status_code == 400
-        # A valid create, then a bad-oracle edit → 400.
+
         good = {**bad, "oracle": {"kind": "regex", "pattern": "ANSWER"}}
         assert client.post("/targets", json=good).status_code == 201
         assert client.put("/targets/byo", json=bad).status_code == 400

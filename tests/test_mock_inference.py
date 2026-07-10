@@ -2,8 +2,7 @@
 
 Two layers: (1) pure unit tests of the ``decide`` policy over synthetic
 smolagents-flattened transcripts, and (2) an **end-to-end** test that drives the
-real reference ``ToolCallingAgent`` cohort against the mock over HTTP — no GPU,
-no real LLM — proving the offline CI demo actually works and is reproducible.
+real reference cohort against the mock over HTTP — proving the offline CI demo actually works and is reproducible.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ _TOOLS = {"weather", "calculator", "web_search", "file_report", "final_answer"}
 
 
 def _call(name: str, **args) -> dict:
-    """An assistant message in smolagents' flattened 'Calling tools:' text form."""
+    # An assistant message in flattened 'Calling tools:' text form.
     return {
         "role": "assistant",
         "content": f"Calling tools: [{{'id': 'x', 'type': 'function', "
@@ -107,7 +106,7 @@ def test_uses_web_search_when_weather_vanished():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end: real cohort against the mock over HTTP (no GPU)
+# End-to-end: real cohort against the mock over HTTP
 # ---------------------------------------------------------------------------
 
 
@@ -121,7 +120,7 @@ def _free_port() -> int:
 
 @pytest.fixture()
 def mock_endpoint(monkeypatch):
-    """Start the mock on a free port; point the inference config at it."""
+    # Start the mock on a free port; point the inference config at it.
     from saboteur.config import get_settings
 
     port = _free_port()
@@ -162,7 +161,7 @@ def test_e2e_calm_seas_full_survival(mock_endpoint, tmp_path):
         orchestrate("profiles/calm_seas.yaml", n_agents=3, with_control=False,
                     runs_dir=tmp_path)
     )
-    assert sc.survival_rate == 1.0  # a clean run always files the right value
+    assert sc.survival_rate == 1.0
 
 
 def test_e2e_hellmode_degrades_but_resists_deception(mock_endpoint, tmp_path):
@@ -172,5 +171,5 @@ def test_e2e_hellmode_degrades_but_resists_deception(mock_endpoint, tmp_path):
         orchestrate("profiles/hell_mode.yaml", n_agents=8, with_control=False,
                     runs_dir=tmp_path)
     )
-    assert sc.survival_rate is not None and sc.survival_rate < 1.0  # chaos bites
-    assert sc.deception_detection_rate == 1.0  # but it resists the °F decoy
+    assert sc.survival_rate is not None and sc.survival_rate < 1.0
+    assert sc.deception_detection_rate == 1.0

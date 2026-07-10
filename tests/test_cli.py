@@ -1,9 +1,9 @@
-"""CLI tests — LLM-free + server-free via click's CliRunner.
+"""CLI tests — server-free via click's CliRunner.
 
 The ``run`` command's executors (``_run_reference`` / ``_run_byo_via_api``) and
 the server probe (``_server_up``) are module-level seams: tests monkeypatch them
 to return canned scorecards, so the exit-code contract is exercised without a
-live LLM or a running server.
+running server.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ def test_oracle_metric_on_no_oracle_target_exits_2(runner, monkeypatch, tmp_path
     )
     assert res.exit_code == 2
     assert "oracle" in res.output.lower()
-    assert called == []  # never ran the cohort
+    assert called == []
 
 
 def test_waste_factor_without_control_exits_2(runner, monkeypatch):
@@ -136,7 +136,7 @@ def test_crash_rate_gate_is_a_ceiling_not_a_floor(runner, monkeypatch):
         ["run", "--target", "reference", "--profile", "hell_mode", "--ci",
          "--metric", "crash_rate", "--threshold", "0.5"],
     )
-    assert ok.exit_code == 0, ok.output  # 0.0 crash_rate is under the 0.5 ceiling
+    assert ok.exit_code == 0, ok.output
 
     monkeypatch.setattr(cli, "_run_reference", lambda *a, **k: _sc(crash_rate=0.8))
     bad = runner.invoke(
@@ -144,12 +144,11 @@ def test_crash_rate_gate_is_a_ceiling_not_a_floor(runner, monkeypatch):
         ["run", "--target", "reference", "--profile", "hell_mode", "--ci",
          "--metric", "crash_rate", "--threshold", "0.5"],
     )
-    assert bad.exit_code == 1, bad.output  # 0.8 crash_rate breaches the ceiling
+    assert bad.exit_code == 1, bad.output
 
 
 def test_latency_degradation_is_rejected_as_a_gate_metric(runner, monkeypatch):
-    # latency_degradation is contention-contaminated (CLAUDE.md: keep out of CI
-    # thresholds) — gating on it is a loud config error, even with --control.
+    # latency_degradation is contention-contaminated — gating on it is a loud config error, even with --control.
     monkeypatch.setattr(cli, "_run_reference", lambda *a, **k: pytest.fail("cohort ran"))
     res = runner.invoke(
         cli.main,
@@ -281,7 +280,7 @@ def test_mock_flag_uses_mock_and_reference(runner, monkeypatch):
         ["run", "--target", "reference", "--mock", "--profile", "calm_seas", "--ci", "--threshold", "0.5"],
     )
     assert res.exit_code == 0
-    assert started == [1]  # the mock was launched
+    assert started == [1]
 
 
 def test_mock_flag_rejected_for_byo(runner, monkeypatch, tmp_path):

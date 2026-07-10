@@ -1,7 +1,6 @@
-"""Unit tests for the pure outcome / recovery classifiers (LLM-free).
+"""Unit tests for the pure outcome / recovery classifiers.
 
-These import only :mod:`saboteur.agents.outcomes`, so they run with no model
-and no smolagents agent loop (invariant #4). They drive the classifiers with
+They drive the classifiers with
 synthetic :class:`StepRecord` histories that mirror what the factory builds
 from real ``ActionStep``s.
 """
@@ -62,9 +61,7 @@ class TestClassifyRecoveries:
             _step(2, "weather", {"city": "Tokyo"}),
         ]
         recs = classify_recoveries(history)
-        # A same-tool/same-args re-call after a 429 is just a retry: telemetry
-        # can't witness whether the agent actually waited, so we don't claim a
-        # separate "backoff".
+
         assert recs[0].kind is RecoveryKind.RETRY
 
     def test_fallback_to_different_tool(self) -> None:
@@ -102,8 +99,7 @@ class TestClassifyRecoveries:
         assert recs[-1].after_fault == "timeout"
 
     def test_terminal_false_suppresses_giveup(self) -> None:
-        # Mid-run view: a faulted last step must NOT be reported as gave_up
-        # before the agent has had its next turn.
+
         history = [
             _step(1, "weather", {"city": "Tokyo"}, faults=("timeout",), errored=True),
         ]
@@ -159,7 +155,7 @@ class TestClassifyOutcome:
         )
 
     def test_step_cap_without_repeats_is_not_infinite_retry(self) -> None:
-        # Hit the cap but doing varied work, no report → silent abandonment.
+
         history = [
             _step(1, "weather", {"city": "Tokyo"}),
             _step(2, "calculator", {"expression": "x"}),
@@ -210,7 +206,7 @@ _AgentParsingError = type("AgentParsingError", (Exception,), {})
 
 
 def _make_parse_error_step(prose: str) -> Any:
-    """A fake ActionStep that mimics a parse failure."""
+    # A fake ActionStep that mimics a parse failure.
     return SimpleNamespace(
         step_number=3,
         tool_calls=[],
@@ -222,10 +218,10 @@ def _make_parse_error_step(prose: str) -> Any:
 
 
 class TestParseErrorTelemetry:
-    """_on_step emits parse_error metadata in the step_start payload."""
+    # _on_step emits parse_error metadata in the step_start payload.
 
     def _build_agent(self) -> tuple[Any, list[AgentEvent]]:
-        """Build a SaboteurAgent with a capturing on_event; engine left None."""
+        # Build a SaboteurAgent with a capturing on_event; engine left None.
         from saboteur.agents.factory import SaboteurAgent
         from saboteur.agents.tools import ReportStore
 
@@ -235,17 +231,14 @@ class TestParseErrorTelemetry:
             store=ReportStore(),
             on_event=events.append,
         )
-        # engine stays None — no chaos, no context_drop; step_hook is guarded.
-        # Inject a minimal smolagents agent stand-in so _on_step can read
-        # step_number (via getattr with a fallback) and engine.step_hook is
-        # never reached.
+
         from unittest.mock import MagicMock
         shell.agent = MagicMock()
         shell.agent.step_number = 3
         return shell, events
 
     def test_parse_error_in_payload(self) -> None:
-        """step_start payload carries parse_error=True and the raw model output."""
+        # step_start payload carries parse_error=True and the raw model output.
         shell, events = self._build_agent()
         prose = "The temperature in Tokyo is 22 °C, which is 71.6 °F."
 
@@ -259,13 +252,10 @@ class TestParseErrorTelemetry:
         assert "AgentParsingError" in payload.get("error", "")
 
     def test_normal_step_has_empty_payload(self) -> None:
-        """step_start for a successful tool call must NOT carry parse_error."""
+        # step_start for a successful tool call must NOT carry parse_error.
         shell, events = self._build_agent()
 
-        # _on_step only reads memory_step via getattr, so a SimpleNamespace is
-        # sufficient — no need for the real ActionStep (which requires Timing).
-        # _build_record accesses tool_call.name and tool_call.arguments directly,
-        # so we use smolagents.memory.ToolCall (not ChatMessageToolCall).
+
         from smolagents.memory import ToolCall
 
         tc = ToolCall(name="weather", arguments={"city": "Tokyo"}, id="c1")
@@ -285,20 +275,11 @@ class TestParseErrorTelemetry:
 
 
 # ---------------------------------------------------------------------------
-# Wall-clock timeout verdict (regression: MI300X run — timeout + success:true)
+# Wall-clock timeout verdict
 # ---------------------------------------------------------------------------
 
 
 class TestTimeoutVerdict:
-    """A wall-clock-killed run must never freeze ``success=True``.
-
-    ``asyncio.wait_for`` cannot kill the smolagents worker thread, so on
-    timeout the orphan thread keeps running and can file a valid report into
-    the store before ``verify()`` reads it — which used to score a killed
-    agent as a pass (MI300X run, agent 6). The verdict derivation must freeze
-    a failure without consulting the oracle; the outcome taxonomy and the
-    (pure) scorer are untouched.
-    """
 
     async def test_timeout_freezes_failure_despite_passing_verifier(
         self, monkeypatch
@@ -309,14 +290,11 @@ class TestTimeoutVerdict:
         from saboteur.agents.factory import SaboteurAgent
         from saboteur.agents.tools import FiledReport
 
-        # AGENT_TIMEOUT_S must flow from the environment to asyncio.wait_for
-        # end-to-end (the heavy-model config knob) — the stub below is killed
-        # at this ceiling, which proves the plumbing too.
+
         monkeypatch.setenv("AGENT_TIMEOUT_S", "1")
         cfg.get_settings.cache_clear()
         try:
-            # The store already holds a PASSING report — mimicking the orphan
-            # worker thread that completes the task around/after the kill.
+
             store = {7: [FiledReport(title="Tokyo report", body="71.6 F")]}
             events: list[AgentEvent] = []
             shell = SaboteurAgent(agent_id=7, store=store, on_event=events.append)
@@ -329,10 +307,9 @@ class TestTimeoutVerdict:
             cfg.get_settings.cache_clear()
 
         assert result.outcome is Outcome.TIMEOUT
-        # The raw verifier verdict stays honest (the report IS valid)…
+
         assert result.task_result.success is True
-        # …but the frozen success verdict must be a failure: the run never
-        # returned, so it cannot be a pass.
+
         terminal = next(e for e in events if e.kind == "terminal")
         assert terminal.data["outcome"] == "timeout"
         assert terminal.data["success"] is False

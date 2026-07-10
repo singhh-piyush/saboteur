@@ -1,4 +1,4 @@
-"""Cancellation tests — every exit path emits exactly one terminal (LLM-free).
+"""Cancellation tests — every exit path emits exactly one terminal.
 
 Regression for the hell_mode N=50 GPU run ``hell_mode-20260703T002129-ee891b``:
 STOP RUN cancelled the orchestrate task ~70 s in; ``CancelledError`` (a
@@ -39,7 +39,6 @@ from saboteur.telemetry.jsonl import read_jsonl
 
 
 class _BlockingLoopAgent:
-    """Duck-types the smolagents agent: run() blocks until released."""
 
     def __init__(self) -> None:
         self.release = threading.Event()
@@ -51,7 +50,6 @@ class _BlockingLoopAgent:
 
 
 class _StepCapAgent:
-    """Duck-types the smolagents agent: run() returns a max-steps RunResult."""
 
     step_number = 15
 
@@ -95,8 +93,6 @@ async def test_cancelled_agent_emits_exactly_one_terminal() -> None:
     assert payload["success"] is False
     assert payload["outcome"] == str(Outcome.TIMEOUT)
     assert "not judged" in payload["oracle_detail"]
-
-    # The orphan worker thread is silenced: releasing it emits nothing more.
     stub.release.set()
     await asyncio.sleep(0.05)
     assert [e for e in events if e.kind == "terminal"] == terminals
@@ -111,8 +107,6 @@ async def test_step_cap_mid_recovery_emits_exactly_one_terminal() -> None:
     events: list[AgentEvent] = []
     shell = SaboteurAgent(agent_id=17, store={}, on_event=events.append)
     shell.agent = _StepCapAgent()  # type: ignore[assignment]
-    # Mirror the GPU run's agent 17: reaches the cap mid-recovery — weather
-    # faulted at step 14, fallback to web_search at the final step 15.
     shell._history.extend(
         [_rec(s, "weather") for s in range(1, 14)]
         + [_rec(14, "weather", faulted=True), _rec(15, "web_search")]
@@ -122,8 +116,6 @@ async def test_step_cap_mid_recovery_emits_exactly_one_terminal() -> None:
 
     terminals = [e for e in events if e.kind == "terminal"]
     assert len(terminals) == 1
-    # No report was filed and there is no >=3 identical-call streak, so the
-    # step-capped run classifies as silent_abandonment — and it IS emitted.
     assert terminals[0].data["outcome"] == str(Outcome.SILENT_ABANDONMENT)
     assert result.outcome == Outcome.SILENT_ABANDONMENT
     assert result.steps_taken == 15
@@ -165,7 +157,7 @@ class _QuickAgent:
 
 
 class _HangingAgent:
-    """Hangs forever and — deliberately — emits no terminal when cancelled."""
+    # Hangs forever and — deliberately — emits no terminal when cancelled.
 
     def __init__(self, agent_id: int) -> None:
         self.agent_id = agent_id
@@ -202,14 +194,13 @@ async def test_cancelled_cohort_scores_and_persists(tmp_path: Path) -> None:
             agent_factory=factory,
         )
     )
-    for _ in range(400):  # wait until both quick agents have finished
+    for _ in range(400):
         if len(done) == 2:
             break
         await asyncio.sleep(0.005)
     assert len(done) == 2
     task.cancel()
 
-    # The orchestrate task swallows the stop, scores, persists, and returns.
     card = await task
 
     scorecard_path = runs_dir / f"{card.run_id}.scorecard.json"
@@ -221,8 +212,6 @@ async def test_cancelled_cohort_scores_and_persists(tmp_path: Path) -> None:
     assert len(finished) == 1
     assert finished[0].payload.get("cancelled") is True
 
-    # Every agent id has exactly one terminal — the hanging agent's was
-    # synthesized (invariant #2: the grid can never freeze on a live state).
     dones = [e for e in events if e.event == "agent_done"]
     assert sorted(e.agent_id for e in dones) == [0, 1, 2]
     synthesized = next(e for e in dones if e.agent_id == 2)
@@ -234,8 +223,6 @@ async def test_cancelled_cohort_scores_and_persists(tmp_path: Path) -> None:
     assert card.survival_rate == pytest.approx(2 / 3)
     assert card.per_agent[2]["success"] is False
 
-    # Replay parity (invariant #3): re-scoring the JSONL reproduces the
-    # persisted scorecard exactly (no-control run scores against []).
     replayed = score(
         events,
         [],
@@ -267,7 +254,7 @@ async def test_cancel_during_control_stage_propagates(tmp_path: Path) -> None:
             agent_factory=factory,
         )
     )
-    for _ in range(400):  # wait until the control cohort's JSONL appears
+    for _ in range(400):
         if next(runs_dir.glob("*-control.jsonl"), None) is not None:
             break
         await asyncio.sleep(0.005)
@@ -275,14 +262,12 @@ async def test_cancel_during_control_stage_propagates(tmp_path: Path) -> None:
     with pytest.raises(asyncio.CancelledError):
         await task
 
-    # No chaos cohort, no scorecard — the stop stopped everything.
     assert list(runs_dir.glob("*.scorecard.json")) == []
     control_log = next(runs_dir.glob("*-control.jsonl"))
     chaos_logs = [
         p for p in runs_dir.glob("*.jsonl") if not p.name.endswith("-control.jsonl")
     ]
     assert chaos_logs == []
-    # The control log itself still closed cleanly with synthesized terminals.
     control_events = read_jsonl(control_log)
     assert [e for e in control_events if e.event == "run_finished"]
     assert len([e for e in control_events if e.event == "agent_done"]) == 2

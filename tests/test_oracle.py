@@ -1,8 +1,8 @@
-"""Oracle + two-tier scorecard tests (LLM-free).
+"""Oracle + two-tier scorecard tests.
 
 Covers:
   1. Each oracle's ``judge`` (BuiltinReference / Regex / AssertionCommand /
-     HttpCallback) over hand-built contexts — no LLM, no network (HTTP is
+     HttpCallback) over hand-built contexts — no network (HTTP is
      monkeypatched).
   2. ``score()`` gating: oracle-gated metrics are null + an explicit reason when
      no/ineligible oracle; behavioral metrics are identical regardless.
@@ -248,7 +248,7 @@ def test_behavioral_metrics_identical_regardless_of_oracle() -> None:
 
     # Sanity on the values themselves.
     assert with_o.mttr_steps == pytest.approx(1.0)
-    assert with_o.crash_rate == pytest.approx(0.5)  # agent 1 hard-crashed
+    assert with_o.crash_rate == pytest.approx(0.5)
     assert with_o.waste_factor == pytest.approx(1000 / 500)
     assert with_o.latency_degradation == pytest.approx(100 / 50)
 
@@ -269,7 +269,7 @@ def test_crash_rate_is_not_one_minus_survival() -> None:
     ]
     card = score(events, [], run_id="r", profile="p")
     assert card.survival_rate == 0.0
-    assert card.crash_rate == 0.0  # timeouts, not hard_exception
+    assert card.crash_rate == 0.0
     assert card.failure_modes == {"timeout": 2}
 
 
@@ -329,14 +329,14 @@ def test_old_scorecard_still_validates() -> None:
 
 
 def test_legacy_minimal_scorecard_loads_with_defaults() -> None:
-    """A pre-two-tier scorecard (none of crash_rate / oracle / *_reason / latency)
-    must still validate, with the new fields filled from their defaults."""
+    # A pre-two-tier scorecard (none of crash_rate / oracle / *_reason / latency)
+    # must still validate, with the new fields filled from their defaults.
     legacy = json.dumps(
         {
             "run_id": "flaky_friday-20260101T000000-legacy",
             "profile": "flaky_friday",
             "n_agents": 8,
-            "survival_rate": 0.75,  # pre-WP: survival was a plain required float
+            "survival_rate": 0.75,
             "mttr_steps": 2.5,
             "recovery_breakdown": {"retry": 4},
             "waste_factor": 1.4,
@@ -415,7 +415,7 @@ async def test_byo_oracle_overrides_reference_verdict() -> None:
 async def test_default_oracle_is_builtin_reference() -> None:
     captured: list = []
     store = {0: [FiledReport(title="Tokyo", body="71.6")]}
-    shell = SaboteurAgent(0, store, on_event=captured.append)  # no oracle → builtin
+    shell = SaboteurAgent(0, store, on_event=captured.append)
     shell.agent = _StubAgent("filed 71.6")
 
     await shell.run()
@@ -423,4 +423,4 @@ async def test_default_oracle_is_builtin_reference() -> None:
     terminal = [e for e in captured if e.kind == "terminal"][-1]
     assert terminal.data["oracle"] == "builtin_reference"
     assert terminal.data["deception_aware"] is True
-    assert terminal.data["success"] is True  # reference verifier passed
+    assert terminal.data["success"] is True

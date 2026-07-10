@@ -1,6 +1,6 @@
 """End-to-end integration review tests (hostile audit of the five invariants).
 
-All tests are LLM-free. They cover the cross-package seams that unit tests miss:
+They cover the cross-package seams that unit tests miss:
 
 1. Determinism survives concurrency (#1) — asyncio scheduling never changes which
    faults fire; decisions depend only on the per-agent call sequence.
@@ -65,7 +65,7 @@ def _spicy_profile(seed: int = 1234) -> ChaosProfile:
     )
 
 
-# A fixed, agent-independent tool-call script (what a deterministic LLM would do).
+# A fixed, agent-independent tool-call script.
 _CALL_SCRIPT: tuple[tuple[str, str], ...] = tuple(
     ("weather" if i % 2 == 0 else "calculator", f"arg-{i}") for i in range(24)
 )
@@ -113,7 +113,7 @@ async def test_concurrency_does_not_perturb_fault_sequences() -> None:
     reference = {
         aid: _fault_fingerprint(_run_script_sync(profile, aid)) for aid in range(n)
     }
-    # Sanity: chaos actually happened for at least one agent.
+
     assert any(reference[aid] for aid in range(n))
 
     async def concurrent_run() -> dict[int, list[tuple]]:
@@ -135,9 +135,9 @@ async def test_concurrency_does_not_perturb_fault_sequences() -> None:
 # ---------------------------------------------------------------------------
 
 class _ScriptedEngineAgent:
-    """A deterministic, LLM-free agent that drives the fixed call script through
-    a real ChaosEngine and streams real fault telemetry through ``on_event`` —
-    exactly the path SaboteurAgent uses, minus the model."""
+    # A deterministic agent that drives the fixed call script through
+    # a real ChaosEngine and streams real fault telemetry through ``on_event`` —
+    # exactly the path SaboteurAgent uses.
 
     def __init__(self, agent_id, profile, store, on_event) -> None:
         self.agent_id = agent_id
@@ -199,7 +199,7 @@ def _scripted_factory(agent_id, profile, store, on_event, oracle=None):
 
 
 def _jsonl_fault_view(path: Path) -> dict[int, list[tuple]]:
-    """Per-agent ordered fault_injected projection from a JSONL log."""
+    # Per-agent ordered fault_injected projection from a JSONL log.
     by_agent: dict[int, list[tuple]] = {}
     for e in read_jsonl(path):
         if e.event != "fault_injected":
@@ -211,7 +211,7 @@ def _jsonl_fault_view(path: Path) -> dict[int, list[tuple]]:
 
 
 async def test_two_cohort_runs_same_seed_identical_fault_jsonl(tmp_path: Path) -> None:
-    """Acceptance: two N=8 runs, same profile+seed → identical fault_injected logs."""
+    # Acceptance: two N=8 runs, same profile+seed → identical fault_injected logs.
     chaos_yaml = tmp_path / "chaos.yaml"
     chaos_yaml.write_text(
         "name: acceptance_chaos\nseed: 4242\nfaults:\n"
@@ -245,7 +245,7 @@ async def test_two_cohort_runs_same_seed_identical_fault_jsonl(tmp_path: Path) -
 
     assert view_a == view_b, "fault_injected sequences diverged between identical runs"
     assert any(view_a.values()), "expected at least one fault to be injected"
-    # All 8 agents present and divergent per-agent (different seed+agent_id).
+
     assert set(view_a) == set(range(8))
 
 
@@ -254,7 +254,7 @@ async def test_two_cohort_runs_same_seed_identical_fault_jsonl(tmp_path: Path) -
 # ---------------------------------------------------------------------------
 
 class _FaultyEventAgent:
-    """Runs fine but its on_event sink raises — must not crash the agent."""
+    # Runs fine but its on_event sink raises — must not crash the agent.
 
     def __init__(self, agent_id, profile, store, on_event) -> None:
         self.agent_id = agent_id
@@ -281,25 +281,25 @@ class _FaultyEventAgent:
 
 
 def test_make_on_event_swallows_subscriber_errors() -> None:
-    """A bus whose emit raises must never propagate into the agent loop (#3)."""
+    # A bus whose emit raises must never propagate into the agent loop (#3).
 
     class _BoomBus:
         def emit(self, event) -> None:  # noqa: ANN001
             raise RuntimeError("subscriber exploded")
 
     on_event = make_on_event(_BoomBus(), "run")  # type: ignore[arg-type]
-    # Must not raise.
+
     on_event(AgentEvent(0, 1, "fault", {"fault": "api_error"}))
 
 
 def test_factory_emit_guards_against_raising_sink() -> None:
-    """SaboteurAgent._emit/_handle_fault swallow sink exceptions (#3)."""
+    # SaboteurAgent._emit/_handle_fault swallow sink exceptions (#3).
 
     def boom(_event: AgentEvent) -> None:
         raise RuntimeError("sink down")
 
     shell = SaboteurAgent(agent_id=0, store={}, on_event=boom)
-    # None of these may raise even though the sink always does.
+
     shell._emit("step_start", 1, {})
     shell._handle_fault(
         FaultEvent(fault=FaultType.API_ERROR, tool_name="weather",
@@ -308,8 +308,8 @@ def test_factory_emit_guards_against_raising_sink() -> None:
 
 
 async def test_one_raising_subscriber_does_not_starve_others() -> None:
-    """Bus fan-out isolation: a consumer that raises mid-stream must not stop
-    other subscribers from receiving every event (#2)."""
+    # Bus fan-out isolation: a consumer that raises mid-stream must not stop
+    # other subscribers from receiving every event (#2).
     bus = TelemetryBus()
     bus.bind(asyncio.get_event_loop())
     n = 5
@@ -343,8 +343,8 @@ async def test_one_raising_subscriber_does_not_starve_others() -> None:
 
 
 async def test_faulty_event_sink_agent_still_completes_others() -> None:
-    """Through the harness: an agent whose sink raises (and is swallowed) still
-    completes, and the rest of the cohort is untouched (#2)."""
+    # Through the harness: an agent whose sink raises (and is swallowed) still
+    # completes, and the rest of the cohort is untouched (#2).
     bus = TelemetryBus()
     bus.bind(asyncio.get_event_loop())
 
@@ -370,8 +370,8 @@ async def test_faulty_event_sink_agent_still_completes_others() -> None:
 # ---------------------------------------------------------------------------
 
 def test_finished_flag_silences_all_callbacks() -> None:
-    """Fix A: once run() has finished, an orphan worker thread's callbacks are
-    no-ops, so no telemetry can land after run_finished and desync the logs."""
+    # Fix A: once run() has finished, an orphan worker thread's callbacks are
+    # no-ops, so no telemetry can land after run_finished and desync the logs.
     emitted: list[AgentEvent] = []
     shell = SaboteurAgent(agent_id=0, store={}, on_event=emitted.append)
     shell._finished = True
@@ -434,7 +434,7 @@ def test_ws_live_event_sharing_timestamp_is_not_dropped(tmp_path, monkeypatch) -
     with TestClient(app) as client:
         with client.websocket_connect(f"/ws/{run_id}") as ws:
             got_backlog = ws.receive_json()
-            # Live event with the SAME ts but a distinct identity (step=1).
+
             bus.emit(
                 TelemetryEvent(
                     ts=shared_ts, run_id=run_id, agent_id=0, step=1,
@@ -444,7 +444,7 @@ def test_ws_live_event_sharing_timestamp_is_not_dropped(tmp_path, monkeypatch) -
             got_live = ws.receive_json()
 
     assert got_backlog["step"] == 0
-    assert got_live["step"] == 1  # not dropped despite the shared timestamp
+    assert got_live["step"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -461,9 +461,9 @@ def _tev(agent_id, event, *, step=None, fault=None, recovery=None,
 
 
 def test_mttr_pairs_every_prior_fault_to_next_productive_recovery() -> None:
-    """Documented MTTR definition: each fault at step s maps to the next
-    productive recovery at step >= s. Faults @2 and @4, recovery @5 →
-    distances 3 and 1 → mean 2.0."""
+    # Documented MTTR definition: each fault at step s maps to the next
+    # productive recovery at step >= s. Faults @2 and @4, recovery @5 →
+    # distances 3 and 1 → mean 2.0.
     events = [
         _tev(-1, "run_started", payload={"n_agents": 1}),
         _tev(0, "fault_injected", step=2, fault="api_error"),
@@ -480,8 +480,8 @@ def test_mttr_pairs_every_prior_fault_to_next_productive_recovery() -> None:
 
 
 def test_mttr_skips_no_action_stall() -> None:
-    """A ``no_action`` stall is not a productive recovery: fault @2 → no_action
-    @3 → retry @5 pairs the fault to the retry (distance 3), not the stall."""
+    # A ``no_action`` stall is not a productive recovery: fault @2 → no_action
+    # @3 → retry @5 pairs the fault to the retry (distance 3), not the stall.
     events = [
         _tev(-1, "run_started", payload={"n_agents": 1}),
         _tev(0, "fault_injected", step=2, fault="api_error"),
@@ -522,8 +522,8 @@ def test_deception_rate_counts_only_lied_to_agents() -> None:
 # ---------------------------------------------------------------------------
 
 async def test_report_store_concurrent_writers_no_lost_or_crossed_writes() -> None:
-    """Many agents writing their own key concurrently: every write lands, and no
-    report ends up under the wrong agent_id."""
+    # Many agents writing their own key concurrently: every write lands, and no
+    # report ends up under the wrong agent_id.
     store: ReportStore = {}
     n = 32
     writes_each = 10

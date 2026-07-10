@@ -1,6 +1,6 @@
-"""Determinism + chaos-engine behavior tests (CLAUDE.md invariant #1).
+"""Determinism + chaos-engine behavior tests.
 
-All tests run without a live LLM. Sleep-based faults use sub-millisecond
+Sleep-based faults use sub-millisecond
 delays so the suite stays fast.
 """
 
@@ -27,7 +27,7 @@ PROFILE_NAMES = ["calm_seas", "flaky_friday", "rate_limit_storm", "hell_mode"]
 
 
 def _spicy_profile(seed: int = 42) -> ChaosProfile:
-    """A profile exercising all tool/transport faults with tiny sleeps."""
+    # A profile exercising all tool/transport faults with tiny sleeps.
     return ChaosProfile(
         name="test_spicy",
         seed=seed,
@@ -50,7 +50,7 @@ def _spicy_profile(seed: int = 42) -> ChaosProfile:
 
 
 def _run_sequence(profile: ChaosProfile, agent_id: int, n: int = 200) -> bytes:
-    """Run n simulated tool calls and serialize everything observable."""
+    # Run n simulated tool calls and serialize everything observable.
     records: list[str] = []
 
     def on_fault(event: FaultEvent) -> None:
@@ -82,7 +82,7 @@ def test_same_seed_same_agent_identical_sequence() -> None:
     seq_a = _run_sequence(_spicy_profile(), agent_id=3)
     seq_b = _run_sequence(_spicy_profile(), agent_id=3)
     assert seq_a == seq_b
-    # Sanity: chaos actually happened.
+
     assert b"fault" in seq_a
 
 
@@ -109,7 +109,7 @@ def test_calm_seas_injects_zero_faults() -> None:
 
 
 def test_rate_limit_honors_rolling_budget() -> None:
-    """With probability 0, only the call-count budget can trigger 429s."""
+    # With probability 0, only the call-count budget can trigger 429s.
     profile = ChaosProfile(
         name="budget_only",
         seed=7,
@@ -133,8 +133,6 @@ def test_rate_limit_honors_rolling_budget() -> None:
         except SimulatedRateLimit as exc:
             assert exc.retry_after_s == 1.0
             outcomes.append("429")
-    # 2 calls pass, then the window of 5 is saturated until the early
-    # passes slide out of it.
     assert outcomes == ["ok", "ok", "429", "429", "429", "429", "ok"]
 
 
@@ -165,7 +163,7 @@ def test_silent_lie_is_wrong_but_well_formed() -> None:
     )
     calc = engine.wrap("calculator", lambda expr: 71.6)
 
-    lied_weather = json.loads(weather("Tokyo"))  # must still parse
+    lied_weather = json.loads(weather("Tokyo"))
     assert lied_weather["city"] == "Tokyo"
     assert lied_weather["temp_c"] != 22.0
     # Temperature-style first-number lie: off by 10-30 degrees.
@@ -210,7 +208,7 @@ def test_context_drop_trims_memory_but_keeps_task() -> None:
         name="amnesia",
         seed=0,
         faults=[
-            # K larger than the droppable steps: the TaskStep must survive.
+
             FaultSpec(type=FaultType.CONTEXT_DROP, probability=1.0, drop_last_k=5)
         ],
     )
@@ -223,7 +221,7 @@ def test_context_drop_trims_memory_but_keeps_task() -> None:
     assert events[0].fault is FaultType.CONTEXT_DROP
     assert events[0].detail == {"dropped_steps": 3}
 
-    # Defensive: an agent with no memory is a silent no-op.
+
     engine.step_hook(object())
 
 

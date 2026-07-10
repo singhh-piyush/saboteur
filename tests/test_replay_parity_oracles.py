@@ -44,7 +44,7 @@ def _frozen_done(
     outcome: str = "completed",
     tokens: int = 100,
 ) -> TelemetryEvent:
-    """An ``agent_done`` with the verdict frozen in — exactly as the shell emits."""
+    # An ``agent_done`` with the verdict frozen in — exactly as the shell emits.
     return build.event(
         RUN_ID,
         agent_id,
@@ -77,7 +77,7 @@ def _stream(*dones: TelemetryEvent, lied: set[int] | None = None) -> list[Teleme
 
 
 def _write_and_reread(tmp_path, events: list[TelemetryEvent]) -> list[TelemetryEvent]:
-    """Persist exactly like JsonlWriter (one model_dump_json per line) + replay."""
+    # Persist exactly like JsonlWriter (one model_dump_json per line) + replay.
     path = tmp_path / f"{RUN_ID}.jsonl"
     path.write_text(
         "".join(e.model_dump_json() + "\n" for e in events), encoding="utf-8"
@@ -86,7 +86,7 @@ def _write_and_reread(tmp_path, events: list[TelemetryEvent]) -> list[TelemetryE
 
 
 def _no_oracle_calls(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make any score-time shell-out / network call explode loudly."""
+    # Make any score-time shell-out / network call explode loudly.
 
     def boom_run(*a, **k):  # noqa: ANN002, ANN003
         raise AssertionError("score() shelled out — it must not re-judge")

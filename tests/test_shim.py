@@ -26,7 +26,7 @@ def test_headers_empty_without_env(monkeypatch):
 
 
 def test_headers_partial_env(monkeypatch):
-    """An empty/unset id is omitted rather than sent as an empty header."""
+    # An empty/unset id is omitted rather than sent as an empty header.
     monkeypatch.setenv("SABOTEUR_RUN_ID", "run-abc")
     monkeypatch.setenv("SABOTEUR_AGENT_ID", "")
     assert saboteur_headers() == {"X-Saboteur-Run-Id": "run-abc"}

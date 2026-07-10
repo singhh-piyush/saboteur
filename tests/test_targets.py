@@ -1,4 +1,4 @@
-"""Target registry tests — LLM-free, SQLite store on a temp path.
+"""Target registry tests — SQLite store on a temp path.
 
 Covers the :class:`TargetStore` CRUD contract (reference is built-in + never
 deletable), the ``build_oracle`` mapping, and the ``/targets`` HTTP routes.
@@ -68,13 +68,13 @@ def test_add_rejects_reserved_and_duplicate_and_invalid(tmp_path):
     store.add(_cmd("byo"))
 
     with pytest.raises(TargetExistsError):
-        store.add(_cmd("byo"))  # duplicate
+        store.add(_cmd("byo"))
     with pytest.raises(TargetExistsError):
-        store.add(Target(name="reference", kind="command", cmd=["x"]))  # reserved
+        store.add(Target(name="reference", kind="command", cmd=["x"]))
     with pytest.raises(ValueError):
-        store.add(Target(name="no_cmd", kind="command"))  # missing cmd
+        store.add(Target(name="no_cmd", kind="command"))
     with pytest.raises(ValueError):
-        store.add(Target(name="bad name", kind="command", cmd=["x"]))  # bad chars
+        store.add(Target(name="bad name", kind="command", cmd=["x"]))
 
 
 def test_delete_unknown_and_reference_raise(tmp_path):
@@ -87,9 +87,9 @@ def test_delete_unknown_and_reference_raise(tmp_path):
 
 def test_corrupt_store_skips_bad_row(tmp_path):
     database = Database(tmp_path / "saboteur.db")
-    database.target_upsert("bad", {"name": "bad"})  # not a valid Target (no kind)
+    database.target_upsert("bad", {"name": "bad"})
     store = TargetStore(database)
-    assert [t.name for t in store.all()] == ["reference"]  # only the built-in
+    assert [t.name for t in store.all()] == ["reference"]
 
 
 # ---------------------------------------------------------------------------
