@@ -242,6 +242,18 @@ body::before {
   }
 }
 
+/* Autopilot cursor click ripple */
+@keyframes ap-ripple {
+  from {
+    transform: scale(0.3);
+    opacity: 0.75;
+  }
+  to {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
 /* Coachmark content cross-fade - the incoming beat's text fades in while the
    outgoing text fades out (as an overlay), so the switch is barely noticeable.
    Auto-neutered by the reduced-motion block below. */

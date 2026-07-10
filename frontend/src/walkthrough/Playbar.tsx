@@ -15,6 +15,8 @@ interface PlaybarProps {
   onSwitchRun: (index: number) => void;
   /** true while the guided tour is active - switcher renders dimmed and inert */
   switcherDisabled?: boolean;
+  autopilot?: boolean;
+  onToggleAutopilot?: () => void;
 }
 
 export function Playbar({
@@ -24,6 +26,8 @@ export function Playbar({
   runIndex,
   onSwitchRun,
   switcherDisabled = false,
+  autopilot = false,
+  onToggleAutopilot,
 }: PlaybarProps) {
   const { position, length, playing, speed, play, pause, restart, setSpeed, seek } =
     useWalkthrough();
@@ -72,6 +76,22 @@ export function Playbar({
       >
         <RestartIcon size={12} />
       </button>
+
+      {onToggleAutopilot && (
+        <button
+          type="button"
+          data-autopilot-safe
+          onClick={onToggleAutopilot}
+          aria-pressed={autopilot}
+          className={`rounded-sm border px-2.5 py-1 text-xs font-semibold transition-colors duration-150 ${
+            autopilot
+              ? "border-accent/60 bg-accent/10 text-accent"
+              : "border-line text-ink-faint hover:text-ink"
+          }`}
+        >
+          AUTOPILOT
+        </button>
+      )}
 
       {showReplayTour && onReplayTour && (
         <button

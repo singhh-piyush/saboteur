@@ -12,6 +12,7 @@ import { TooltipSuppression } from "../components/Tooltip";
 import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
 import { DEMO_FAMILIES, type DemoRun } from "../demo";
+import { Autopilot } from "./Autopilot";
 import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
 import { Reveal } from "./Reveal";
@@ -142,6 +143,7 @@ function WalkthroughShell({
   const [tourMode, setTourMode] = useState<"tour" | "free">("tour");
   const [tourBeat, setTourBeat] = useState(0);
   const [sideBySideOpen, setSideBySideOpen] = useState(false);
+  const [autopilot, setAutopilot] = useState(false);
 
   const beats = useMemo(() => buildTour(runs), [runs]);
 
@@ -211,20 +213,33 @@ function WalkthroughShell({
   }, []);
 
   const exitTour = () => {
+    setAutopilot(false);
     setTourMode("free");
     play();
   };
   const finishTour = () => {
+    setAutopilot(false);
     setTourMode("free");
     selectAgent(null);
     setTab("grid");
     setSpeed(2);
-    restart(); 
+    restart();
   };
   const replayTour = () => {
     setTourBeat(0);
     setTourMode("tour");
   };
+  const toggleAutopilot = () => {
+    if (autopilot) {
+      setAutopilot(false);
+      return;
+    }
+    if (tourMode !== "tour") replayTour();
+    setAutopilot(true);
+  };
+
+  const apAwaiting =
+    !!activeBeat?.interactive && selectedAgent !== activeBeat.interactive.agent;
 
   return (
     <TooltipSuppression active={tourMode === "tour"}>
@@ -377,6 +392,8 @@ function WalkthroughShell({
               runIndex={runIndex}
               onSwitchRun={switchRunFree}
               switcherDisabled={tourActive}
+              autopilot={autopilot}
+              onToggleAutopilot={toggleAutopilot}
             />
           </div>
         </main>
@@ -418,6 +435,15 @@ function WalkthroughShell({
         seekSmooth={seekSmooth}
         sideBySideOpen={sideBySideOpen}
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
+        autopilot={autopilot}
+        onStartAutopilot={() => setAutopilot(true)}
+      />
+
+      <Autopilot
+        enabled={autopilot && tourActive && !tourSuspended}
+        beat={activeBeat}
+        awaiting={apAwaiting}
+        onStop={() => setAutopilot(false)}
       />
 
       {/* face-off beat: side-by-side scorecard comparison */}

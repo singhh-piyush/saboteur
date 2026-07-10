@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Callout } from "./Callout";
 import { Spotlight, useSpotlightRect } from "./Spotlight";
 import type { Beat, TourCtx, TourTarget } from "./tour";
+import { agentCell, DRIVE_LABEL } from "./autopilot";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 interface TourOverlayProps {
@@ -31,6 +32,9 @@ interface TourOverlayProps {
   sideBySideOpen?: boolean;
   /** toggle the side-by-side comparison from the face-off beat */
   onToggleSideBySide?: () => void;
+  /** true while the synthetic cursor is driving */
+  autopilot?: boolean;
+  onStartAutopilot?: () => void;
 }
 
 const BTN_GHOST =
@@ -39,11 +43,6 @@ const BTN_PRIMARY =
   "whitespace-nowrap rounded-sm border border-accent/60 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20";
 const BTN_RED =
   "whitespace-nowrap rounded-sm border border-crit/70 bg-crit/15 px-2.5 py-1 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/25";
-
-function agentCell(id: number): HTMLElement | null {
-  const grid = document.querySelector('[data-tour="grid"]');
-  return grid?.querySelectorAll<HTMLElement>(".agent-cell-wrap")[id] ?? null;
-}
 
 export function TourOverlay({
   beats,
@@ -61,6 +60,8 @@ export function TourOverlay({
   onViewOtherFamily,
   sideBySideOpen,
   onToggleSideBySide,
+  autopilot = false,
+  onStartAutopilot,
 }: TourOverlayProps) {
   const { seek, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
@@ -155,6 +156,7 @@ export function TourOverlay({
               {beat.compare && onToggleSideBySide && (
                 <button
                   type="button"
+                  data-autopilot="compare"
                   onClick={onToggleSideBySide}
                   aria-pressed={sideBySideOpen}
                   className={sideBySideOpen ? BTN_PRIMARY : BTN_GHOST}
@@ -206,6 +208,17 @@ export function TourOverlay({
               <span className="font-mono text-xs tabular-nums text-ink-faint">
                 {beatIndex + 1} / {total}
               </span>
+              {beatIndex === 0 && !autopilot && onStartAutopilot && (
+                <button
+                  type="button"
+                  data-autopilot-safe
+                  onClick={onStartAutopilot}
+                  className={BTN_GHOST}
+                >
+                  <span aria-hidden className="mr-1">⏵</span>
+                  {DRIVE_LABEL}
+                </button>
+              )}
               {awaiting ? (
                 <button
                   type="button"
@@ -215,7 +228,7 @@ export function TourOverlay({
                   Open trace
                 </button>
               ) : (
-                <button type="button" onClick={next} className={BTN_PRIMARY}>
+                <button type="button" data-autopilot="next" onClick={next} className={BTN_PRIMARY}>
                   {isLast ? (beat.finishLabel ?? "Finish") : "Next"}
                 </button>
               )}
