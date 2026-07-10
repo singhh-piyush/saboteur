@@ -1,9 +1,6 @@
-"""Telemetry — event schema, async bus, JSONL writer, and WebSocket broadcaster.
+"""telemetry event schema, bus, and streaming utilities
 
-Telemetry is the source of truth (CLAUDE.md invariant #3). Every observable
-action flows through TelemetryBus → JSONL writer + WebSocket broadcaster.
-Scoring and the dashboard are pure functions over the resulting event stream,
-so replaying runs/{run_id}.jsonl renders identically to live streaming.
+events flow through TelemetryBus to disk and websockets.
 """
 
 from .bus import TelemetryBus

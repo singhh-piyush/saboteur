@@ -1,14 +1,4 @@
-"""JSONL writer — subscribes to a TelemetryBus and flushes every event to disk.
-
-The file ``runs/{run_id}.jsonl`` is the replay fallback (invariant #3):
-scoring and the dashboard must render identically from this file as from the
-live event stream. Flush per event so a crash never leaves the log incomplete.
-
-Usage::
-
-    writer = JsonlWriter(bus, run_id, runs_dir=Path("runs"))
-    asyncio.create_task(writer.run())   # runs until the bus closes
-"""
+"""writes telemetry bus events to a jsonl file on disk"""
 
 from __future__ import annotations
 
@@ -21,7 +11,7 @@ _DEFAULT_RUNS_DIR = Path("runs")
 
 
 class JsonlWriter:
-    """Async subscriber that appends every event as one JSON line."""
+    # write telemetry events to disk
 
     def __init__(
         self,
@@ -38,11 +28,7 @@ class JsonlWriter:
         return self._runs_dir / f"{self._run_id}.jsonl"
 
     async def run(self) -> None:
-        """Subscribe to the bus and write until it closes.
-
-        Creates the runs directory if necessary. Flushed after every event so
-        the file is always a valid, complete record of events received so far.
-        """
+        # subscribe to bus and write flushed json lines
         self._runs_dir.mkdir(parents=True, exist_ok=True)
         async with self._bus.subscribe() as events:
             with self.path.open("a", encoding="utf-8") as fh:
@@ -52,11 +38,7 @@ class JsonlWriter:
 
 
 def read_jsonl(path: Path) -> list[TelemetryEvent]:
-    """Read and parse every event in a JSONL log file.
-
-    Returns events in file order. Raises on parse errors so callers know the
-    log is corrupt (rather than silently dropping events).
-    """
+    # read and parse all events from a jsonl file
     events: list[TelemetryEvent] = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:

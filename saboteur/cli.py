@@ -1,18 +1,6 @@
-"""``saboteur`` — the one-command product surface + CI gate.
+"""saboteur — CLI command interface and CI gate.
 
-A thin, dependency-light front door over the existing runner / API (no engine
-behavior changes):
-
-- ``saboteur run``      — run a cohort, print a compact scorecard, optionally
-  gate CI on a metric/threshold (non-zero exit when below). Reference targets
-  run in-process (serverless); BYO command targets go through the HTTP API,
-  starting a server if one isn't up (they need the wire proxy).
-- ``saboteur profiles`` — list the bundled chaos profiles.
-- ``saboteur targets``  — list the registered targets.
-- ``saboteur replay``   — drive an already-open dashboard from a JSONL log.
-
-Exit codes (any non-zero drops into a shell ``if``):
-``0`` pass / info-only · ``1`` CI threshold breach · ``2`` config/usage error.
+exit codes: 0 pass, 1 threshold breach, 2 usage error.
 """
 
 from __future__ import annotations
@@ -35,14 +23,11 @@ from saboteur.config import get_settings
 _PROFILES_DIR = Path("profiles")
 _RUNS_DIR = Path("runs")
 
-# Metric gating buckets (mirror the two-tier scorecard, CLAUDE.md invariant #4).
+# metric gating buckets
 _ORACLE_GATED = {"survival_rate", "deception_detection_rate"}
 _CONTROL_GATED = {"waste_factor"}
 _GATEABLE = _ORACLE_GATED | _CONTROL_GATED | {"mttr_steps", "crash_rate"}
-# Real metrics that are deliberately NOT hard CI gates. latency_degradation mixes
-# injected latency with -np N batching contention (CLAUDE.md scorecard: "soft/rough
-# … keep out of CI thresholds"), so gating on it is rejected loudly (exit 2) rather
-# than letting a noisy metric block a merge.
+# latency_degradation is not a hard CI gate to avoid noisy metrics blocking merges
 _UNGATEABLE_METRICS = {
     "latency_degradation": (
         "latency_degradation is not a hard gate metric: it is contaminated by "
@@ -52,13 +37,8 @@ _UNGATEABLE_METRICS = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Small utilities
-# ---------------------------------------------------------------------------
-
-
 def _die(message: str, code: int = 2) -> NoReturn:
-    """Print an error to stderr and exit (default 2 = config/usage error)."""
+    # print error and exit
     click.echo(f"error: {message}", err=True)
     sys.exit(code)
 
@@ -74,17 +54,12 @@ def _pct(value: float | None, reason: str | None = None) -> str:
 
 
 def _api_base(override: str | None) -> str:
-    """API base URL: explicit override, else the configured dashboard app URL."""
+    # explicit override or configured dashboard app URL
     return (override or get_settings().proxy_public_base_url).rstrip("/")
 
 
-# ---------------------------------------------------------------------------
-# Scorecard rendering
-# ---------------------------------------------------------------------------
-
-
 def _print_scorecard(sc: dict[str, Any], target: str) -> None:
-    """Print a compact, aligned scorecard table from a Scorecard dict."""
+    # print scorecard table
     rows = [
         ("run_id", sc.get("run_id", "—")),
         ("profile", sc.get("profile", "—")),
@@ -122,7 +97,7 @@ def _kv(d: dict[str, int] | None) -> str:
 
 
 def _print_artifacts(run_id: str, *, control: bool) -> None:
-    """List artifact paths with an ok/MISSING marker (control only if requested)."""
+    # list artifact paths with existence status
     names = [f"{run_id}.jsonl", f"{run_id}.scorecard.json"]
     if control:
         names = [f"{run_id}-control.jsonl", *names]
@@ -130,11 +105,6 @@ def _print_artifacts(run_id: str, *, control: bool) -> None:
     for name in names:
         path = _RUNS_DIR / name
         click.echo(f"  [{'ok' if path.exists() else 'MISSING'}] {path}")
-
-
-# ---------------------------------------------------------------------------
-# Server lifecycle (BYO needs the wire proxy inside a running app)
-# ---------------------------------------------------------------------------
 
 
 def _server_up(base: str) -> bool:
@@ -145,10 +115,7 @@ def _server_up(base: str) -> bool:
 
 
 def _ensure_server(base: str) -> tuple[str, subprocess.Popen | None]:
-    """Return (base, proc). Reuse a running server; else start one we own.
-
-    The caller tears down only a server it started (proc is not None).
-    """
+    # reuse running server or start new one; caller terminates started process
     if _server_up(base):
         return base, None
     parts = urlsplit(base)
@@ -183,12 +150,7 @@ def _stop_server(proc: subprocess.Popen | None) -> None:
 
 
 def _start_mock() -> subprocess.Popen:
-    """Launch the bundled deterministic mock model and point inference at it.
-
-    Sets ``OPENAI_BASE_URL`` (+ key/model) to the mock and clears the settings
-    cache so ``orchestrate``→``get_model()`` targets it. Returns the process so
-    the caller can tear it down. Used by ``run --mock`` for offline/CI demos.
-    """
+    # start mock inference server, set OPENAI_BASE_URL, clear settings cache
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
@@ -201,7 +163,7 @@ def _start_mock() -> subprocess.Popen:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    for _ in range(60):  # up to ~30 s
+    for _ in range(60):
         if _server_up(base):
             break
         if proc.poll() is not None:
@@ -218,13 +180,8 @@ def _start_mock() -> subprocess.Popen:
     return proc
 
 
-# ---------------------------------------------------------------------------
-# Executors (the test seams — monkeypatched to return canned scorecards)
-# ---------------------------------------------------------------------------
-
-
 def _run_reference(profile: str, n: int, control: bool) -> dict[str, Any]:
-    """Run the reference cohort in-process and return the Scorecard as a dict."""
+    # run reference cohort in-process and return scorecard
     from saboteur.harness import orchestrate
 
     scorecard = asyncio.run(
@@ -234,11 +191,7 @@ def _run_reference(profile: str, n: int, control: bool) -> dict[str, Any]:
 
 
 def _run_byo_via_api(base: str, target: str, profile: str, n: int) -> dict[str, Any]:
-    """Run a BYO command target through the API; return the Scorecard as a dict.
-
-    BYO v1 is chaos-only (``with_control=False``). Polls the run to completion
-    then fetches its scorecard. Calls :func:`_die` on any failure.
-    """
+    # run byo target via api, poll to completion, return scorecard
     with httpx.Client(base_url=base, timeout=30.0) as client:
         resp = client.post(
             "/runs",
@@ -268,14 +221,7 @@ def _run_byo_via_api(base: str, target: str, profile: str, n: int) -> dict[str, 
         return sc.json()
 
 
-# ---------------------------------------------------------------------------
-# CI gate
-# ---------------------------------------------------------------------------
-
-# Gate direction per metric. higher-is-better metrics treat the threshold as a
-# FLOOR (fail below it); lower-is-better metrics treat it as a CEILING (fail
-# above it). Without this, gating on crash_rate / mttr_steps — which the preflight
-# explicitly recommends for no-oracle targets — would invert and fail good runs.
+# gate direction: true for floor (fail below), false for ceiling (fail above)
 _HIGHER_IS_BETTER: dict[str, bool] = {
     "survival_rate": True,
     "deception_detection_rate": True,
@@ -288,13 +234,7 @@ _HIGHER_IS_BETTER: dict[str, bool] = {
 def _evaluate_ci(
     sc: dict[str, Any], metric: str, threshold: float
 ) -> tuple[int, str]:
-    """Return (exit_code, message) for ``--ci``.
-
-    Direction-aware: a higher-is-better metric (survival_rate) fails *below* the
-    threshold (a floor); a lower-is-better metric (crash_rate, mttr_steps,
-    waste_factor) fails *above* it (a ceiling). A null/ungateable metric is a
-    loud config error (exit 2) — never a silent pass/fail.
-    """
+    # evaluate ci threshold; returns (exit_code, message)
     if metric in _UNGATEABLE_METRICS:
         return 2, _UNGATEABLE_METRICS[metric]
     if metric not in _GATEABLE:
@@ -321,13 +261,8 @@ def _evaluate_ci(
     )
 
 
-# ---------------------------------------------------------------------------
-# Target / metric pre-flight (fail before spending a cohort)
-# ---------------------------------------------------------------------------
-
-
 def _preflight_ci(target, metric: str, control: bool) -> None:
-    """Loud-fail unsatisfiable CI gates up front (before running anything)."""
+    # check ci gating requirements before running cohort
     from saboteur.harness.targets import build_oracle
 
     if metric in _UNGATEABLE_METRICS:
@@ -354,15 +289,10 @@ def _preflight_ci(target, metric: str, control: bool) -> None:
         _die(f"--metric {metric!r} needs a control cohort; re-run with --control.")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
-
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(package_name="saboteur", message="%(version)s")
 def main() -> None:
-    """Saboteur — chaos engineering for AI agents."""
+    """saboteur — chaos engineering."""
 
 
 @main.command("run")
@@ -437,7 +367,7 @@ def run_cmd(
 
 @main.command("profiles")
 def profiles_cmd() -> None:
-    """List the bundled chaos profiles."""
+    # list the bundled chaos profiles
     from saboteur.chaos.profile import load_profile
 
     paths = sorted(_PROFILES_DIR.glob("*.yaml"))
@@ -451,7 +381,7 @@ def profiles_cmd() -> None:
 
 @main.command("targets")
 def targets_cmd() -> None:
-    """List the registered targets (reference first)."""
+    # list registered targets
     from saboteur.harness.targets import target_store
 
     for t in target_store.all():
@@ -464,13 +394,8 @@ def targets_cmd() -> None:
             click.echo(f"{t.name:<18} command     oracle={t.oracle.kind:<8} {cmd}")
 
 
-# ---------------------------------------------------------------------------
-# compare
-# ---------------------------------------------------------------------------
-
-
 def _fetch_compare(base: str, a: str, b: str) -> dict:
-    """GET /runs/compare (the PWP4 endpoint). Test seam."""
+    # get run comparison from api
     with httpx.Client(base_url=base, timeout=30.0) as client:
         resp = client.get("/runs/compare", params={"a": a, "b": b})
     if resp.status_code >= 400:
@@ -578,11 +503,11 @@ def replay_cmd(jsonl: str, speed: float, api: str | None, follow: bool) -> None:
 
 
 def _follow_ws(base: str, run_id: str) -> None:
-    """Stream a run's WS channel to stdout (websockets imported lazily)."""
+    # stream websocket channel to stdout
     import json
 
     try:
-        import websockets  # soft dep (ships with uvicorn[standard])
+        import websockets  # websockets dependency
     except ImportError:
         _die("--follow needs the 'websockets' package")
 

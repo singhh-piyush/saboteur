@@ -1,15 +1,6 @@
 """Inference swap layer and global settings.
 
-This is the ONLY place in the codebase where the model / endpoint is constructed.
-Swapping local llama.cpp ↔ vLLM on MI300X is a pure .env change — no code edits.
-
-Usage::
-
-    from saboteur.config import get_model, get_settings
-
-    model = get_model()          # smolagents OpenAIServerModel
-    s = get_settings()           # pydantic-settings Settings singleton
-    print(s.n_agents, s.model_id)
+Swapping local llama.cpp ↔ vLLM on MI300X is configured via env vars.
 """
 
 import functools
@@ -31,61 +22,36 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # --- Inference ---
     openai_base_url: str = "http://localhost:8080/v1"
     openai_api_key: str = "none"
     model_id: str = "llama-3.1-8b-instruct"
 
-    # --- Wire proxy (saboteur.proxy) ---
-    # Where the proxy forwards. A BYO agent points its OPENAI_BASE_URL at the
-    # proxy (the dashboard app, :8000); the proxy injects faults and forwards
-    # here, to the real upstream (local llama.cpp / the MI300X vLLM). No
-    # separate proxy_port: the proxy is a router on the dashboard app.
+    # where the proxy forwards. byo agents point OPENAI_BASE_URL here
     upstream_base_url: str = "http://localhost:8080/v1"
-    # Finish a proxy run (score + run_finished) after this many seconds with no
-    # request from any of its sessions. Bounded runs (invariant #5).
+    # finish run after this many seconds of inactivity from any session
     proxy_idle_timeout_s: int = 120
-    # The externally reachable URL of THIS app (where the proxy is mounted). The
-    # BYO cohort spawner hands subprocesses OPENAI_BASE_URL=<this>/v1 so their
-    # traffic flows back through the proxy. Override if the app isn't on :8000.
+    # externally reachable URL of this app where the proxy is mounted
     proxy_public_base_url: str = "http://localhost:8000"
-    # Small local models (Llama-3.1-8B-Q4) deterministically stall at temp=0:
-    # after computing the answer they emit empty "Action:" turns with no tool
-    # call, looping to the step cap (the WP3 control-validity bug). A little
-    # temperature breaks that greedy loop and lifts local control survival to
-    # ceiling, so 0.3 is the default. Note: end-to-end reproducibility is
-    # already not guaranteed on live runs (llama.cpp -np N batching is
-    # non-deterministic even at temp=0); invariant #1 holds for an *identical
-    # tool-call sequence*, which is independent of temperature. Set TEMPERATURE=0
-    # if a backend ever needs strict greedy decoding. MODEL_SEED stays fixed.
+    # small models stall at temp=0; 0.3 breaks greedy loops and lifts survival
     temperature: float = 0.3
     model_seed: int | None = 42
-    # Force the model to emit a tool call on every turn. llama.cpp (--jinja)
-    # and vLLM both enforce this via constrained generation. Set TOOL_CHOICE=auto
-    # if a future backend rejects the parameter (e.g. no tools-API support).
+    # force tool call on every turn; set auto if a backend rejects the parameter
     tool_choice: str = "required"
 
-    # --- Harness knobs ---
     n_agents: int = 8
     max_steps: int = 15
     agent_timeout_s: int = 180
-    # Max agents running concurrently; 0 = unlimited. Local default matches
-    # llama.cpp's -np 8 parallel slots; the MI300X .env raises or disables it.
+    # max concurrent agents; 0 means unlimited
     concurrency_limit: int = 8
 
 
 @functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return the global Settings singleton (cached after first call)."""
     return Settings()
 
 
 def get_model() -> OpenAIServerModel:
-    """Construct an OpenAIServerModel from current settings.
-
-    Every agent and every module that needs the model calls this function.
-    Never instantiate OpenAIServerModel anywhere else in the codebase.
-    """
+    # construct OpenAIServerModel from settings; do not instantiate elsewhere
     s = get_settings()
     return OpenAIServerModel(
         model_id=s.model_id,
@@ -93,8 +59,6 @@ def get_model() -> OpenAIServerModel:
         api_key=s.openai_api_key,
         temperature=s.temperature,
         seed=s.model_seed,
-        # Extra kwargs are stored on the model and applied at highest priority
-        # on every chat.completions.create call, guaranteeing constrained
-        # generation even across smolagents version upgrades.
+        # stored on the model to guarantee constrained generation on every call
         tool_choice=s.tool_choice,
     )

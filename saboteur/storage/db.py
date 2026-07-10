@@ -1,27 +1,6 @@
-"""SQLite index/cache over the run artifacts.
+"""sqlite index over run logs.
 
-**Invariant #3 is the law here.** ``runs/{run_id}.jsonl`` is the source of truth
-and the replay log; this database is *only* an index. It is always
-reconstructable from ``runs/*.jsonl`` + ``*.scorecard.json`` alone: drop
-``runs/saboteur.db``, restart, and :func:`backfill` rebuilds every row. Scoring
-and replay never touch this DB, so live-vs-replay parity is untouched.
-
-Concurrency model
------------------
-``runs/saboteur.db`` is opened **per operation** (a handle is created, used, and
-closed inside the single thread that needs it) so **no sqlite handle is ever
-shared across threads**. A module-level ``threading.Lock`` serialises writes →
-one logical writer, regardless of whether the caller runs on the event loop
-(async routes / background tasks) or in a Starlette threadpool worker (sync
-routes). WAL mode lets lockless readers run concurrently with the writer.
-
-Tables
-------
-- ``targets``  — authoritative; migrated from the old ``runs/targets.json``
-  (the only state in this DB not derivable from the run logs).
-- ``profiles`` — cache; synced from ``profiles/*.yaml`` on startup.
-- ``runs``     — cache; the run index, rebuilt from the run logs by
-  :func:`reconcile_runs`.
+the jsonl logs are the source of truth; the db is reconstructed on startup.
 """
 
 from __future__ import annotations
@@ -40,7 +19,7 @@ _DEFAULT_DB_PATH = Path("runs/saboteur.db")
 
 @dataclass
 class RunRow:
-    """One row of the ``runs`` index — all of it derivable from disk."""
+    # runs index row derived from disk
 
     run_id: str
     target: str | None
@@ -85,11 +64,7 @@ CREATE INDEX IF NOT EXISTS idx_runs_started ON runs(started_at);
 
 
 class Database:
-    """A thin SQLite wrapper: per-operation connections + a single-writer lock.
-
-    ``path`` is mutable so tests can point the singleton at a temp file (the
-    schema is (re)ensured lazily for whatever path is current).
-    """
+    # sqlite wrapper with per-operation connections and write lock
 
     def __init__(self, path: Path | str = _DEFAULT_DB_PATH) -> None:
         self.path = Path(path)
@@ -97,11 +72,9 @@ class Database:
         self._ensure_lock = threading.Lock()
         self._ensured: set[str] = set()
 
-    # -- connection / schema -------------------------------------------------
-
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
-        """Open a fresh connection for one operation (never shared across threads)."""
+        # open fresh sqlite connection for one operation
         self._ensure_schema()
         conn = sqlite3.connect(self.path, timeout=30.0)
         conn.row_factory = sqlite3.Row
@@ -113,7 +86,7 @@ class Database:
             conn.close()
 
     def _create_schema(self) -> None:
-        """Run the (idempotent) DDL for the current path and mark it ensured."""
+        # run idempotent ddl to ensure schema exists
         with self._ensure_lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(self.path, timeout=30.0)
@@ -126,22 +99,16 @@ class Database:
             self._ensured.add(str(self.path))
 
     def _ensure_schema(self) -> None:
-        """Cheap per-connection guard: create the schema once per distinct path."""
+        # ensure schema exists on first connection to path
         if str(self.path) in self._ensured:
             return
         self._create_schema()
 
     def init(self) -> None:
-        """(Re)create the schema for the current path — always runs the DDL.
-
-        This is the explicit startup/rebuild entrypoint, so it never trusts the
-        per-path cache: a fresh process (or a DB file deleted out from under us)
-        must get its tables back. ``CREATE TABLE IF NOT EXISTS`` makes it safe to
-        call repeatedly.
-        """
+        # initialize schema on startup
         self._create_schema()
 
-    # -- targets (authoritative) --------------------------------------------
+
 
     def targets_all(self) -> list[dict[str, Any]]:
         with self._conn() as conn:
@@ -180,7 +147,7 @@ class Database:
             conn.commit()
             return cur.rowcount > 0
 
-    # -- runs (cache; rebuildable from disk) --------------------------------
+
 
     def run_upsert(self, row: RunRow) -> None:
         with self._write_lock, self._conn() as conn:
@@ -234,7 +201,7 @@ class Database:
             conn.commit()
             return cur.rowcount > 0
 
-    # -- profiles (cache) ----------------------------------------------------
+
 
     def profile_upsert(
         self, name: str, seed: int | None, description: str | None, faults: list[str]
@@ -271,9 +238,7 @@ class Database:
         return out
 
 
-# ---------------------------------------------------------------------------
-# Row mapping
-# ---------------------------------------------------------------------------
+
 
 
 def _row_to_runrow(r: sqlite3.Row) -> RunRow:
@@ -291,17 +256,11 @@ def _row_to_runrow(r: sqlite3.Row) -> RunRow:
     )
 
 
-# ---------------------------------------------------------------------------
-# Disk → index reconstruction (the invariant-#3 rebuild path)
-# ---------------------------------------------------------------------------
+
 
 
 def _split_run_id(run_id: str) -> tuple[str, str | None]:
-    """Split ``{prefix}-{YYYYmmddTHHMMSS}-{hex}`` → (prefix, stamp).
-
-    ``prefix`` is the profile (reference runs) or target name (BYO runs) and may
-    itself contain hyphens; the stamp + hex are the last two ``-`` fields.
-    """
+    # split run_id into prefix and timestamp
     parts = run_id.rsplit("-", 2)
     if len(parts) == 3:
         return parts[0], parts[1]
@@ -309,7 +268,7 @@ def _split_run_id(run_id: str) -> tuple[str, str | None]:
 
 
 def _stamp_to_iso(run_id: str) -> str | None:
-    """Recover started_at from the timestamp embedded in the run_id."""
+    # recover started_at from run_id timestamp
     _, stamp = _split_run_id(run_id)
     if stamp is None:
         return None
@@ -321,13 +280,7 @@ def _stamp_to_iso(run_id: str) -> str | None:
 
 
 def derive_target(run_id: str, profile: str | None) -> str:
-    """Reconstruct the target from the run_id (JSONL-only, no extra state).
-
-    Reference cohorts use ``make_run_id(profile)`` so the prefix equals the
-    profile; BYO cohorts use ``make_run_id(target)`` so the prefix is the target
-    name. Hence: prefix == profile ⇒ ``reference``; otherwise the prefix *is* the
-    target.
-    """
+    # derive target from run_id prefix
     prefix, _ = _split_run_id(run_id)
     if profile and prefix == profile:
         return "reference"
@@ -335,7 +288,7 @@ def derive_target(run_id: str, profile: str | None) -> str:
 
 
 def _extract_run_meta(path: Path) -> dict[str, Any]:
-    """Pull profile / n_agents / timestamps from a JSONL log (cheap line scan)."""
+    # scan jsonl file for run metadata
     meta: dict[str, Any] = {
         "profile": None,
         "n_agents": None,
@@ -376,7 +329,7 @@ def _extract_run_meta(path: Path) -> dict[str, Any]:
 
 
 def build_run_row(runs_dir: Path, run_id: str) -> RunRow | None:
-    """Construct a :class:`RunRow` purely from a run's on-disk artifacts."""
+    # build run row from log and scorecard files
     jsonl = runs_dir / f"{run_id}.jsonl"
     scorecard = runs_dir / f"{run_id}.scorecard.json"
     if not jsonl.exists() and not scorecard.exists():
@@ -422,15 +375,7 @@ def build_run_row(runs_dir: Path, run_id: str) -> RunRow | None:
 
 
 def reconcile_runs(db: Database, runs_dir: Path) -> None:
-    """Bring the ``runs`` index in line with disk (the self-healing rebuild).
-
-    Indexes any run not yet present and re-indexes one whose scorecard appeared
-    since (so a just-finished run picks up its metrics). Prunes rows whose JSONL
-    no longer exists — disk is the source of truth. Control cohorts
-    (``*-control``) are folded into their parent and never indexed. Replay
-    sessions (``replay-*``) are dashboard re-emissions of an existing run, not
-    runs of their own — indexing them would double-count the source run.
-    """
+    # sync runs table with files on disk
     if not runs_dir.is_dir():
         return
     on_disk: set[str] = set()
@@ -451,7 +396,7 @@ def reconcile_runs(db: Database, runs_dir: Path) -> None:
 
 
 def sync_profiles(db: Database, profiles_dir: Path) -> None:
-    """Index the bundled chaos profiles (cache; YAML stays authoritative)."""
+    # sync profiles table with yaml files
     if not profiles_dir.is_dir():
         return
     import yaml
@@ -479,15 +424,11 @@ def sync_profiles(db: Database, profiles_dir: Path) -> None:
 
 
 def backfill(db: Database, runs_dir: Path, profiles_dir: Path) -> None:
-    """Startup rebuild: ensure schema, reindex runs from disk, sync profiles.
-
-    Safe to call repeatedly; the acceptance contract is that deleting the DB and
-    running this again reproduces the full index from ``runs/*.jsonl`` alone.
-    """
+    # reindex runs and profiles from disk
     db.init()
     reconcile_runs(db, runs_dir)
     sync_profiles(db, profiles_dir)
 
 
-# Module singleton. Path is mutable so tests can retarget it to a temp file.
+# module singleton
 db = Database()

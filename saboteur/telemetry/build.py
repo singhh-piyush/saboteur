@@ -1,17 +1,4 @@
-"""Pure :class:`TelemetryEvent` constructors, shared across injection surfaces.
-
-These are *pure* — given the same arguments they return the same event, with no
-I/O and no side effects. They exist so every surface that produces telemetry (the
-wire proxy's :class:`~saboteur.proxy.session.ProxyRun`, and the out-of-process MCP
-shim in :mod:`saboteur.mcp`) emits the **byte-identical event shape** for each
-kind, so the dashboard / scoring / replay render the same regardless of which
-surface produced the stream (invariant #3). Keeping the shapes here, instead of
-duplicated inline, means they can never drift between surfaces.
-
-The MCP shim builds these in its own process and POSTs them to the dashboard's
-ingest endpoint; ``ProxyRun.emit_*`` build the same events and emit them straight
-to the in-process bus.
-"""
+"""pure telemetry event builders shared across injection processes"""
 
 from __future__ import annotations
 
@@ -32,7 +19,7 @@ def event(
     latency_ms: float | None = None,
     payload: dict[str, Any] | None = None,
 ) -> TelemetryEvent:
-    """The generic constructor every other builder delegates to."""
+    # generic event builder
     return TelemetryEvent(
         run_id=run_id,
         agent_id=agent_id,
@@ -47,11 +34,7 @@ def event(
 
 
 def latency_ms_from_detail(detail: dict[str, Any]) -> float | None:
-    """The injected wall-clock delay of a latency/timeout fault, in ms.
-
-    Lifted onto ``fault_injected`` events so the schema's ``latency_ms`` field
-    is populated where the data exists; other fault kinds leave it null.
-    """
+    # get wall-clock delay from fault details in ms
     for key in ("delay_s", "timeout_after_s"):
         value = detail.get(key)
         if isinstance(value, (int, float)):
