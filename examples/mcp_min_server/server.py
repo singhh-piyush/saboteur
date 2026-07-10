@@ -1,18 +1,13 @@
 #!/usr/bin/env python
-"""A trivial stdlib MCP server (stdio) — the "real" server the shim wraps.
+"""A trivial stdlib MCP server (stdio).
 
-No dependencies: it speaks newline-delimited JSON-RPC 2.0 on stdin/stdout, the
-MCP stdio transport. Two tools:
+Speaks newline-delimited JSON-RPC 2.0 on stdin/stdout. Two tools:
 
-  - ``get_weather(city)`` → ``"22.0°C (71.6°F)"`` (Tokyo), the deception
-    ground-truth: Saboteur's ``silent_lie`` corrupts only the last number (°F),
-    leaving °C true, so a lied reading is internally inconsistent. Matches
-    ``saboteur/agents/task.py``'s GROUND_TRUTH.
-  - ``add(a, b)`` → the numeric sum.
+  - ``get_weather(city)``: Saboteur's ``silent_lie`` corrupts only the last number (°F),
+    leaving °C true, so a lied reading is internally inconsistent.
+  - ``add(a, b)``: Numeric sum.
 
-Run it directly to sanity-check, or register it as the upstream behind the shim
-(see README). It is intentionally minimal — just enough protocol for a client to
-initialize, list tools, and call them.
+Intentionally minimal — just enough protocol to initialize, list tools, and call them.
 """
 
 from __future__ import annotations

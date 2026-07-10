@@ -1,13 +1,10 @@
 #!/usr/bin/env python
-"""A minimal BYO agent — raw OpenAI SDK, NOT smolagents.
+"""A minimal BYO agent.
 
-Proof that Saboteur can sabotage an agent it doesn't own: this ~40-line script
-reads ``OPENAI_BASE_URL`` (pointed at the wire proxy by the cohort spawner),
-forwards the ``X-Saboteur-*`` attribution headers, runs a 2-tool task, and prints
-the final answer to stdout (so a regex/command oracle can grade it).
+Reads OPENAI_BASE_URL (pointed at the proxy), forwards X-Saboteur-* headers,
+runs a 2-tool task, and prints the final answer to stdout.
 
-Run standalone against a plain OpenAI endpoint, or let Saboteur spawn N copies:
-register it as a ``command`` target, then ``POST /runs`` (see README.md).
+Register it as a ``command`` target, then ``POST /runs`` (see README.md).
 """
 
 from __future__ import annotations
@@ -54,7 +51,7 @@ def client() -> OpenAI:
 
 
 def complete(c: OpenAI, model: str, messages: list) -> object:
-    """One chat turn with a tiny retry so a transient fault becomes a recovery."""
+    # One chat turn with a tiny retry so a transient fault becomes a recovery.
     last: Exception | None = None
     for _ in range(3):
         try:
