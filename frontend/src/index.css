@@ -617,24 +617,18 @@ body::before {
 .ap-orbit-glow {
   position: absolute;
   inset: -1px;
-  border-radius: 2px;
-  padding: 1px;
   pointer-events: none;
-  background: conic-gradient(
-    from var(--ap-angle),
-    transparent 0deg,
-    color-mix(in oklch, var(--color-accent) 90%, transparent) 60deg,
-    transparent 120deg,
-    transparent 360deg
-  );
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
+  /* border-image paints ONLY in the border band - it cannot spill into the
+     chip or beyond it, unlike a masked background */
+  border: 1px solid transparent;
+  border-image: conic-gradient(
+      from var(--ap-angle),
+      transparent 0deg,
+      color-mix(in oklch, var(--color-accent) 90%, transparent) 60deg,
+      transparent 120deg,
+      transparent 360deg
+    )
+    1;
   animation: ap-orbit-glow 2500ms linear infinite;
   transition: opacity 500ms ease;
 }
