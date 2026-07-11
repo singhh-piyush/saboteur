@@ -149,7 +149,8 @@ function WalkthroughShell({
   // pre-tour choice: autopilot vs manual; re-shown on tour replay
   const [tourPrompt, setTourPrompt] = useState(true);
   const [apOrigin, setApOrigin] = useState<{ x: number; y: number } | null>(null);
-  const [apStopped, setApStopped] = useState(false);
+  // paused = interrupted mid-tour (resumable); done = finished the last dwell
+  const [apNotice, setApNotice] = useState<"paused" | "done" | null>(null);
 
   const beats = useMemo(() => buildTour(runs), [runs]);
 
@@ -220,14 +221,14 @@ function WalkthroughShell({
 
   const exitTour = () => {
     setAutopilot(false);
-    setApStopped(false);
+    setApNotice(null);
     setTourPrompt(false);
     setTourMode("free");
     play();
   };
   const finishTour = () => {
     setAutopilot(false);
-    setApStopped(false);
+    setApNotice(null);
     setTourMode("free");
     selectAgent(null);
     setTab("grid");
@@ -237,20 +238,20 @@ function WalkthroughShell({
   const replayTour = () => {
     setTourBeat(0);
     setAutopilot(false);
-    setApStopped(false);
+    setApNotice(null);
     setTourPrompt(true);
     setTourMode("tour");
   };
   const startAutopilot = (origin: { x: number; y: number } | null) => {
     setApOrigin(origin);
-    setApStopped(false);
+    setApNotice(null);
     setTourPrompt(false);
     setAutopilot(true);
   };
   const toggleAutopilot = () => {
     if (autopilot) {
       setAutopilot(false);
-      setApStopped(true);
+      setApNotice("paused");
       return;
     }
     if (tourMode !== "tour") {
@@ -259,6 +260,12 @@ function WalkthroughShell({
     }
     startAutopilot(null);
   };
+
+  // "done" only makes sense on the closing card; navigating away turns the
+  // notice into a resumable pause
+  useEffect(() => {
+    setApNotice((n) => (n === "done" ? "paused" : n));
+  }, [tourBeat]);
 
   // interactive reveal is sticky per beat: once the trace is opened the beat
   // stays revealed even if the drawer is closed, until the beat changes
@@ -484,7 +491,7 @@ function WalkthroughShell({
         sideBySideOpen={sideBySideOpen}
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
         autopilot={autopilot}
-        canResume={apStopped}
+        resumeNotice={apNotice}
         onStartAutopilot={startAutopilot}
         awaiting={apAwaiting}
         spotRect={spotRect}
@@ -507,7 +514,7 @@ function WalkthroughShell({
         origin={apOrigin}
         onStop={(reason) => {
           setAutopilot(false);
-          if (reason === "interrupt") setApStopped(true);
+          setApNotice(reason === "interrupt" ? "paused" : "done");
         }}
       />
 

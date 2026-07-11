@@ -32,8 +32,8 @@ interface TourOverlayProps {
   onToggleSideBySide?: () => void;
   /** true while the synthetic cursor is driving */
   autopilot?: boolean;
-  /** autopilot was interrupted by the viewer and can be resumed on this beat */
-  canResume?: boolean;
+  /** paused = viewer interrupted (resumable); done = autopilot finished the tour */
+  resumeNotice?: "paused" | "done" | null;
   onStartAutopilot?: (origin: { x: number; y: number } | null) => void;
   /** interactive beat phase 1: still waiting for the agent-cell click (owned by the shell) */
   awaiting: boolean;
@@ -64,7 +64,7 @@ export function TourOverlay({
   sideBySideOpen,
   onToggleSideBySide,
   autopilot = false,
-  canResume = false,
+  resumeNotice = null,
   onStartAutopilot,
   awaiting,
   spotRect,
@@ -126,19 +126,25 @@ export function TourOverlay({
       <Spotlight rect={rect} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">
-          {canResume && !autopilot && onStartAutopilot && (
+          {resumeNotice === "paused" && !autopilot && onStartAutopilot && (
             <button
               type="button"
               data-autopilot-safe
               onClick={(e) => onStartAutopilot({ x: e.clientX, y: e.clientY })}
               className="flex items-center justify-between gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20"
             >
-              <span className="font-medium text-ink-dim">Autopilot handed you control</span>
+              <span className="font-medium text-ink-dim">Autopilot paused - you have control</span>
               <span className="whitespace-nowrap">
                 <CursorGlyph className="mr-1.5 inline-block align-[-1px]" />
                 Resume
               </span>
             </button>
+          )}
+          {resumeNotice === "done" && !autopilot && (
+            <div className="flex items-center gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim">
+              <CursorGlyph className="shrink-0 text-accent" />
+              Autopilot finished - over to you
+            </div>
           )}
 
           <div className="flex items-center gap-2">

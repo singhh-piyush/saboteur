@@ -85,15 +85,17 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
   const [entered, setEntered] = useState(false);
   const reduced = usePrefersReducedMotion();
 
-  const [shown, setShown] = useState<{ key: string; node: ReactNode }>({
-    key: anchorKey,
-    node: children,
-  });
+  // live children render directly (so same-beat content changes, e.g. the
+  // autopilot pause strip, appear immediately); only the outgoing overlay
+  // needs a snapshot of the previous beat's content
+  const [shownKey, setShownKey] = useState(anchorKey);
   const [outgoing, setOutgoing] = useState<{ key: string; node: ReactNode } | null>(null);
-  if (shown.key !== anchorKey) {
-    setOutgoing(reduced ? null : shown);
-    setShown({ key: anchorKey, node: children });
+  const lastChildren = useRef(children);
+  if (shownKey !== anchorKey) {
+    setOutgoing(reduced ? null : { key: shownKey, node: lastChildren.current });
+    setShownKey(anchorKey);
   }
+  lastChildren.current = children;
 
   useEffect(() => {
     if (!outgoing) return;
@@ -121,7 +123,7 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
       window.removeEventListener("resize", compute);
     };
     // Re-place when the target moves, content swaps, or width mode flips.
-  }, [rect, placement, shown.key, wide]);
+  }, [rect, placement, anchorKey, wide]);
 
   useEffect(() => {
     if (pos !== null && !entered) {
@@ -155,10 +157,10 @@ export function Callout({ rect, placement, anchorKey, wide = false, children }: 
       <div ref={innerRef} className="relative p-4">
         {/* incoming content: fades in on each beat */}
         <div
-          key={shown.key}
+          key={anchorKey}
           style={reduced ? undefined : { animation: `callout-in 440ms ease-out both` }}
         >
-          {shown.node}
+          {children}
         </div>
         {/* outgoing content: overlaid + fades out, then retired */}
         {outgoing && (

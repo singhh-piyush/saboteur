@@ -605,42 +605,30 @@ body::before {
   }
 }
 
-/* Autopilot dwell orbit - a comet with a fading tail circles the chip's
-   border while the cursor waits out a reading pause; opacity-transitioned
-   in and out so start/stop read as smooth, never frozen */
-@property --ap-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-.ap-orbit {
+/* Autopilot dwell breathe - the chip's border and halo brighten and dim
+   together while the cursor waits out a reading pause. Keyframes animate
+   only border-color/box-shadow so the inline opacity transition still owns
+   the smooth start/stop fade. */
+.ap-breathe {
   position: absolute;
-  inset: -1.5px;
+  inset: -1px;
   border-radius: 3px;
-  padding: 1.5px;
+  border: 1px solid transparent;
   pointer-events: none;
-  background: conic-gradient(
-    from var(--ap-angle),
-    transparent 0deg,
-    transparent 245deg,
-    color-mix(in oklch, var(--color-accent) 65%, transparent) 320deg,
-    #ffd9c4 351deg,
-    transparent 355deg
-  );
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  animation: ap-orbit 2500ms linear infinite;
+  animation: ap-breathe 2500ms ease-in-out infinite;
   transition: opacity 500ms ease;
 }
-@keyframes ap-orbit {
-  to {
-    --ap-angle: 360deg;
+@keyframes ap-breathe {
+  0%,
+  100% {
+    border-color: color-mix(in oklch, var(--color-accent) 35%, transparent);
+    box-shadow: 0 0 4px color-mix(in oklch, var(--color-accent) 20%, transparent);
+  }
+  50% {
+    border-color: #ffb08a;
+    box-shadow:
+      0 0 16px color-mix(in oklch, var(--color-accent) 60%, transparent),
+      inset 0 0 6px color-mix(in oklch, var(--color-accent) 30%, transparent);
   }
 }
 
