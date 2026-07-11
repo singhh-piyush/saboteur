@@ -147,17 +147,6 @@ export function Intro({ onDone }: { onDone: () => void }) {
       )}
 
       {/* studio lighting: drifting key light shaft, vignette, film grain */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute left-1/2 top-1/2 h-[240vmax] w-[30vmax]"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, color-mix(in oklch, var(--color-accent) 13%, transparent) 50%, transparent)",
-            mixBlendMode: "screen",
-            animation: "intro-keylight 13s ease-in-out infinite alternate",
-          }}
-        />
-      </div>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -258,9 +247,6 @@ function Cohort() {
   const cards = Array.from({ length: 18 }, (_, i) => i);
   return (
     <div className="flex w-full flex-col items-center gap-2">
-      <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 200ms backwards` }}>
-        the cohort
-      </p>
       <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 400ms backwards` }}>
         {RUN_8B.scorecard.n_agents} agents. One task. Seeded chaos.
       </p>
@@ -278,14 +264,6 @@ function Cohort() {
             animation: `intro-floor 6600ms ${EASE} both`,
           }}
         >
-          <div
-            aria-hidden
-            className="absolute -inset-12 rounded-full"
-            style={{
-              background:
-                "radial-gradient(ellipse, color-mix(in oklch, var(--color-accent) 8%, transparent), transparent 70%)",
-            }}
-          />
           {/* preserve-3d here lets each card's translateZ pop compose with the tilt
               (a mask would flatten the subtree, so depth fog is an overlay instead) */}
           <div className="grid grid-cols-6 gap-2.5" style={{ transformStyle: "preserve-3d" }}>
@@ -423,9 +401,6 @@ function Sabotage() {
         </span>
       ))}
       <div className="absolute inset-x-0 bottom-[16%] flex flex-col items-center gap-2">
-        <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 3000ms backwards` }}>
-          the sabotage
-        </p>
         <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 3200ms backwards` }}>
           8 faults. 3 layers. Injected on the wire.
         </p>
@@ -499,18 +474,6 @@ function Verdict() {
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   return (
     <div className="relative flex w-full max-w-xl flex-col items-center gap-6">
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-1/2 h-[24rem] w-[54rem] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          background:
-            "radial-gradient(ellipse, color-mix(in oklch, var(--color-accent) 6%, transparent), transparent 70%)",
-          animation: `scene-in 1800ms ${EASE} both`,
-        }}
-      />
-      <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 200ms backwards` }}>
-        the verdict
-      </p>
       <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 400ms backwards` }}>
         Every run ends in a Resilience Scorecard.
       </p>
@@ -578,15 +541,6 @@ function Resolve({ leaving }: { leaving: boolean }) {
         transition: `transform ${FADE_MS}ms ${EASE}`,
       }}
     >
-      <div
-        aria-hidden
-        className="absolute left-1/2 top-1/2 h-64 w-[36rem] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          background:
-            "radial-gradient(ellipse, color-mix(in oklch, var(--color-accent) 13%, transparent), transparent 70%)",
-          animation: `scene-in 1600ms ${EASE} both`,
-        }}
-      />
       <div className="relative">
         <span className={`glitch-in ${WORDMARK} text-ink`} data-text="SABOTEUR">
           SABOTEUR
