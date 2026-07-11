@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 
 import { usePrefersReducedMotion } from "./Spotlight";
 import type { Beat } from "./tour";
-import { planPhase, resolveClickTarget } from "./autopilot";
+import { planPhase, resolveClickTarget, type AutopilotStep } from "./autopilot";
 
 const GLIDE_MS = 680;
 const EASE = "cubic-bezier(0.3, 0.7, 0.2, 1)";
@@ -24,9 +24,21 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
   const [ripple, setRipple] = useState(0);
   const stopRef = useRef(onStop);
   stopRef.current = onStop;
+  const posRef = useRef<{ x: number; y: number } | null>(null);
+  const firstRef = useRef(false);
+
+  const moveTo = (x: number, y: number) => {
+    posRef.current = { x, y };
+    setPos({ x, y });
+  };
 
   useEffect(() => {
-    if (!enabled) setPos(null);
+    if (!enabled) {
+      setPos(null);
+      posRef.current = null;
+    } else {
+      firstRef.current = true;
+    }
   }, [enabled]);
 
   // any trusted user input hands control back; our own el.click() is untrusted
@@ -54,27 +66,59 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
     const sleep = (ms: number) =>
       new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
+    const resolveWithRetry = async (step: AutopilotStep) => {
+      for (let i = 0; i < 10 && !cancelled; i++) {
+        const el = resolveClickTarget(step);
+        if (el) return el;
+        await sleep(200);
+      }
+      return null;
+    };
+
+    const glideTo = async (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      const to = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      const from = posRef.current;
+      const moved = !from || Math.hypot(to.x - from.x, to.y - from.y) > 4;
+      moveTo(to.x, to.y);
+      if (moved) await sleep(reduced ? 150 : GLIDE_MS + 120);
+      return moved;
+    };
+
+    const steps = planPhase(beat, awaiting);
+
     const run = async () => {
-      for (const step of planPhase(beat, awaiting)) {
+      // engage beat: the viewer already read this coachmark before opting in
+      const capFirstDwell = firstRef.current;
+      firstRef.current = false;
+      // cursor is visible from the first frame, never a dead screen
+      if (posRef.current === null)
+        moveTo(window.innerWidth / 2, window.innerHeight - 110);
+
+      for (let i = 0; i < steps.length; i++) {
         if (cancelled) return;
+        const step = steps[i];
         if (step.kind === "dwell") {
-          await sleep(step.ms);
+          let ms = capFirstDwell && i === 0 ? Math.min(step.ms, 2600) : step.ms;
+          // park the cursor on the upcoming button while the viewer reads
+          const nxt = steps[i + 1];
+          if (nxt?.kind === "click") {
+            const el = await resolveWithRetry(nxt);
+            if (cancelled) return;
+            if (el && (await glideTo(el))) ms = Math.max(ms - GLIDE_MS, 600);
+          }
+          if (cancelled) return;
+          await sleep(ms);
           continue;
         }
-        let el: HTMLElement | null = null;
-        for (let i = 0; i < 10 && !cancelled; i++) {
-          el = resolveClickTarget(step);
-          if (el) break;
-          await sleep(200);
-        }
+        const el = await resolveWithRetry(step);
         if (cancelled) return;
         if (!el) {
           stopRef.current();
           return;
         }
-        const r = el.getBoundingClientRect();
-        setPos({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-        await sleep(reduced ? 150 : GLIDE_MS + 160);
+        // re-measure at click time: corrects for camera/layout motion during the dwell
+        await glideTo(el);
         if (cancelled) return;
         setPressed(true);
         setRipple((n) => n + 1);
@@ -100,6 +144,7 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
       style={{
         transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
         transition: reduced ? "none" : `transform ${GLIDE_MS}ms ${EASE}`,
+        animation: "ap-in 240ms ease-out both",
       }}
     >
       {ripple > 0 && (
