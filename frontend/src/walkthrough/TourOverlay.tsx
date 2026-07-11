@@ -133,7 +133,7 @@ export function TourOverlay({
               onClick={(e) => onStartAutopilot({ x: e.clientX, y: e.clientY })}
               className="flex items-center justify-between gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20"
             >
-              <span className="font-medium text-ink-dim">Autopilot paused - you have control</span>
+              <span className="font-medium text-ink-dim">Autopilot handed you control</span>
               <span className="whitespace-nowrap">
                 <CursorGlyph className="mr-1.5 inline-block align-[-1px]" />
                 Resume
@@ -143,7 +143,7 @@ export function TourOverlay({
           {resumeNotice === "done" && !autopilot && (
             <div className="flex items-center gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim">
               <CursorGlyph className="shrink-0 text-accent" />
-              Autopilot ended - choose what to do next
+              Autopilot ended
             </div>
           )}
 
