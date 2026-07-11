@@ -151,6 +151,9 @@ function WalkthroughShell({
   const [apOrigin, setApOrigin] = useState<{ x: number; y: number } | null>(null);
   // paused = interrupted mid-tour (resumable); done = finished the last dwell
   const [apNotice, setApNotice] = useState<"paused" | "done" | null>(null);
+  // autopilot ran at some point this tour: the closing card shows "ended"
+  // even when the viewer interrupted earlier and arrived manually
+  const [apEngaged, setApEngaged] = useState(false);
 
   const beats = useMemo(() => buildTour(runs), [runs]);
 
@@ -239,12 +242,14 @@ function WalkthroughShell({
     setTourBeat(0);
     setAutopilot(false);
     setApNotice(null);
+    setApEngaged(false);
     setTourPrompt(true);
     setTourMode("tour");
   };
   const startAutopilot = (origin: { x: number; y: number } | null) => {
     setApOrigin(origin);
     setApNotice(null);
+    setApEngaged(true);
     setTourPrompt(false);
     setAutopilot(true);
   };
@@ -492,6 +497,7 @@ function WalkthroughShell({
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
         autopilot={autopilot}
         resumeNotice={apNotice}
+        apEngaged={apEngaged}
         onStartAutopilot={startAutopilot}
         awaiting={apAwaiting}
         spotRect={spotRect}

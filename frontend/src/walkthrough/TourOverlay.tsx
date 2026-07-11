@@ -34,6 +34,8 @@ interface TourOverlayProps {
   autopilot?: boolean;
   /** paused = viewer interrupted (resumable); done = autopilot finished the tour */
   resumeNotice?: "paused" | "done" | null;
+  /** autopilot ran at some point this tour (drives the closing-card ended strip) */
+  apEngaged?: boolean;
   onStartAutopilot?: (origin: { x: number; y: number } | null) => void;
   /** interactive beat phase 1: still waiting for the agent-cell click (owned by the shell) */
   awaiting: boolean;
@@ -65,6 +67,7 @@ export function TourOverlay({
   onToggleSideBySide,
   autopilot = false,
   resumeNotice = null,
+  apEngaged = false,
   onStartAutopilot,
   awaiting,
   spotRect,
@@ -126,7 +129,16 @@ export function TourOverlay({
       <Spotlight rect={rect} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">
-          {resumeNotice === "paused" && !autopilot && onStartAutopilot && (
+          {/* closing card: autopilot ran this tour and isn't driving anymore -
+              whether it finished the last dwell or was interrupted earlier,
+              the choice of what happens next belongs to the viewer here */}
+          {isLast && apEngaged && !autopilot && (
+            <div className="flex items-center gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim">
+              <CursorGlyph className="shrink-0 text-accent" />
+              Autopilot ended
+            </div>
+          )}
+          {!isLast && resumeNotice === "paused" && !autopilot && onStartAutopilot && (
             <button
               type="button"
               data-autopilot-safe
@@ -139,12 +151,6 @@ export function TourOverlay({
                 Resume
               </span>
             </button>
-          )}
-          {resumeNotice === "done" && !autopilot && (
-            <div className="flex items-center gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim">
-              <CursorGlyph className="shrink-0 text-accent" />
-              Autopilot ended
-            </div>
           )}
 
           <div className="flex items-center gap-2">
