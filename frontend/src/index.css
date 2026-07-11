@@ -242,6 +242,414 @@ body::before {
   }
 }
 
+/* Launch-film intro: scene cut, depth entrances, cohort floor flicker */
+@keyframes scene-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes intro-line {
+  from {
+    opacity: 0;
+    transform: translateZ(-140px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0);
+    filter: blur(0);
+  }
+}
+/* push-through transition: the camera dollies THROUGH the outgoing scene while the
+   next one arrives from depth - one continuous forward move, not an in/out pair */
+@keyframes intro-scene-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.32);
+    filter: blur(10px);
+  }
+}
+@keyframes intro-scene-in {
+  from {
+    opacity: 0;
+    transform: scale(0.84);
+    filter: blur(6px);
+  }
+  60% {
+    filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+.intro-out {
+  animation: intro-scene-out 880ms cubic-bezier(0.5, 0, 0.75, 0.5) both;
+}
+.intro-out * {
+  animation: none !important;
+}
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* fault chips converge on the agent node from deep space along their bearing */
+@keyframes intro-converge {
+  from {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--fx)), calc(-50% + var(--fy))) scale(1.5);
+    filter: blur(6px);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes intro-land {
+  from {
+    box-shadow: 0 0 24px 3px color-mix(in oklch, currentColor 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes intro-ring {
+  from {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+@keyframes intro-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 24px 3px color-mix(in oklch, var(--color-accent) 40%, transparent);
+  }
+}
+/* mini agent card lifecycle: nominal -> hit -> down -> recovers; wave travels via delay.
+   currentColor drives the status dot, pill wash and progress bar; translateZ pops the
+   card off the floor when a state flips so the wave is physical, not just a recolor. */
+@keyframes intro-agent-cycle {
+  0%,
+  30% {
+    color: var(--color-ok);
+    background-color: color-mix(in oklch, var(--color-ok) 10%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 45%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in oklch, var(--color-ok) 50%, transparent);
+    transform: translateZ(0);
+  }
+  36% {
+    transform: translateZ(30px);
+    box-shadow: 0 0 30px 0 color-mix(in oklch, var(--color-warn) 60%, transparent);
+  }
+  38%,
+  48% {
+    color: var(--color-warn);
+    background-color: color-mix(in oklch, var(--color-warn) 11%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-warn) 50%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-warn) 50%, transparent);
+    transform: translateZ(10px);
+  }
+  53% {
+    transform: translateZ(34px);
+    box-shadow: 0 0 34px 0 color-mix(in oklch, var(--color-crit) 65%, transparent);
+  }
+  55%,
+  68% {
+    color: var(--color-crit);
+    background-color: color-mix(in oklch, var(--color-crit) 14%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-crit) 55%, transparent);
+    box-shadow: 0 0 18px -2px color-mix(in oklch, var(--color-crit) 55%, transparent);
+    transform: translateZ(4px);
+  }
+  76%,
+  100% {
+    color: var(--color-ok);
+    background-color: color-mix(in oklch, var(--color-ok) 10%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 45%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in oklch, var(--color-ok) 50%, transparent);
+    transform: translateZ(0);
+  }
+}
+@keyframes intro-agent-cycle-win {
+  0%,
+  30% {
+    color: var(--color-ok);
+    background-color: color-mix(in oklch, var(--color-ok) 10%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 45%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in oklch, var(--color-ok) 50%, transparent);
+    transform: translateZ(0);
+  }
+  36% {
+    transform: translateZ(30px);
+    box-shadow: 0 0 30px 0 color-mix(in oklch, var(--color-warn) 60%, transparent);
+  }
+  38%,
+  48% {
+    color: var(--color-warn);
+    background-color: color-mix(in oklch, var(--color-warn) 11%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-warn) 50%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-warn) 50%, transparent);
+    transform: translateZ(10px);
+  }
+  53% {
+    transform: translateZ(34px);
+    box-shadow: 0 0 34px 0 color-mix(in oklch, var(--color-crit) 65%, transparent);
+  }
+  55%,
+  64% {
+    color: var(--color-crit);
+    background-color: color-mix(in oklch, var(--color-crit) 14%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-crit) 55%, transparent);
+    box-shadow: 0 0 18px -2px color-mix(in oklch, var(--color-crit) 55%, transparent);
+    transform: translateZ(4px);
+  }
+  72% {
+    transform: translateZ(26px);
+    box-shadow: 0 0 30px 0 color-mix(in oklch, var(--color-win) 60%, transparent);
+  }
+  74%,
+  100% {
+    color: var(--color-win);
+    background-color: color-mix(in oklch, var(--color-win) 11%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-win) 50%, transparent);
+    box-shadow: 0 0 16px -3px color-mix(in oklch, var(--color-win) 50%, transparent);
+    transform: translateZ(0);
+  }
+}
+.intro-agent {
+  animation: intro-agent-cycle 3800ms linear infinite;
+}
+.intro-agent-win {
+  animation-name: intro-agent-cycle-win;
+}
+/* the status word rides the same clock as the card color (discrete content swap) */
+@keyframes intro-pill-word {
+  0%,
+  30% {
+    content: "nominal";
+  }
+  38%,
+  48% {
+    content: "recovering";
+  }
+  55%,
+  68% {
+    content: "down";
+  }
+  76%,
+  100% {
+    content: "nominal";
+  }
+}
+@keyframes intro-pill-word-win {
+  0%,
+  30% {
+    content: "nominal";
+  }
+  38%,
+  48% {
+    content: "recovering";
+  }
+  55%,
+  64% {
+    content: "down";
+  }
+  74%,
+  100% {
+    content: "complete";
+  }
+}
+.intro-pill::after {
+  content: "nominal";
+  animation: intro-pill-word 3800ms linear infinite;
+  animation-delay: inherit;
+}
+.intro-agent-win .intro-pill::after {
+  animation-name: intro-pill-word-win;
+}
+@keyframes intro-floor-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+/* the floor never sits still: a slow dolly runs the whole scene */
+@keyframes intro-floor {
+  from {
+    transform: rotateX(45deg) translateY(14px) scale(1.06);
+  }
+  to {
+    transform: rotateX(36deg) translateY(0) scale(1);
+  }
+}
+/* fault strike: the agent node flinches on each hit (jitter only - centering
+   lives on the parent wrapper so the node never leaves its anchor) */
+@keyframes intro-impact {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-4px, 2px);
+  }
+  55% {
+    transform: translate(3px, -2px);
+  }
+  80% {
+    transform: translate(-1px, 1px);
+  }
+}
+@keyframes intro-shock {
+  from {
+    opacity: 0.75;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.3);
+  }
+}
+
+/* Studio lighting: film grain, drifting key light, specular shine, handheld 3D drift */
+@keyframes intro-grain {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-1.5%, 2%);
+  }
+  50% {
+    transform: translate(2%, -1.5%);
+  }
+  75% {
+    transform: translate(-2%, -2%);
+  }
+}
+.intro-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: intro-grain 0.7s steps(4) infinite;
+}
+@keyframes intro-keylight {
+  from {
+    transform: translate(-85%, -50%) rotate(16deg);
+  }
+  to {
+    transform: translate(-15%, -50%) rotate(16deg);
+  }
+}
+@keyframes intro-shine {
+  from {
+    background-position: 230% 0;
+  }
+  to {
+    background-position: -130% 0;
+  }
+}
+.intro-shine {
+  background-image: linear-gradient(
+    105deg,
+    transparent 44%,
+    rgba(255, 255, 255, 0.9) 50%,
+    transparent 56%
+  );
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: intro-shine 2000ms cubic-bezier(0.4, 0, 0.2, 1) 1300ms both;
+}
+@keyframes intro-drift {
+  from {
+    transform: rotateX(1.6deg) rotateY(-2.4deg);
+  }
+  to {
+    transform: rotateX(-1.2deg) rotateY(2.4deg);
+  }
+}
+
+@keyframes ap-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Autopilot dwell orbit glow - an orange highlight travels clockwise along
+   the chip's (black) border while the cursor waits out a reading pause.
+   Masked hard to the 1px border band - nothing paints inside the chip or
+   beyond it; inline opacity owns the smooth start/stop fade. */
+@property --ap-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.ap-orbit-glow {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  /* border-image paints ONLY in the border band - it cannot spill into the
+     chip or beyond it, unlike a masked background */
+  border: 1px solid transparent;
+  border-image: conic-gradient(
+      from var(--ap-angle),
+      transparent 0deg,
+      color-mix(in oklch, var(--color-accent) 90%, transparent) 60deg,
+      transparent 120deg,
+      transparent 360deg
+    )
+    1;
+  animation: ap-orbit-glow 2500ms linear infinite;
+  transition: opacity 500ms ease;
+}
+@keyframes ap-orbit-glow {
+  to {
+    --ap-angle: 360deg;
+  }
+}
+
+/* Autopilot cursor click ripple */
+@keyframes ap-ripple {
+  from {
+    transform: scale(0.3);
+    opacity: 0.75;
+  }
+  to {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
 /* Coachmark content cross-fade - the incoming beat's text fades in while the
    outgoing text fades out (as an overlay), so the switch is barely noticeable.
    Auto-neutered by the reduced-motion block below. */

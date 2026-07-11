@@ -12,13 +12,16 @@ import { TooltipSuppression } from "../components/Tooltip";
 import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
 import { DEMO_FAMILIES, type DemoRun } from "../demo";
+import { Autopilot } from "./Autopilot";
 import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
 import { Reveal } from "./Reveal";
 import { SideBySide } from "./SideBySide";
 import { usePrefersReducedMotion } from "./Spotlight";
 import { TourOverlay } from "./TourOverlay";
+import { TourPrompt } from "./TourPrompt";
 import { buildTour } from "./tour";
+import { useTourCamera } from "./useTourCamera";
 import { useWalkthrough, WalkthroughProvider } from "./WalkthroughProvider";
 
 type Tab = "grid" | "scorecard";
@@ -142,6 +145,15 @@ function WalkthroughShell({
   const [tourMode, setTourMode] = useState<"tour" | "free">("tour");
   const [tourBeat, setTourBeat] = useState(0);
   const [sideBySideOpen, setSideBySideOpen] = useState(false);
+  const [autopilot, setAutopilot] = useState(false);
+  // pre-tour choice: autopilot vs manual; re-shown on tour replay
+  const [tourPrompt, setTourPrompt] = useState(true);
+  const [apOrigin, setApOrigin] = useState<{ x: number; y: number } | null>(null);
+  // paused = interrupted mid-tour (resumable); done = finished the last dwell
+  const [apNotice, setApNotice] = useState<"paused" | "done" | null>(null);
+  // autopilot ran at some point this tour: the closing card shows "ended"
+  // even when the viewer interrupted earlier and arrived manually
+  const [apEngaged, setApEngaged] = useState(false);
 
   const beats = useMemo(() => buildTour(runs), [runs]);
 
@@ -211,24 +223,88 @@ function WalkthroughShell({
   }, []);
 
   const exitTour = () => {
+    setAutopilot(false);
+    setApNotice(null);
+    setTourPrompt(false);
     setTourMode("free");
     play();
   };
   const finishTour = () => {
+    setAutopilot(false);
+    setApNotice(null);
     setTourMode("free");
     selectAgent(null);
     setTab("grid");
     setSpeed(2);
-    restart(); 
+    restart();
   };
   const replayTour = () => {
     setTourBeat(0);
+    setAutopilot(false);
+    setApNotice(null);
+    setApEngaged(false);
+    setTourPrompt(true);
     setTourMode("tour");
   };
+  const startAutopilot = (origin: { x: number; y: number } | null) => {
+    setApOrigin(origin);
+    setApNotice(null);
+    setApEngaged(true);
+    setTourPrompt(false);
+    setAutopilot(true);
+  };
+  const toggleAutopilot = () => {
+    if (autopilot) {
+      setAutopilot(false);
+      setApNotice("paused");
+      return;
+    }
+    if (tourMode !== "tour") {
+      setTourBeat(0);
+      setTourMode("tour");
+    }
+    startAutopilot(null);
+  };
+
+  // "done" only makes sense on the closing card; navigating away turns the
+  // notice into a resumable pause
+  useEffect(() => {
+    setApNotice((n) => (n === "done" ? "paused" : n));
+  }, [tourBeat]);
+
+  // interactive reveal is sticky per beat: once the trace is opened the beat
+  // stays revealed even if the drawer is closed, until the beat changes
+  const [revealedBeat, setRevealedBeat] = useState<number | null>(null);
+  useEffect(() => {
+    if (!tourActive || !activeBeat?.interactive) return;
+    if (selectedAgent === activeBeat.interactive.agent) setRevealedBeat(tourBeat);
+  }, [tourActive, activeBeat, selectedAgent, tourBeat]);
+  const apAwaiting = !!activeBeat?.interactive && revealedBeat !== tourBeat;
+
+  const promptOpen = tourActive && !tourSuspended && !covered && tourPrompt;
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const { camera, spotRect } = useTourCamera({
+    active: tourActive && !tourSuspended && !covered && !tourPrompt,
+    beat: activeBeat,
+    awaiting: apAwaiting,
+    reducedMotion,
+    wrapperRef,
+  });
 
   return (
     <TooltipSuppression active={tourMode === "tour"}>
-    <div className="flex h-screen flex-col gap-2 bg-void p-2">
+    <div className="fixed inset-0 overflow-hidden bg-void">
+    <div
+      ref={wrapperRef}
+      className="flex h-full flex-col gap-2 p-2"
+      style={{
+        transformOrigin: "0 0",
+        transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`,
+        transition: reducedMotion ? undefined : "transform 820ms cubic-bezier(0.4, 0, 0.2, 1)",
+        willChange: tourActive ? "transform" : undefined,
+      }}
+    >
       <header
         className={`${CARD} flex items-center gap-4 px-4 py-2.5`}
         style={{ animation: "card-in 0.3s ease-out backwards" }}
@@ -377,6 +453,8 @@ function WalkthroughShell({
               runIndex={runIndex}
               onSwitchRun={switchRunFree}
               switcherDisabled={tourActive}
+              autopilot={autopilot}
+              onToggleAutopilot={toggleAutopilot}
             />
           </div>
         </main>
@@ -404,7 +482,7 @@ function WalkthroughShell({
 
       <TourOverlay
         beats={beats}
-        active={tourMode === "tour" && !tourSuspended}
+        active={tourMode === "tour" && !tourSuspended && !tourPrompt}
         beatIndex={tourBeat}
         onSetBeat={setTourBeat}
         onExitTour={exitTour}
@@ -412,12 +490,38 @@ function WalkthroughShell({
         onExitToLanding={onExit}
         otherFamilyLabel={otherFamilyLabel}
         onViewOtherFamily={onViewOtherFamily}
-        selectedAgent={selectedAgent}
         selectAgent={selectAgent}
         setTab={setTab}
         seekSmooth={seekSmooth}
         sideBySideOpen={sideBySideOpen}
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
+        autopilot={autopilot}
+        resumeNotice={apNotice}
+        apEngaged={apEngaged}
+        onStartAutopilot={startAutopilot}
+        awaiting={apAwaiting}
+        spotRect={spotRect}
+      />
+
+      {promptOpen && (
+        <TourPrompt
+          totalBeats={beats.length}
+          onAutopilot={startAutopilot}
+          onManual={() => setTourPrompt(false)}
+          onSkip={exitTour}
+        />
+      )}
+
+      <Autopilot
+        enabled={autopilot && tourActive && !tourSuspended && !tourPrompt}
+        beat={activeBeat}
+        awaiting={apAwaiting}
+        isLast={tourBeat >= beats.length - 1}
+        origin={apOrigin}
+        onStop={(reason) => {
+          setAutopilot(false);
+          setApNotice(reason === "interrupt" ? "paused" : "done");
+        }}
       />
 
       {/* face-off beat: side-by-side scorecard comparison */}
@@ -437,6 +541,7 @@ function WalkthroughShell({
           />,
           document.body,
         )}
+    </div>
     </div>
     </TooltipSuppression>
   );

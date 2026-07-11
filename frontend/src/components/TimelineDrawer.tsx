@@ -91,7 +91,11 @@ export function TimelineDrawer({ agentId, onClose }: Props) {
       </div>
 
       {/* key remounts the list + replays feed-in animation on agent switch */}
-      <ol key={agentId} className="animate-feed-in min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
+      <ol
+        key={agentId}
+        data-tour="trace-list"
+        className="animate-feed-in min-h-0 flex-1 space-y-1 overflow-y-auto p-3"
+      >
         {entries.length === 0 && (
           <p className="text-sm text-ink-faint">No activity yet.</p>
         )}

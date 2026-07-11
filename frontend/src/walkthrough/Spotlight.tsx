@@ -1,5 +1,5 @@
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 const PAD = 8;
@@ -22,7 +22,7 @@ export function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-function scrollWithinContainer(el: HTMLElement): void {
+export function scrollWithinContainer(el: HTMLElement): void {
   let parent = el.parentElement;
   while (parent) {
     const oy = getComputedStyle(parent).overflowY;
@@ -39,84 +39,6 @@ function scrollWithinContainer(el: HTMLElement): void {
     }
     parent = parent.parentElement;
   }
-}
-
-function closeRect(a: DOMRect | null, b: DOMRect | null): boolean {
-  if (a === null || b === null) return a === b;
-  return (
-    Math.abs(a.left - b.left) < 0.5 &&
-    Math.abs(a.top - b.top) < 0.5 &&
-    Math.abs(a.width - b.width) < 0.5 &&
-    Math.abs(a.height - b.height) < 0.5
-  );
-}
-
-export function useSpotlightRect(resolve: () => HTMLElement | null, key: string): DOMRect | null {
-  const [rect, setRect] = useState<DOMRect | null>(null);
-  const resolveRef = useRef(resolve);
-  resolveRef.current = resolve;
-
-  useLayoutEffect(() => {
-    const el = resolveRef.current();
-    if (!el) {
-      setRect((prev) => (prev === null ? prev : null));
-      return;
-    }
-    scrollWithinContainer(el);
-    const r = el.getBoundingClientRect();
-    if (r.width > 1 || r.height > 1) setRect((prev) => (closeRect(prev, r) ? prev : r));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  useEffect(() => {
-    let stopped = false;
-    let raf = 0;
-    let frames = 0;
-    let stable = 0;
-    let committed = false;
-    let last: DOMRect | null = null;
-
-    const measure = (): DOMRect | null => {
-      const el = resolveRef.current();
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      return r.width > 1 || r.height > 1 ? r : null;
-    };
-
-    const loop = () => {
-      if (stopped) return;
-      frames += 1;
-      const r = measure();
-      stable = closeRect(r, last) ? stable + 1 : 0;
-      last = r;
-
-      if (r === null) {
-        setRect((prev) => (prev === null ? prev : null));
-      } else if (stable >= 2) {
-        setRect((prev) => (closeRect(prev, r) ? prev : r));
-        committed = true;
-      }
-
-      const settled = committed && stable >= 6;
-      if (frames < 90 && !settled) raf = requestAnimationFrame(loop);
-    };
-    loop();
-
-    const onChange = () => {
-      const r = measure();
-      setRect((prev) => (closeRect(prev, r) ? prev : r));
-    };
-    window.addEventListener("resize", onChange);
-    window.addEventListener("scroll", onChange, true);
-    return () => {
-      stopped = true;
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onChange);
-      window.removeEventListener("scroll", onChange, true);
-    };
-  }, [key]);
-
-  return rect;
 }
 
 export function Spotlight({ rect, snap = false }: { rect: DOMRect | null; snap?: boolean }) {

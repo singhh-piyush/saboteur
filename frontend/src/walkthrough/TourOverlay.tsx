@@ -1,9 +1,10 @@
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
+import { CursorGlyph } from "./Autopilot";
 import { Callout } from "./Callout";
-import { Spotlight, useSpotlightRect } from "./Spotlight";
-import type { Beat, TourCtx, TourTarget } from "./tour";
+import { Spotlight } from "./Spotlight";
+import type { Beat, TourCtx } from "./tour";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 interface TourOverlayProps {
@@ -17,8 +18,6 @@ interface TourOverlayProps {
   onFinishTour: () => void;
   /** navigate back to the landing page */
   onExitToLanding: () => void;
-  /** current agent selection; used to detect the interactive reveal click */
-  selectedAgent: number | null;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
   /** fade-through seek: hides grid pane during jump so only destination state is visible */
@@ -31,6 +30,17 @@ interface TourOverlayProps {
   sideBySideOpen?: boolean;
   /** toggle the side-by-side comparison from the face-off beat */
   onToggleSideBySide?: () => void;
+  /** true while the synthetic cursor is driving */
+  autopilot?: boolean;
+  /** paused = viewer interrupted (resumable); done = autopilot finished the tour */
+  resumeNotice?: "paused" | "done" | null;
+  /** autopilot ran at some point this tour (drives the closing-card ended strip) */
+  apEngaged?: boolean;
+  onStartAutopilot?: (origin: { x: number; y: number } | null) => void;
+  /** interactive beat phase 1: still waiting for the agent-cell click (owned by the shell) */
+  awaiting: boolean;
+  /** screen-space spotlight rect from the shared camera pipeline */
+  spotRect: DOMRect | null;
 }
 
 const BTN_GHOST =
@@ -40,11 +50,6 @@ const BTN_PRIMARY =
 const BTN_RED =
   "whitespace-nowrap rounded-sm border border-crit/70 bg-crit/15 px-2.5 py-1 text-xs font-semibold text-crit transition-colors duration-150 hover:bg-crit/25";
 
-function agentCell(id: number): HTMLElement | null {
-  const grid = document.querySelector('[data-tour="grid"]');
-  return grid?.querySelectorAll<HTMLElement>(".agent-cell-wrap")[id] ?? null;
-}
-
 export function TourOverlay({
   beats,
   active,
@@ -53,7 +58,6 @@ export function TourOverlay({
   onExitTour,
   onFinishTour,
   onExitToLanding,
-  selectedAgent,
   selectAgent,
   setTab,
   seekSmooth,
@@ -61,13 +65,16 @@ export function TourOverlay({
   onViewOtherFamily,
   sideBySideOpen,
   onToggleSideBySide,
+  autopilot = false,
+  resumeNotice = null,
+  apEngaged = false,
+  onStartAutopilot,
+  awaiting,
+  spotRect,
 }: TourOverlayProps) {
   const { seek, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
-
-  const [revealedBeat, setRevealedBeat] = useState<number | null>(null);
-  const revealed = revealedBeat === beatIndex;
 
   const ctxRef = useRef<TourCtx>({ seek, seekSmooth, pause, selectAgent, setTab, switchRun });
   ctxRef.current = { seek, seekSmooth, pause, selectAgent, setTab, switchRun };
@@ -78,11 +85,6 @@ export function TourOverlay({
     // beat is derived from beatIndex; re-run only when the beat changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, beatIndex]);
-
-  useEffect(() => {
-    if (!active || !beat?.interactive) return;
-    if (selectedAgent === beat.interactive.agent) setRevealedBeat(beatIndex);
-  }, [active, beat, beatIndex, selectedAgent]);
 
   const next = useCallback(() => {
     if (beatIndex >= total - 1) onFinishTour();
@@ -111,21 +113,11 @@ export function TourOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [active, next, back, onExitTour]);
 
-  const awaiting = !!beat?.interactive && !revealed;
-  const target: TourTarget = awaiting
-    ? { kind: "agent", id: beat!.interactive!.agent }
-    : (beat?.target ?? { kind: "none" });
   const placement = awaiting ? "bottom" : (beat?.placement ?? "center");
   const bodyText = awaiting ? (beat?.promptBody ?? beat?.body ?? "") : (beat?.body ?? "");
   const phaseKey = awaiting ? "prompt" : "reveal";
 
-  const resolve = useCallback((): HTMLElement | null => {
-    if (target.kind === "none") return null;
-    if (target.kind === "agent") return agentCell(target.id);
-    return document.querySelector<HTMLElement>(`[data-tour="${target.name}"]`);
-  }, [target]);
-
-  const rect = useSpotlightRect(resolve, active && beat ? `${beat.id}:${phaseKey}` : "inactive");
+  const rect = spotRect;
 
   if (!active || !beat) return null;
 
@@ -137,6 +129,30 @@ export function TourOverlay({
       <Spotlight rect={rect} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">
+          {/* closing card: autopilot ran this tour and isn't driving anymore -
+              whether it finished the last dwell or was interrupted earlier,
+              the choice of what happens next belongs to the viewer here */}
+          {isLast && apEngaged && !autopilot && (
+            <div className="flex items-center gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim">
+              <CursorGlyph className="shrink-0 text-accent" />
+              Autopilot ended
+            </div>
+          )}
+          {!isLast && resumeNotice === "paused" && !autopilot && onStartAutopilot && (
+            <button
+              type="button"
+              data-autopilot-safe
+              onClick={(e) => onStartAutopilot({ x: e.clientX, y: e.clientY })}
+              className="flex items-center justify-between gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20"
+            >
+              <span className="font-medium text-ink-dim">Autopilot handed you control</span>
+              <span className="whitespace-nowrap">
+                <CursorGlyph className="mr-1.5 inline-block align-[-1px]" />
+                Resume
+              </span>
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-accent" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim">
@@ -155,6 +171,7 @@ export function TourOverlay({
               {beat.compare && onToggleSideBySide && (
                 <button
                   type="button"
+                  data-autopilot="compare"
                   onClick={onToggleSideBySide}
                   aria-pressed={sideBySideOpen}
                   className={sideBySideOpen ? BTN_PRIMARY : BTN_GHOST}
@@ -203,7 +220,7 @@ export function TourOverlay({
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs tabular-nums text-ink-faint">
+              <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-faint">
                 {beatIndex + 1} / {total}
               </span>
               {awaiting ? (
@@ -215,7 +232,7 @@ export function TourOverlay({
                   Open trace
                 </button>
               ) : (
-                <button type="button" onClick={next} className={BTN_PRIMARY}>
+                <button type="button" data-autopilot="next" onClick={next} className={BTN_PRIMARY}>
                   {isLast ? (beat.finishLabel ?? "Finish") : "Next"}
                 </button>
               )}
