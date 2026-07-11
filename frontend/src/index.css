@@ -605,14 +605,29 @@ body::before {
   }
 }
 
-/* Autopilot dwell progress - fills over the reading pause so long
-   coachmarks read as a countdown, not a frozen screen */
-@keyframes ap-dwell {
-  from {
-    transform: scaleX(0);
+/* Autopilot dwell shimmer - a soft glow sweeps across the chip while the
+   cursor waits out a reading pause; the sweep-pause-sweep cadence plus the
+   opacity transition make start/stop read as smooth, never frozen */
+.ap-wave {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 25%,
+    color-mix(in oklch, var(--color-accent) 45%, transparent) 50%,
+    transparent 75%
+  );
+  animation: ap-wave 2000ms ease-in-out infinite;
+  transition: opacity 500ms ease;
+}
+@keyframes ap-wave {
+  0% {
+    transform: translateX(-105%);
   }
-  to {
-    transform: scaleX(1);
+  65%,
+  100% {
+    transform: translateX(105%);
   }
 }
 

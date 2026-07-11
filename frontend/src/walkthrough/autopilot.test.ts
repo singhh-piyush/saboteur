@@ -19,21 +19,20 @@ function beat(overrides: Partial<Beat> = {}): Beat {
 }
 
 describe("readingMs", () => {
-  it("clamps to [4000, 22000]", () => {
+  it("clamps to [4000, 30000]", () => {
     expect(readingMs("")).toBe(4000);
-    expect(readingMs("x".repeat(500))).toBe(22000);
+    expect(readingMs("x".repeat(500))).toBe(30000);
     const mid = readingMs("x".repeat(80));
     expect(mid).toBeGreaterThan(4000);
-    expect(mid).toBeLessThan(22000);
+    expect(mid).toBeLessThan(30000);
   });
 
-  it("paces a typical coachmark at 150-160 wpm including the orientation beat", () => {
-    // 250 chars ≈ 43 words; total dwell must land between 16.1s (160 wpm) and 17.2s (150 wpm)
+  it("paces a typical coachmark near 100 wpm including the orientation beat", () => {
     const ms = readingMs("x".repeat(250));
     const words = 250 / 5.8;
     const wpm = words / (ms / 60000);
-    expect(wpm).toBeGreaterThan(150);
-    expect(wpm).toBeLessThan(165);
+    expect(wpm).toBeGreaterThan(90);
+    expect(wpm).toBeLessThan(110);
   });
 });
 

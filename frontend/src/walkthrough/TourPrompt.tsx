@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
+import { CursorGlyph } from "./Autopilot";
 import { DRIVE_LABEL } from "./autopilot";
 
 const BTN_GHOST =
@@ -64,7 +65,7 @@ export function TourPrompt({ totalBeats, onAutopilot, onManual, onSkip }: TourPr
               onClick={(e) => onAutopilot({ x: e.clientX, y: e.clientY })}
               className={BTN_PRIMARY}
             >
-              <span aria-hidden className="mr-1">⏵</span>
+              <CursorGlyph className="mr-1.5 inline-block align-[-1px]" />
               {DRIVE_LABEL}
             </button>
             <button type="button" onClick={onManual} className={BTN_GHOST}>

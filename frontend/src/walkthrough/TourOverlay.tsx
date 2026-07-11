@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+import { CursorGlyph } from "./Autopilot";
 import { Callout } from "./Callout";
 import { Spotlight } from "./Spotlight";
 import type { Beat, TourCtx } from "./tour";
@@ -134,7 +135,8 @@ export function TourOverlay({
             >
               <span className="font-medium text-ink-dim">Autopilot handed you control</span>
               <span className="whitespace-nowrap">
-                <span aria-hidden className="mr-1">⏵</span>Resume
+                <CursorGlyph className="mr-1.5 inline-block align-[-1px]" />
+                Resume
               </span>
             </button>
           )}

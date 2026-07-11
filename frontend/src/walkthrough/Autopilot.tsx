@@ -11,6 +11,15 @@ const EASE = "cubic-bezier(0.3, 0.7, 0.2, 1)";
 
 export type AutopilotStopReason = "interrupt" | "done";
 
+/** the autopilot cursor arrow, reused on the buttons that summon it */
+export function CursorGlyph({ className }: { className?: string }) {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" aria-hidden className={className}>
+      <path d="M5 3l14 8.2-6.6 1.5L9.4 19 5 3z" fill="currentColor" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 interface AutopilotProps {
   enabled: boolean;
   beat: Beat | null;
@@ -28,10 +37,9 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [pressed, setPressed] = useState(false);
   const [ripple, setRipple] = useState(0);
-  // active reading pause: drives a fill bar under the chip so long dwells
+  // active reading pause: drives a shimmer across the chip so long dwells
   // read as "autopilot is waiting", never as a frozen screen
-  const [dwell, setDwell] = useState<{ ms: number; id: number } | null>(null);
-  const dwellSeq = useRef(0);
+  const [dwelling, setDwelling] = useState(false);
   // glide transition stays off until the spawn position has painted, so the
   // cursor fades in exactly where the viewer clicked instead of sliding there
   const [settled, setSettled] = useState(false);
@@ -113,13 +121,51 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
 
     const steps = planPhase(beat, awaiting, isLast);
 
+    const scrollTraceToEnd = async () => {
+      // the drawer opens with a width transition; let it settle first
+      await sleep(reduced ? 100 : 650);
+      let list: HTMLElement | null = null;
+      for (let i = 0; i < 10 && !cancelled; i++) {
+        list = document.querySelector<HTMLElement>('[data-tour="trace-list"]');
+        if (list) break;
+        await sleep(150);
+      }
+      if (!list || cancelled) return;
+      const target = list;
+      const dist = target.scrollHeight - target.clientHeight - target.scrollTop;
+      if (dist <= 4) return;
+      if (reduced) {
+        target.scrollTop = target.scrollHeight;
+        return;
+      }
+      const start = target.scrollTop;
+      const dur = Math.min(3600, Math.max(1400, dist * 2.4));
+      const t0 = performance.now();
+      await new Promise<void>((resolve) => {
+        const tick = (now: number) => {
+          if (cancelled) return resolve();
+          const t = Math.min(1, (now - t0) / dur);
+          const e = t < 0.5 ? 2 * t * t : 1 - (2 - 2 * t) ** 2 / 2;
+          target.scrollTop = start + dist * e;
+          if (t < 1) requestAnimationFrame(tick);
+          else resolve();
+        };
+        requestAnimationFrame(tick);
+      });
+    };
+
     const run = async () => {
-      setDwell(null);
+      setDwelling(false);
       // engage beat: the viewer already read this coachmark before opting in
       const capFirstDwell = firstRef.current;
       firstRef.current = false;
       // fresh spawn: let the fade-in land before the first glide
       if (capFirstDwell) await sleep(reduced ? 50 : 320);
+
+      // the trace just opened on this interactive beat: walk it to the end
+      // so the viewer sees the whole story before the dwell starts
+      if (beat.interactive && !awaiting) await scrollTraceToEnd();
+      if (cancelled) return;
 
       for (let i = 0; i < steps.length; i++) {
         if (cancelled) return;
@@ -134,9 +180,9 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
             if (el && (await glideTo(el))) ms = Math.max(ms - GLIDE_MS, 600);
           }
           if (cancelled) return;
-          setDwell({ ms, id: ++dwellSeq.current });
+          setDwelling(true);
           await sleep(ms);
-          setDwell(null);
+          setDwelling(false);
           continue;
         }
         const el = await resolveWithRetry(step);
@@ -204,22 +250,18 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
           />
         </svg>
       </div>
-      <div className="absolute left-5 top-5 flex w-max flex-col gap-[3px]">
-        <span className="whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent">
-          AUTOPILOT
-        </span>
-        {dwell && (
-          <span
-            key={dwell.id}
-            className="h-[3px] overflow-hidden rounded-full bg-accent/20"
-          >
-            <span
-              className="block h-full origin-left rounded-full bg-accent"
-              style={{ animation: `ap-dwell ${dwell.ms}ms linear forwards` }}
-            />
-          </span>
-        )}
-      </div>
+      <span
+        className="absolute left-5 top-5 overflow-hidden whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent"
+        style={{
+          boxShadow: dwelling
+            ? "0 0 14px color-mix(in oklch, var(--color-accent) 40%, transparent)"
+            : "0 0 0 transparent",
+          transition: "box-shadow 500ms ease",
+        }}
+      >
+        AUTOPILOT
+        <span aria-hidden className="ap-wave" style={{ opacity: dwelling ? 1 : 0 }} />
+      </span>
     </div>,
     document.body,
   );
