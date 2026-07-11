@@ -605,29 +605,42 @@ body::before {
   }
 }
 
-/* Autopilot dwell shimmer - a soft glow sweeps across the chip while the
-   cursor waits out a reading pause; the sweep-pause-sweep cadence plus the
-   opacity transition make start/stop read as smooth, never frozen */
-.ap-wave {
+/* Autopilot dwell orbit - a comet with a fading tail circles the chip's
+   border while the cursor waits out a reading pause; opacity-transitioned
+   in and out so start/stop read as smooth, never frozen */
+@property --ap-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.ap-orbit {
   position: absolute;
-  inset: 0;
+  inset: -1.5px;
+  border-radius: 3px;
+  padding: 1.5px;
   pointer-events: none;
-  background: linear-gradient(
-    105deg,
-    transparent 25%,
-    color-mix(in oklch, var(--color-accent) 45%, transparent) 50%,
-    transparent 75%
+  background: conic-gradient(
+    from var(--ap-angle),
+    transparent 0deg,
+    transparent 245deg,
+    color-mix(in oklch, var(--color-accent) 65%, transparent) 320deg,
+    #ffd9c4 351deg,
+    transparent 355deg
   );
-  animation: ap-wave 2000ms ease-in-out infinite;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  animation: ap-orbit 2500ms linear infinite;
   transition: opacity 500ms ease;
 }
-@keyframes ap-wave {
-  0% {
-    transform: translateX(-105%);
-  }
-  65%,
-  100% {
-    transform: translateX(105%);
+@keyframes ap-orbit {
+  to {
+    --ap-angle: 360deg;
   }
 }
 

@@ -251,7 +251,7 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
         </svg>
       </div>
       <span
-        className="absolute left-5 top-5 overflow-hidden whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent"
+        className="absolute left-5 top-5 whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent"
         style={{
           boxShadow: dwelling
             ? "0 0 14px color-mix(in oklch, var(--color-accent) 40%, transparent)"
@@ -260,7 +260,7 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
         }}
       >
         AUTOPILOT
-        <span aria-hidden className="ap-wave" style={{ opacity: dwelling ? 1 : 0 }} />
+        <span aria-hidden className="ap-orbit" style={{ opacity: dwelling ? 1 : 0 }} />
       </span>
     </div>,
     document.body,
