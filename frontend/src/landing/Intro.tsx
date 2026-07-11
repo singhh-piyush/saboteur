@@ -247,9 +247,6 @@ function Cohort() {
   const cards = Array.from({ length: 18 }, (_, i) => i);
   return (
     <div className="flex w-full flex-col items-center gap-2">
-      <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 200ms backwards` }}>
-        the cohort
-      </p>
       <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 400ms backwards` }}>
         {RUN_8B.scorecard.n_agents} agents. One task. Seeded chaos.
       </p>
@@ -404,9 +401,6 @@ function Sabotage() {
         </span>
       ))}
       <div className="absolute inset-x-0 bottom-[16%] flex flex-col items-center gap-2">
-        <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 3000ms backwards` }}>
-          the sabotage
-        </p>
         <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 3200ms backwards` }}>
           8 faults. 3 layers. Injected on the wire.
         </p>
@@ -480,9 +474,6 @@ function Verdict() {
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   return (
     <div className="relative flex w-full max-w-xl flex-col items-center gap-6">
-      <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 200ms backwards` }}>
-        the verdict
-      </p>
       <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 400ms backwards` }}>
         Every run ends in a Resilience Scorecard.
       </p>
