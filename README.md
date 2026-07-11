@@ -1,6 +1,29 @@
-# Saboteur
+<div align="center">
 
-Chaos testing for AI agents.
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/saboteur-light.gif">
+  <img src="docs/assets/saboteur-dark.gif" alt="SABOTEUR" width="640">
+</picture>
+
+**Chaos engineering for AI agents.**
+<br>
+Break your agent on purpose, before production does.
+
+[![Resilience gate](https://github.com/singhh-piyush/saboteur/actions/workflows/resilience.yml/badge.svg)](https://github.com/singhh-piyush/saboteur/actions/workflows/resilience.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
+[![React](https://img.shields.io/badge/dashboard-React%20%2B%20Vite-61DAFB.svg?logo=react&logoColor=black)](frontend)
+[![AMD MI300X](https://img.shields.io/badge/50--agent%20runs-AMD%20MI300X-ED1C24.svg?logo=amd&logoColor=white)](#built-with)
+
+[Quick start](#quick-start-no-gpu-needed) ·
+[The faults](#the-faults) ·
+[Test your own agent](#testing-your-own-agent) ·
+[The scorecard](#the-scorecard) ·
+[CI gate](#ci-gate)
+
+</div>
+
+---
 
 ## What it is
 
@@ -294,3 +317,14 @@ written live.
 - vLLM on ROCm with an AMD Instinct MI300X for the 50-agent cohort runs
 
 Built for the AMD Developer Hackathon: ACT II.
+
+## Contributing
+
+Issues and pull requests are welcome. Before opening a PR, run the full check
+locally (`make test`, `make lint`, and `npx vitest run` in `frontend/`); the
+resilience gate also runs on every PR and blocks the merge if the reference
+agent's survival rate regresses.
+
+## License
+
+Released under the [MIT License](LICENSE).
