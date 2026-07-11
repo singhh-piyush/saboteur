@@ -605,30 +605,43 @@ body::before {
   }
 }
 
-/* Autopilot dwell breathe - the chip's border and halo brighten and dim
-   together while the cursor waits out a reading pause. Keyframes animate
-   only border-color/box-shadow so the inline opacity transition still owns
-   the smooth start/stop fade. */
-.ap-breathe {
+/* Autopilot dwell orbit glow - a soft orange glow travels clockwise around
+   the chip's (black) border while the cursor waits out a reading pause.
+   The arc fades in and out symmetrically (no hard head), masked to the
+   border ring only; inline opacity owns the smooth start/stop fade. */
+@property --ap-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.ap-orbit-glow {
   position: absolute;
-  inset: -1px;
-  border-radius: 3px;
-  border: 1px solid transparent;
+  inset: -2px;
+  border-radius: 4px;
+  padding: 2px;
   pointer-events: none;
-  animation: ap-breathe 2500ms ease-in-out infinite;
+  background: conic-gradient(
+    from var(--ap-angle),
+    transparent 0deg,
+    color-mix(in oklch, var(--color-accent) 85%, transparent) 45deg,
+    transparent 90deg,
+    transparent 360deg
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  filter: blur(1px) drop-shadow(0 0 5px color-mix(in oklch, var(--color-accent) 65%, transparent));
+  animation: ap-orbit-glow 2500ms linear infinite;
   transition: opacity 500ms ease;
 }
-@keyframes ap-breathe {
-  0%,
-  100% {
-    border-color: color-mix(in oklch, var(--color-accent) 35%, transparent);
-    box-shadow: 0 0 4px color-mix(in oklch, var(--color-accent) 20%, transparent);
-  }
-  50% {
-    border-color: #ffb08a;
-    box-shadow:
-      0 0 16px color-mix(in oklch, var(--color-accent) 60%, transparent),
-      inset 0 0 6px color-mix(in oklch, var(--color-accent) 30%, transparent);
+@keyframes ap-orbit-glow {
+  to {
+    --ap-angle: 360deg;
   }
 }
 

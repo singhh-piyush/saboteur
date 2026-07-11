@@ -156,11 +156,9 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
 
     const run = async () => {
       setDwelling(false);
-      // engage beat: the viewer already read this coachmark before opting in
-      const capFirstDwell = firstRef.current;
-      firstRef.current = false;
       // fresh spawn: let the fade-in land before the first glide
-      if (capFirstDwell) await sleep(reduced ? 50 : 320);
+      if (firstRef.current) await sleep(reduced ? 50 : 320);
+      firstRef.current = false;
 
       // the trace just opened on this interactive beat: walk it to the end
       // so the viewer sees the whole story before the dwell starts
@@ -171,7 +169,7 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
         if (cancelled) return;
         const step = steps[i];
         if (step.kind === "dwell") {
-          let ms = capFirstDwell && i === 0 ? Math.min(step.ms, 2600) : step.ms;
+          let ms = step.ms;
           // park the cursor on the upcoming button while the viewer reads
           const nxt = steps[i + 1];
           if (nxt?.kind === "click") {
@@ -250,9 +248,9 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
           />
         </svg>
       </div>
-      <span className="absolute left-5 top-5 whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent">
+      <span className="absolute left-5 top-5 whitespace-nowrap rounded-sm border border-black bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent">
         AUTOPILOT
-        <span aria-hidden className="ap-breathe" style={{ opacity: dwelling ? 1 : 0 }} />
+        <span aria-hidden className="ap-orbit-glow" style={{ opacity: dwelling ? 1 : 0 }} />
       </span>
     </div>,
     document.body,
