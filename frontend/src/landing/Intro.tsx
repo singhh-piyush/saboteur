@@ -34,20 +34,19 @@ export function introShouldSkip(): boolean {
 }
 
 const RUN_8B = DEMO_FAMILIES[0].runs[0];
-const RUN_70B = DEMO_FAMILIES[0].runs[1];
 
 type Scene = "thesis" | "cohort" | "sabotage" | "verdict" | "resolve";
 
 const SCENES: { id: Scene; ms: number }[] = [
   { id: "thesis", ms: 6200 },
-  { id: "cohort", ms: 5800 },
-  { id: "sabotage", ms: 5600 },
-  { id: "verdict", ms: 6600 },
+  { id: "cohort", ms: 6600 },
+  { id: "sabotage", ms: 6200 },
+  { id: "verdict", ms: 6800 },
   { id: "resolve", ms: 3800 },
 ];
 
 const FADE_MS = 1400;
-const XFADE_MS = 500;
+const XFADE_MS = 860;
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 const STATEMENT =
@@ -131,7 +130,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
       <div
         key={scene}
         className="absolute inset-0 flex items-center justify-center px-6"
-        style={{ animation: "scene-in 700ms ease-out both", pointerEvents: "none" }}
+        style={{ animation: `intro-scene-in 880ms ${EASE} both`, pointerEvents: "none" }}
       >
         {renderScene(scene)}
       </div>
@@ -221,29 +220,42 @@ function Thesis() {
   );
 }
 
-const COLS = 8;
+const COLS = 6;
 
 function MiniCard({ id, delay, barW, win }: { id: number; delay: number; barW: number; win: boolean }) {
+  const dl = `${delay}ms`;
   return (
     <div
-      className={`intro-agent rounded border px-2 pb-2 pt-1.5 text-left ${win ? "intro-agent-win" : ""}`}
-      style={{ animationDelay: `${delay}ms` }}
+      className={`intro-agent rounded-md border p-2.5 text-left ${win ? "intro-agent-win" : ""}`}
+      style={{ animationDelay: dl }}
     >
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] font-semibold tracking-wide text-ink-dim">
+        <span className="font-mono text-[11px] font-semibold tracking-wide text-ink">
           A-{String(id).padStart(2, "0")}
         </span>
-        <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: "currentColor" }} />
+        <span
+          aria-hidden
+          className="h-2 w-2 rounded-full"
+          style={{ background: "currentColor", boxShadow: "0 0 8px currentColor" }}
+        />
       </div>
-      <div className="mt-2 h-1 w-full rounded bg-white/10">
-        <div className="h-full rounded" style={{ width: `${barW}%`, background: "currentColor" }} />
+      {/* the status word rides the card's animation clock via ::after */}
+      <span
+        className="intro-pill mt-2 inline-block rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
+        style={{ animationDelay: dl, background: "color-mix(in oklch, currentColor 15%, transparent)" }}
+      />
+      <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${barW}%`, background: "currentColor", boxShadow: "0 0 6px currentColor" }}
+        />
       </div>
     </div>
   );
 }
 
 function Cohort() {
-  const cards = Array.from({ length: 24 }, (_, i) => i);
+  const cards = Array.from({ length: 18 }, (_, i) => i);
   return (
     <div className="flex w-full flex-col items-center gap-2">
       <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 200ms backwards` }}>
@@ -254,16 +266,16 @@ function Cohort() {
       </p>
       <div
         className="mt-8"
-        style={{ perspective: "820px", animation: `intro-rise 1100ms ${EASE} 700ms backwards` }}
+        style={{ perspective: "780px", animation: `intro-rise 1100ms ${EASE} 700ms backwards` }}
       >
         <div
           className="relative"
           style={{
-            width: "min(88vw, 840px)",
+            width: "min(90vw, 880px)",
             transformStyle: "preserve-3d",
             // static end state keeps the plane tilted in the crossfade snapshot
-            transform: "rotateX(38deg) scale(1)",
-            animation: `intro-floor 5600ms ${EASE} both`,
+            transform: "rotateX(36deg) translateY(0) scale(1)",
+            animation: `intro-floor 6600ms ${EASE} both`,
           }}
         >
           <div
@@ -274,13 +286,9 @@ function Cohort() {
                 "radial-gradient(ellipse, color-mix(in oklch, var(--color-accent) 8%, transparent), transparent 70%)",
             }}
           />
-          <div
-            className="grid grid-cols-8 gap-2"
-            style={{
-              maskImage: "linear-gradient(to bottom, transparent 0%, black 32%)",
-              WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 32%)",
-            }}
-          >
+          {/* preserve-3d here lets each card's translateZ pop compose with the tilt
+              (a mask would flatten the subtree, so depth fog is an overlay instead) */}
+          <div className="grid grid-cols-6 gap-2.5" style={{ transformStyle: "preserve-3d" }}>
             {cards.map((i) => {
               const row = Math.floor(i / COLS);
               const col = i % COLS;
@@ -288,13 +296,21 @@ function Cohort() {
                 <MiniCard
                   key={i}
                   id={i}
-                  delay={(col + row * 1.4) * 210 - 3600}
+                  delay={(col + row * 1.5) * 260 - 3600}
                   barW={18 + ((i * 37) % 68)}
                   win={i % 3 === 0}
                 />
               );
             })}
           </div>
+          {/* depth fog: far edge of the floor dissolves into the void */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-3 -top-3 h-1/2"
+            style={{
+              background: "linear-gradient(to bottom, rgba(0, 0, 0, 0.94) 12%, transparent)",
+            }}
+          />
           {/* light sweep travels with the chaos wave */}
           <div
             aria-hidden
@@ -313,67 +329,104 @@ function Cohort() {
   );
 }
 
-/** angle/radius ring around the agent node; deep start point = same bearing, far out */
-const FAULTS: { name: string; angle: number; r: number; d: number }[] = [
-  { name: "api_error", angle: 205, r: 148, d: 500 },
-  { name: "rate_limit", angle: 338, r: 152, d: 720 },
-  { name: "latency", angle: 162, r: 132, d: 940 },
-  { name: "timeout", angle: 22, r: 138, d: 1160 },
-  { name: "malformed", angle: 118, r: 126, d: 1380 },
-  { name: "tool_vanish", angle: 62, r: 130, d: 1600 },
-  { name: "context_drop", angle: 272, r: 120, d: 1820 },
-  { name: "silent_lie", angle: 90, r: 96, d: 2400 },
+/** faults streak in from off-screen and land in three tidy layer clusters:
+    transport left of the node, context right, tool row beneath, and the
+    silent_lie probe alone above it - structure over scatter, no ring shapes */
+const STRIKES: { name: string; x: number; y: number; d: number; fx: string; fy: string; big?: boolean }[] = [
+  { name: "latency", x: -238, y: -44, d: 500, fx: "-58vw", fy: "-6vh" },
+  { name: "timeout", x: -238, y: 6, d: 740, fx: "-58vw", fy: "8vh" },
+  { name: "context_drop", x: 238, y: -20, d: 980, fx: "58vw", fy: "-4vh" },
+  { name: "api_error", x: -168, y: 118, d: 1260, fx: "-30vw", fy: "54vh" },
+  { name: "rate_limit", x: -56, y: 118, d: 1480, fx: "-10vw", fy: "54vh" },
+  { name: "malformed", x: 56, y: 118, d: 1700, fx: "10vw", fy: "54vh" },
+  { name: "tool_vanish", x: 168, y: 118, d: 1920, fx: "30vw", fy: "54vh" },
+  { name: "silent_lie", x: 0, y: -116, d: 2450, fx: "0vw", fy: "-52vh", big: true },
+];
+
+const FLIGHT_MS = 650;
+
+const LAYER_CAPTIONS: { text: string; x: number; y: number; d: number }[] = [
+  { text: "transport", x: -238, y: 46, d: 1550 },
+  { text: "context", x: 238, y: 16, d: 1800 },
+  { text: "tool", x: 0, y: 158, d: 2750 },
+  { text: "the deception probe", x: 0, y: -156, d: 3350 },
 ];
 
 function Sabotage() {
+  const impacts = STRIKES.map((s) => `intro-impact 260ms ease-out ${s.d + FLIGHT_MS}ms`).join(", ");
   return (
     <div className="absolute inset-0">
-      <div
-        className="absolute left-1/2 top-[42%]"
-        style={{ transform: "translate(-50%, -50%)", animation: `intro-rise 700ms ${EASE} 200ms backwards` }}
-      >
-        <div className="relative rounded border border-line-strong bg-panel px-5 py-3">
-          <span className="font-mono text-sm font-semibold text-ink">your agent</span>
-          <span
-            aria-hidden
-            className="absolute -inset-2 rounded border border-accent/40"
-            style={{ animation: "intro-ring 2200ms ease-out infinite" }}
-          />
+      {/* centering stays on the wrapper; entrance + hit flinches animate the inner
+          div so the node never drifts off its anchor mid-animation */}
+      <div className="absolute left-1/2 top-[42%]" style={{ transform: "translate(-50%, -50%)" }}>
+        <div style={{ animation: `intro-rise 700ms ${EASE} 200ms backwards, ${impacts}` }}>
+          <div className="relative rounded border border-line-strong bg-panel px-5 py-3">
+            <span className="font-mono text-sm font-semibold text-ink">your agent</span>
+            <span
+              aria-hidden
+              className="absolute -inset-2 rounded border border-accent/40"
+              style={{ animation: "intro-ring 2200ms ease-out infinite" }}
+            />
+          </div>
         </div>
       </div>
-      {FAULTS.map((c) => {
-        const rad = (c.angle * Math.PI) / 180;
-        const tx = Math.cos(rad) * c.r * 1.9;
-        const ty = -Math.sin(rad) * c.r;
-        const lie = c.name === "silent_lie";
+      {STRIKES.map((s) => {
+        const lie = s.big === true;
         return (
           <span
-            key={c.name}
-            className={`absolute left-1/2 top-[42%] rounded-sm border px-2.5 py-1 font-mono text-xs sm:text-sm ${
+            key={s.name}
+            className={`absolute left-1/2 top-[42%] rounded-sm border px-2.5 py-1 font-mono ${
               lie
-                ? "border-accent bg-accent/15 font-semibold text-accent"
-                : "border-line-strong bg-panel text-ink-dim"
+                ? "border-accent bg-accent/15 text-sm font-semibold text-accent sm:text-base"
+                : "border-line-strong bg-panel text-xs text-ink-dim sm:text-sm"
             }`}
             style={{
-              ["--tx" as string]: `${tx}px`,
-              ["--ty" as string]: `${ty}px`,
-              ["--fx" as string]: `${tx * 4.4}px`,
-              ["--fy" as string]: `${ty * 4.4}px`,
-              transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`,
-              animation: `intro-converge 950ms ${EASE} ${c.d}ms backwards, intro-land 550ms ease-out ${c.d + 950}ms backwards${
-                lie ? `, intro-pulse 2000ms ease-in-out ${c.d + 1500}ms infinite` : ""
+              ["--tx" as string]: `${s.x}px`,
+              ["--ty" as string]: `${s.y}px`,
+              ["--fx" as string]: s.fx,
+              ["--fy" as string]: s.fy,
+              transform: `translate(calc(-50% + ${s.x}px), calc(-50% + ${s.y}px))`,
+              animation: `intro-converge ${FLIGHT_MS}ms cubic-bezier(0.4, 0, 0.9, 0.6) ${s.d}ms backwards, intro-land 550ms ease-out ${s.d + FLIGHT_MS}ms backwards${
+                lie ? `, intro-pulse 2000ms ease-in-out ${s.d + 1400}ms infinite` : ""
               }`,
             }}
           >
-            {c.name}
+            {s.name}
           </span>
         );
       })}
-      <div className="absolute inset-x-0 bottom-[21%] flex flex-col items-center gap-2">
-        <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 2900ms backwards` }}>
+      {STRIKES.map((s) => (
+        <span
+          key={`shock-${s.name}`}
+          aria-hidden
+          className={`absolute h-12 w-12 rounded-full border ${s.big ? "border-accent/70" : "border-white/30"}`}
+          style={{
+            left: `calc(50% + ${s.x}px)`,
+            top: `calc(42% + ${s.y}px)`,
+            // natural opacity 0 hides the ring outside its burst (no fill mode:
+            // "both"/"backwards" would paint the from-state during the delay)
+            opacity: 0,
+            animation: `intro-shock 700ms ease-out ${s.d + FLIGHT_MS - 40}ms`,
+          }}
+        />
+      ))}
+      {LAYER_CAPTIONS.map((c) => (
+        <span
+          key={c.text}
+          className="absolute left-1/2 top-[42%] whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.25em] text-ink-faint"
+          style={{
+            transform: `translate(calc(-50% + ${c.x}px), calc(-50% + ${c.y}px))`,
+            animation: `scene-in 700ms ${EASE} ${c.d}ms backwards`,
+          }}
+        >
+          {c.text}
+        </span>
+      ))}
+      <div className="absolute inset-x-0 bottom-[16%] flex flex-col items-center gap-2">
+        <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 3000ms backwards` }}>
           the sabotage
         </p>
-        <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 3100ms backwards` }}>
+        <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 3200ms backwards` }}>
           8 faults. 3 layers. Injected on the wire.
         </p>
       </div>
@@ -381,7 +434,7 @@ function Sabotage() {
   );
 }
 
-function useCountUp(to: number | null, delayMs: number): string {
+function useCountUp(to: number | null, delayMs: number, format: (v: number) => string): string {
   const [v, setV] = useState(0);
   useEffect(() => {
     if (to === null) return;
@@ -397,40 +450,36 @@ function useCountUp(to: number | null, delayMs: number): string {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [to, delayMs]);
-  return to === null ? "-" : `${Math.round(v * 100)}%`;
+  return to === null ? "-" : format(v);
 }
 
-function BarRow({
-  name,
+function Tile({
+  label,
   value,
-  display,
-  accent,
+  caption,
   delay,
+  accent,
+  format,
 }: {
-  name: string;
+  label: string;
   value: number | null;
-  display: string;
-  accent: boolean;
+  caption: string;
   delay: number;
+  accent?: boolean;
+  format: (v: number) => string;
 }) {
+  const display = useCountUp(value, delay, format);
   return (
-    <div className="flex items-center gap-3">
-      <span className="w-14 shrink-0 text-right font-mono text-[11px] text-ink-faint">{name}</span>
-      <div className="h-2 flex-1 overflow-hidden rounded-sm bg-white/10">
-        <div
-          className={`intro-bar h-full rounded-sm ${accent ? "bg-accent" : "bg-ink-dim/60"}`}
-          style={{
-            width: `${(value ?? 0) * 100}%`,
-            animationDelay: `${delay}ms`,
-            boxShadow: accent
-              ? "0 0 14px color-mix(in oklch, var(--color-accent) 55%, transparent)"
-              : undefined,
-          }}
-        />
-      </div>
+    <div
+      className="flex flex-col items-center gap-1.5 px-3 py-5"
+      style={{ animation: `intro-rise 800ms ${EASE} ${delay}ms backwards` }}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-faint">
+        {label}
+      </span>
       <span
-        className={`w-16 text-left font-display text-2xl font-bold tabular-nums sm:text-3xl ${
-          accent ? "text-accent" : "text-ink-dim"
+        className={`font-display text-3xl font-bold tabular-nums sm:text-4xl ${
+          accent ? "text-accent" : "text-ink"
         }`}
         style={
           accent
@@ -440,40 +489,16 @@ function BarRow({
       >
         {display}
       </span>
-    </div>
-  );
-}
-
-function MetricBars({
-  label,
-  a,
-  b,
-  delay,
-}: {
-  label: string;
-  a: number | null;
-  b: number | null;
-  delay: number;
-}) {
-  const av = useCountUp(a, delay + 300);
-  const bv = useCountUp(b, delay + 500);
-  return (
-    <div
-      className="flex flex-col gap-2.5"
-      style={{ animation: `intro-rise 900ms ${EASE} ${delay}ms backwards` }}
-    >
-      <span className={`${OVERLINE} text-left`}>{label}</span>
-      <BarRow name={RUN_8B.short} value={a} display={av} accent={false} delay={delay + 300} />
-      <BarRow name={RUN_70B.short} value={b} display={bv} accent delay={delay + 500} />
+      <span className="text-xs font-medium text-ink-dim">{caption}</span>
     </div>
   );
 }
 
 function Verdict() {
-  const s8 = RUN_8B.scorecard;
-  const s70 = RUN_70B.scorecard;
+  const s = RUN_8B.scorecard;
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
   return (
-    <div className="relative flex w-full max-w-xl flex-col gap-8">
+    <div className="relative flex w-full max-w-xl flex-col items-center gap-6">
       <div
         aria-hidden
         className="absolute left-1/2 top-1/2 h-[24rem] w-[54rem] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-full"
@@ -484,20 +509,58 @@ function Verdict() {
         }}
       />
       <p className={OVERLINE} style={{ animation: `intro-rise 900ms ${EASE} 200ms backwards` }}>
-        same chaos, two models
+        the verdict
       </p>
-      <MetricBars label="survival" a={s8.survival_rate} b={s70.survival_rate} delay={500} />
-      <MetricBars
-        label="deception caught"
-        a={s8.deception_detection_rate}
-        b={s70.deception_detection_rate}
-        delay={1500}
-      />
+      <p className={SCENE_COPY} style={{ animation: `intro-rise 900ms ${EASE} 400ms backwards` }}>
+        Every run ends in a Resilience Scorecard.
+      </p>
+      <div
+        className="w-full overflow-hidden rounded-lg border border-line-strong bg-panel/90"
+        style={{
+          animation: `intro-rise 900ms ${EASE} 1000ms backwards`,
+          boxShadow:
+            "0 24px 80px -24px rgb(0 0 0 / 80%), 0 0 44px -16px color-mix(in oklch, var(--color-accent) 30%, transparent)",
+        }}
+      >
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+          <span aria-hidden className="h-3 w-[3px] shrink-0 rounded-full bg-accent" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-ink-dim">
+            resilience scorecard
+          </span>
+          <span className="ml-auto font-mono text-[10px] text-ink-faint">
+            {s.profile} · {s.n_agents} agents
+          </span>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-line">
+          <Tile
+            label="survival"
+            value={s.survival_rate}
+            caption="finished under fire"
+            delay={1500}
+            format={pct}
+          />
+          <Tile
+            label="deception caught"
+            value={s.deception_detection_rate}
+            caption="refused a planted lie"
+            delay={2000}
+            accent
+            format={pct}
+          />
+          <Tile
+            label="recovery"
+            value={s.mttr_steps}
+            caption="steps to bounce back"
+            delay={2500}
+            format={(v) => v.toFixed(1)}
+          />
+        </div>
+      </div>
       <p
         className="text-base font-medium text-ink-dim sm:text-lg"
-        style={{ animation: `intro-rise 900ms ${EASE} 3600ms backwards` }}
+        style={{ animation: `intro-rise 900ms ${EASE} 3900ms backwards` }}
       >
-        Resilience is a model property. <span className="text-ink">Measure it.</span>
+        Resilience is measurable. <span className="text-ink">Know before you ship.</span>
       </p>
     </div>
   );
