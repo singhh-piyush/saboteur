@@ -605,6 +605,17 @@ body::before {
   }
 }
 
+/* Autopilot dwell progress - fills over the reading pause so long
+   coachmarks read as a countdown, not a frozen screen */
+@keyframes ap-dwell {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 /* Autopilot cursor click ripple */
 @keyframes ap-ripple {
   from {

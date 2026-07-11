@@ -28,6 +28,10 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [pressed, setPressed] = useState(false);
   const [ripple, setRipple] = useState(0);
+  // active reading pause: drives a fill bar under the chip so long dwells
+  // read as "autopilot is waiting", never as a frozen screen
+  const [dwell, setDwell] = useState<{ ms: number; id: number } | null>(null);
+  const dwellSeq = useRef(0);
   // glide transition stays off until the spawn position has painted, so the
   // cursor fades in exactly where the viewer clicked instead of sliding there
   const [settled, setSettled] = useState(false);
@@ -110,6 +114,7 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
     const steps = planPhase(beat, awaiting, isLast);
 
     const run = async () => {
+      setDwell(null);
       // engage beat: the viewer already read this coachmark before opting in
       const capFirstDwell = firstRef.current;
       firstRef.current = false;
@@ -129,7 +134,9 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
             if (el && (await glideTo(el))) ms = Math.max(ms - GLIDE_MS, 600);
           }
           if (cancelled) return;
+          setDwell({ ms, id: ++dwellSeq.current });
           await sleep(ms);
+          setDwell(null);
           continue;
         }
         const el = await resolveWithRetry(step);
@@ -197,9 +204,22 @@ export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: A
           />
         </svg>
       </div>
-      <span className="absolute left-5 top-5 whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent">
-        AUTOPILOT
-      </span>
+      <div className="absolute left-5 top-5 flex w-max flex-col gap-[3px]">
+        <span className="whitespace-nowrap rounded-sm border border-accent/60 bg-black/80 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.22em] text-accent">
+          AUTOPILOT
+        </span>
+        {dwell && (
+          <span
+            key={dwell.id}
+            className="h-[3px] overflow-hidden rounded-full bg-accent/20"
+          >
+            <span
+              className="block h-full origin-left rounded-full bg-accent"
+              style={{ animation: `ap-dwell ${dwell.ms}ms linear forwards` }}
+            />
+          </span>
+        )}
+      </div>
     </div>,
     document.body,
   );

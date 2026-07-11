@@ -27,11 +27,13 @@ describe("readingMs", () => {
     expect(mid).toBeLessThan(22000);
   });
 
-  it("paces a typical coachmark near 155 wpm", () => {
-    // 250 chars ≈ 43 words ≈ 16.6s at 155 wpm; orientation beat included
+  it("paces a typical coachmark at 150-160 wpm including the orientation beat", () => {
+    // 250 chars ≈ 43 words; total dwell must land between 16.1s (160 wpm) and 17.2s (150 wpm)
     const ms = readingMs("x".repeat(250));
-    expect(ms).toBeGreaterThan(15000);
-    expect(ms).toBeLessThan(19000);
+    const words = 250 / 5.8;
+    const wpm = words / (ms / 60000);
+    expect(wpm).toBeGreaterThan(150);
+    expect(wpm).toBeLessThan(165);
   });
 });
 
