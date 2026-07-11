@@ -13,8 +13,6 @@ import { prefersReducedMotion } from "../landing/parts";
 import { useRun } from "../state/RunContext";
 import { DEMO_FAMILIES, type DemoRun } from "../demo";
 import { Autopilot } from "./Autopilot";
-import { resolveTourTarget } from "./autopilot";
-import { CAMERA_IDENTITY, computeCamera, type CameraTransform } from "./camera";
 import { FamilySelect } from "./FamilySelect";
 import { Playbar } from "./Playbar";
 import { Reveal } from "./Reveal";
@@ -22,6 +20,7 @@ import { SideBySide } from "./SideBySide";
 import { usePrefersReducedMotion } from "./Spotlight";
 import { TourOverlay } from "./TourOverlay";
 import { buildTour } from "./tour";
+import { useTourCamera } from "./useTourCamera";
 import { useWalkthrough, WalkthroughProvider } from "./WalkthroughProvider";
 
 type Tab = "grid" | "scorecard";
@@ -240,47 +239,29 @@ function WalkthroughShell({
     setAutopilot(true);
   };
 
-  const apAwaiting =
-    !!activeBeat?.interactive && selectedAgent !== activeBeat.interactive.agent;
-
-  const cameraRef = useRef<CameraTransform>(CAMERA_IDENTITY);
-  const [camera, setCamera] = useState<CameraTransform>(CAMERA_IDENTITY);
+  // interactive reveal is sticky per beat: once the trace is opened the beat
+  // stays revealed even if the drawer is closed, until the beat changes
+  const [revealedBeat, setRevealedBeat] = useState<number | null>(null);
   useEffect(() => {
-    const reset = () => {
-      cameraRef.current = CAMERA_IDENTITY;
-      setCamera(CAMERA_IDENTITY);
-    };
-    if (!tourActive || tourSuspended || covered || reducedMotion || activeBeat === null) {
-      reset();
-      return;
-    }
-    const target =
-      apAwaiting && activeBeat.interactive
-        ? ({ kind: "agent", id: activeBeat.interactive.agent } as const)
-        : activeBeat.target;
-    if (target.kind === "none" || (target.kind === "region" && target.name === "grid")) {
-      reset();
-      return;
-    }
-    // measure after the beat's onEnter side effects (tab switch, drawer) commit
-    const t = window.setTimeout(() => {
-      const el = resolveTourTarget(target);
-      const r = el?.getBoundingClientRect();
-      if (!r || r.width < 2 || r.height < 2) {
-        reset();
-        return;
-      }
-      const next = computeCamera(r, cameraRef.current, window.innerWidth, window.innerHeight);
-      cameraRef.current = next;
-      setCamera(next);
-    }, 80);
-    return () => window.clearTimeout(t);
-  }, [tourActive, tourSuspended, covered, reducedMotion, activeBeat, apAwaiting]);
+    if (!tourActive || !activeBeat?.interactive) return;
+    if (selectedAgent === activeBeat.interactive.agent) setRevealedBeat(tourBeat);
+  }, [tourActive, activeBeat, selectedAgent, tourBeat]);
+  const apAwaiting = !!activeBeat?.interactive && revealedBeat !== tourBeat;
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const { camera, spotRect } = useTourCamera({
+    active: tourActive && !tourSuspended && !covered,
+    beat: activeBeat,
+    awaiting: apAwaiting,
+    reducedMotion,
+    wrapperRef,
+  });
 
   return (
     <TooltipSuppression active={tourMode === "tour"}>
     <div className="fixed inset-0 overflow-hidden bg-void">
     <div
+      ref={wrapperRef}
       className="flex h-full flex-col gap-2 p-2"
       style={{
         transformOrigin: "0 0",
@@ -474,7 +455,6 @@ function WalkthroughShell({
         onExitToLanding={onExit}
         otherFamilyLabel={otherFamilyLabel}
         onViewOtherFamily={onViewOtherFamily}
-        selectedAgent={selectedAgent}
         selectAgent={selectAgent}
         setTab={setTab}
         seekSmooth={seekSmooth}
@@ -482,6 +462,8 @@ function WalkthroughShell({
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
         autopilot={autopilot}
         onStartAutopilot={() => setAutopilot(true)}
+        awaiting={apAwaiting}
+        spotRect={spotRect}
       />
 
       <Autopilot

@@ -1,10 +1,10 @@
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { Callout } from "./Callout";
-import { Spotlight, useSpotlightRect } from "./Spotlight";
-import type { Beat, TourCtx, TourTarget } from "./tour";
-import { DRIVE_LABEL, resolveTourTarget } from "./autopilot";
+import { Spotlight } from "./Spotlight";
+import type { Beat, TourCtx } from "./tour";
+import { DRIVE_LABEL } from "./autopilot";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 interface TourOverlayProps {
@@ -18,8 +18,6 @@ interface TourOverlayProps {
   onFinishTour: () => void;
   /** navigate back to the landing page */
   onExitToLanding: () => void;
-  /** current agent selection; used to detect the interactive reveal click */
-  selectedAgent: number | null;
   selectAgent: (id: number | null) => void;
   setTab: (tab: "grid" | "scorecard") => void;
   /** fade-through seek: hides grid pane during jump so only destination state is visible */
@@ -35,6 +33,10 @@ interface TourOverlayProps {
   /** true while the synthetic cursor is driving */
   autopilot?: boolean;
   onStartAutopilot?: () => void;
+  /** interactive beat phase 1: still waiting for the agent-cell click (owned by the shell) */
+  awaiting: boolean;
+  /** screen-space spotlight rect from the shared camera pipeline */
+  spotRect: DOMRect | null;
 }
 
 const BTN_GHOST =
@@ -52,7 +54,6 @@ export function TourOverlay({
   onExitTour,
   onFinishTour,
   onExitToLanding,
-  selectedAgent,
   selectAgent,
   setTab,
   seekSmooth,
@@ -62,13 +63,12 @@ export function TourOverlay({
   onToggleSideBySide,
   autopilot = false,
   onStartAutopilot,
+  awaiting,
+  spotRect,
 }: TourOverlayProps) {
   const { seek, pause, switchRun } = useWalkthrough();
   const beat: Beat | null = beats[beatIndex] ?? null;
   const total = beats.length;
-
-  const [revealedBeat, setRevealedBeat] = useState<number | null>(null);
-  const revealed = revealedBeat === beatIndex;
 
   const ctxRef = useRef<TourCtx>({ seek, seekSmooth, pause, selectAgent, setTab, switchRun });
   ctxRef.current = { seek, seekSmooth, pause, selectAgent, setTab, switchRun };
@@ -79,11 +79,6 @@ export function TourOverlay({
     // beat is derived from beatIndex; re-run only when the beat changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, beatIndex]);
-
-  useEffect(() => {
-    if (!active || !beat?.interactive) return;
-    if (selectedAgent === beat.interactive.agent) setRevealedBeat(beatIndex);
-  }, [active, beat, beatIndex, selectedAgent]);
 
   const next = useCallback(() => {
     if (beatIndex >= total - 1) onFinishTour();
@@ -112,17 +107,11 @@ export function TourOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [active, next, back, onExitTour]);
 
-  const awaiting = !!beat?.interactive && !revealed;
-  const target: TourTarget = awaiting
-    ? { kind: "agent", id: beat!.interactive!.agent }
-    : (beat?.target ?? { kind: "none" });
   const placement = awaiting ? "bottom" : (beat?.placement ?? "center");
   const bodyText = awaiting ? (beat?.promptBody ?? beat?.body ?? "") : (beat?.body ?? "");
   const phaseKey = awaiting ? "prompt" : "reveal";
 
-  const resolve = useCallback((): HTMLElement | null => resolveTourTarget(target), [target]);
-
-  const rect = useSpotlightRect(resolve, active && beat ? `${beat.id}:${phaseKey}` : "inactive");
+  const rect = spotRect;
 
   if (!active || !beat) return null;
 
