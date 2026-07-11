@@ -263,13 +263,24 @@ body::before {
     filter: blur(0);
   }
 }
-@keyframes intro-dolly {
+/* outgoing scene: linked crossfade out (children freeze at their resting state) */
+@keyframes intro-scene-out {
   from {
-    transform: rotateX(9deg) scale(1.07);
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
   }
   to {
-    transform: rotateX(5deg) scale(1);
+    opacity: 0;
+    transform: translateY(-26px);
+    filter: blur(8px);
   }
+}
+.intro-out {
+  animation: intro-scene-out 500ms ease-in both;
+}
+.intro-out * {
+  animation: none !important;
 }
 @keyframes intro-rise {
   from {
@@ -281,18 +292,51 @@ body::before {
     transform: translateY(0);
   }
 }
-@keyframes intro-chip {
+/* fault chips converge on the agent node from deep space along their bearing */
+@keyframes intro-converge {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) translateZ(var(--z, 0px)) translateY(30px) scale(0.9);
+    transform: translate(calc(-50% + var(--fx)), calc(-50% + var(--fy))) scale(1.5);
     filter: blur(6px);
   }
-  to {
-    /* land on the chip's resting depth-of-field values so the fill handoff never pops */
-    opacity: var(--intro-o, 1);
-    transform: translate(-50%, -50%) translateZ(var(--z, 0px)) translateY(0) scale(1);
-    filter: blur(var(--intro-blur, 0px));
+  55% {
+    opacity: 1;
   }
+  to {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes intro-land {
+  from {
+    box-shadow: 0 0 24px 3px color-mix(in oklch, currentColor 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@keyframes intro-ring {
+  from {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+@keyframes intro-bar {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.intro-bar {
+  transform-origin: left;
+  animation: intro-bar 1200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 @keyframes intro-pulse {
   0%,
@@ -303,38 +347,88 @@ body::before {
     box-shadow: 0 0 24px 3px color-mix(in oklch, var(--color-accent) 40%, transparent);
   }
 }
-@keyframes intro-flicker {
+/* mini agent card lifecycle: nominal -> hit -> down -> recovers; wave travels via delay.
+   currentColor drives the status dot + progress bar so children need no own animation. */
+@keyframes intro-agent-cycle {
   0%,
-  100% {
-    background-color: color-mix(in oklch, var(--color-ok) 16%, var(--color-panel));
-    border-color: color-mix(in oklch, var(--color-ok) 55%, transparent);
-    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-ok) 45%, transparent);
-  }
   30% {
-    background-color: color-mix(in oklch, var(--color-warn) 16%, var(--color-panel));
-    border-color: color-mix(in oklch, var(--color-warn) 55%, transparent);
-    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-warn) 45%, transparent);
+    color: var(--color-ok);
+    background-color: color-mix(in oklch, var(--color-ok) 10%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 45%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in oklch, var(--color-ok) 50%, transparent);
   }
-  55% {
-    background-color: color-mix(in oklch, var(--color-crit) 18%, var(--color-panel));
-    border-color: color-mix(in oklch, var(--color-crit) 60%, transparent);
-    box-shadow: 0 0 16px -2px color-mix(in oklch, var(--color-crit) 50%, transparent);
+  38%,
+  48% {
+    color: var(--color-warn);
+    background-color: color-mix(in oklch, var(--color-warn) 11%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-warn) 50%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-warn) 50%, transparent);
   }
-  80% {
-    background-color: color-mix(in oklch, var(--color-win) 16%, var(--color-panel));
-    border-color: color-mix(in oklch, var(--color-win) 55%, transparent);
-    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-win) 45%, transparent);
+  54%,
+  68% {
+    color: var(--color-crit);
+    background-color: color-mix(in oklch, var(--color-crit) 14%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-crit) 55%, transparent);
+    box-shadow: 0 0 18px -2px color-mix(in oklch, var(--color-crit) 55%, transparent);
+  }
+  76%,
+  100% {
+    color: var(--color-ok);
+    background-color: color-mix(in oklch, var(--color-ok) 10%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 45%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in oklch, var(--color-ok) 50%, transparent);
   }
 }
-.intro-cell {
-  animation: intro-flicker 2.8s linear infinite;
+@keyframes intro-agent-cycle-win {
+  0%,
+  30% {
+    color: var(--color-ok);
+    background-color: color-mix(in oklch, var(--color-ok) 10%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-ok) 45%, transparent);
+    box-shadow: 0 0 14px -4px color-mix(in oklch, var(--color-ok) 50%, transparent);
+  }
+  38%,
+  48% {
+    color: var(--color-warn);
+    background-color: color-mix(in oklch, var(--color-warn) 11%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-warn) 50%, transparent);
+    box-shadow: 0 0 14px -3px color-mix(in oklch, var(--color-warn) 50%, transparent);
+  }
+  54%,
+  64% {
+    color: var(--color-crit);
+    background-color: color-mix(in oklch, var(--color-crit) 14%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-crit) 55%, transparent);
+    box-shadow: 0 0 18px -2px color-mix(in oklch, var(--color-crit) 55%, transparent);
+  }
+  74%,
+  100% {
+    color: var(--color-win);
+    background-color: color-mix(in oklch, var(--color-win) 11%, var(--color-panel));
+    border-color: color-mix(in oklch, var(--color-win) 50%, transparent);
+    box-shadow: 0 0 16px -3px color-mix(in oklch, var(--color-win) 50%, transparent);
+  }
+}
+.intro-agent {
+  animation: intro-agent-cycle 3800ms linear infinite;
+}
+.intro-agent-win {
+  animation-name: intro-agent-cycle-win;
+}
+@keyframes intro-floor-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
 }
 @keyframes intro-floor {
   from {
-    transform: rotateX(58deg) scale(1.06);
+    transform: rotateX(46deg) scale(1.06);
   }
   to {
-    transform: rotateX(52deg) scale(1);
+    transform: rotateX(38deg) scale(1);
   }
 }
 
@@ -393,6 +487,15 @@ body::before {
   }
   to {
     transform: rotateX(-1.2deg) rotateY(2.4deg);
+  }
+}
+
+@keyframes ap-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
