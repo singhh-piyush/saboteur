@@ -11,10 +11,10 @@ const COMPARE_DWELL_MS = 7000;
 const AFTER_COMPARE_MS = 900;
 
 /** how long a viewer needs on a coachmark before the cursor moves on:
-    98ms/char + a 1.2s orientation beat lands the WHOLE dwell near 100 wpm
+    70ms/char + a 1.2s orientation beat lands the WHOLE dwell near 140 wpm
     (at ~5.8 chars/word the base beat eats into the effective pace) */
 export function readingMs(text: string): number {
-  return Math.min(30000, Math.max(4000, Math.round(1200 + 98 * text.length)));
+  return Math.min(26000, Math.max(4000, Math.round(1200 + 70 * text.length)));
 }
 
 export function planPhase(beat: Beat, awaiting: boolean, isLast = false): AutopilotStep[] {

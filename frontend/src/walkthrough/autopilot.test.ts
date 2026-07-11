@@ -19,20 +19,20 @@ function beat(overrides: Partial<Beat> = {}): Beat {
 }
 
 describe("readingMs", () => {
-  it("clamps to [4000, 30000]", () => {
+  it("clamps to [4000, 26000]", () => {
     expect(readingMs("")).toBe(4000);
-    expect(readingMs("x".repeat(500))).toBe(30000);
+    expect(readingMs("x".repeat(500))).toBe(26000);
     const mid = readingMs("x".repeat(80));
     expect(mid).toBeGreaterThan(4000);
-    expect(mid).toBeLessThan(30000);
+    expect(mid).toBeLessThan(26000);
   });
 
-  it("paces a typical coachmark near 100 wpm including the orientation beat", () => {
+  it("paces a typical coachmark near 140 wpm including the orientation beat", () => {
     const ms = readingMs("x".repeat(250));
     const words = 250 / 5.8;
     const wpm = words / (ms / 60000);
-    expect(wpm).toBeGreaterThan(90);
-    expect(wpm).toBeLessThan(110);
+    expect(wpm).toBeGreaterThan(130);
+    expect(wpm).toBeLessThan(150);
   });
 });
 
