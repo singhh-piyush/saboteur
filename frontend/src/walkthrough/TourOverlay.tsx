@@ -143,7 +143,7 @@ export function TourOverlay({
           {resumeNotice === "done" && !autopilot && (
             <div className="flex items-center gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-ink-dim">
               <CursorGlyph className="shrink-0 text-accent" />
-              Autopilot finished - over to you
+              Autopilot ended - choose what to do next
             </div>
           )}
 
