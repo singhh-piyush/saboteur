@@ -19,12 +19,19 @@ function beat(overrides: Partial<Beat> = {}): Beat {
 }
 
 describe("readingMs", () => {
-  it("clamps to [3000, 7500]", () => {
-    expect(readingMs("")).toBe(3000);
-    expect(readingMs("x".repeat(500))).toBe(7500);
+  it("clamps to [4000, 22000]", () => {
+    expect(readingMs("")).toBe(4000);
+    expect(readingMs("x".repeat(500))).toBe(22000);
     const mid = readingMs("x".repeat(80));
-    expect(mid).toBeGreaterThan(3000);
-    expect(mid).toBeLessThan(7500);
+    expect(mid).toBeGreaterThan(4000);
+    expect(mid).toBeLessThan(22000);
+  });
+
+  it("paces a typical coachmark near 155 wpm", () => {
+    // 250 chars ≈ 43 words ≈ 16.6s at 155 wpm; orientation beat included
+    const ms = readingMs("x".repeat(250));
+    expect(ms).toBeGreaterThan(15000);
+    expect(ms).toBeLessThan(19000);
   });
 });
 
@@ -65,6 +72,18 @@ describe("planPhase", () => {
 
   it("non-interactive beat ignores awaiting", () => {
     expect(planPhase(beat(), true)).toEqual(planPhase(beat(), false));
+  });
+
+  it("last beat: dwell only, never clicks past the closing choice", () => {
+    expect(planPhase(beat(), false, true)).toEqual([
+      { kind: "dwell", ms: readingMs("x".repeat(80)) },
+    ]);
+  });
+
+  it("last beat still clicks the agent cell while awaiting", () => {
+    const b = beat({ interactive: { agent: 3 }, promptBody: "click it" });
+    const steps = planPhase(b, true, true);
+    expect(steps[steps.length - 1]).toEqual({ kind: "click", target: "agent", agent: 3 });
   });
 });
 

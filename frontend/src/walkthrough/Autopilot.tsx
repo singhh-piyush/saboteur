@@ -9,23 +9,34 @@ import { planPhase, resolveClickTarget, type AutopilotStep } from "./autopilot";
 const GLIDE_MS = 680;
 const EASE = "cubic-bezier(0.3, 0.7, 0.2, 1)";
 
+export type AutopilotStopReason = "interrupt" | "done";
+
 interface AutopilotProps {
   enabled: boolean;
   beat: Beat | null;
   /** interactive beat still waiting for the agent-cell click */
   awaiting: boolean;
-  onStop: () => void;
+  /** closing beat: dwell only, then hand control back without clicking */
+  isLast: boolean;
+  /** where the cursor spawns (the button the viewer just clicked) */
+  origin: { x: number; y: number } | null;
+  onStop: (reason: AutopilotStopReason) => void;
 }
 
-export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
+export function Autopilot({ enabled, beat, awaiting, isLast, origin, onStop }: AutopilotProps) {
   const reduced = usePrefersReducedMotion();
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [pressed, setPressed] = useState(false);
   const [ripple, setRipple] = useState(0);
+  // glide transition stays off until the spawn position has painted, so the
+  // cursor fades in exactly where the viewer clicked instead of sliding there
+  const [settled, setSettled] = useState(false);
   const stopRef = useRef(onStop);
   stopRef.current = onStop;
   const posRef = useRef<{ x: number; y: number } | null>(null);
   const firstRef = useRef(false);
+  const originRef = useRef(origin);
+  originRef.current = origin;
 
   const moveTo = (x: number, y: number) => {
     posRef.current = { x, y };
@@ -36,9 +47,20 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
     if (!enabled) {
       setPos(null);
       posRef.current = null;
-    } else {
-      firstRef.current = true;
+      setSettled(false);
+      return;
     }
+    firstRef.current = true;
+    const o = originRef.current;
+    moveTo(o?.x ?? window.innerWidth / 2, o?.y ?? window.innerHeight - 110);
+    let raf2 = 0;
+    const raf = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setSettled(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf2);
+    };
   }, [enabled]);
 
   // any trusted user input hands control back; our own el.click() is untrusted
@@ -48,7 +70,7 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
       if (!e.isTrusted) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest?.("[data-autopilot-safe]")) return;
-      stopRef.current();
+      stopRef.current("interrupt");
     };
     window.addEventListener("pointerdown", onInput, true);
     window.addEventListener("keydown", onInput, true);
@@ -85,15 +107,14 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
       return moved;
     };
 
-    const steps = planPhase(beat, awaiting);
+    const steps = planPhase(beat, awaiting, isLast);
 
     const run = async () => {
       // engage beat: the viewer already read this coachmark before opting in
       const capFirstDwell = firstRef.current;
       firstRef.current = false;
-      // cursor is visible from the first frame, never a dead screen
-      if (posRef.current === null)
-        moveTo(window.innerWidth / 2, window.innerHeight - 110);
+      // fresh spawn: let the fade-in land before the first glide
+      if (capFirstDwell) await sleep(reduced ? 50 : 320);
 
       for (let i = 0; i < steps.length; i++) {
         if (cancelled) return;
@@ -114,7 +135,7 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
         const el = await resolveWithRetry(step);
         if (cancelled) return;
         if (!el) {
-          stopRef.current();
+          stopRef.current("interrupt");
           return;
         }
         // re-measure at click time: corrects for camera/layout motion during the dwell
@@ -128,12 +149,17 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
         el.click();
         await sleep(450);
       }
+      // closing beat plan has no click: hand the choice back to the viewer
+      if (isLast && !awaiting && !cancelled) {
+        await sleep(300);
+        if (!cancelled) stopRef.current("done");
+      }
     };
     void run();
     return () => {
       cancelled = true;
     };
-  }, [enabled, beat, awaiting, reduced]);
+  }, [enabled, beat, awaiting, isLast, reduced]);
 
   if (!enabled || pos === null) return null;
 
@@ -143,7 +169,7 @@ export function Autopilot({ enabled, beat, awaiting, onStop }: AutopilotProps) {
       className="pointer-events-none fixed left-0 top-0 z-[150]"
       style={{
         transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
-        transition: reduced ? "none" : `transform ${GLIDE_MS}ms ${EASE}`,
+        transition: reduced || !settled ? "none" : `transform ${GLIDE_MS}ms ${EASE}`,
         animation: "ap-in 240ms ease-out both",
       }}
     >

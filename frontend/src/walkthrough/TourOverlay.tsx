@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef } from "react";
 import { Callout } from "./Callout";
 import { Spotlight } from "./Spotlight";
 import type { Beat, TourCtx } from "./tour";
-import { DRIVE_LABEL } from "./autopilot";
 import { useWalkthrough } from "./WalkthroughProvider";
 
 interface TourOverlayProps {
@@ -32,7 +31,9 @@ interface TourOverlayProps {
   onToggleSideBySide?: () => void;
   /** true while the synthetic cursor is driving */
   autopilot?: boolean;
-  onStartAutopilot?: () => void;
+  /** autopilot was interrupted by the viewer and can be resumed on this beat */
+  canResume?: boolean;
+  onStartAutopilot?: (origin: { x: number; y: number } | null) => void;
   /** interactive beat phase 1: still waiting for the agent-cell click (owned by the shell) */
   awaiting: boolean;
   /** screen-space spotlight rect from the shared camera pipeline */
@@ -62,6 +63,7 @@ export function TourOverlay({
   sideBySideOpen,
   onToggleSideBySide,
   autopilot = false,
+  canResume = false,
   onStartAutopilot,
   awaiting,
   spotRect,
@@ -123,6 +125,20 @@ export function TourOverlay({
       <Spotlight rect={rect} />
       <Callout rect={rect} placement={placement} anchorKey={`${beat.id}:${phaseKey}`} wide={isLast}>
         <div className="flex flex-col gap-3">
+          {canResume && !autopilot && onStartAutopilot && (
+            <button
+              type="button"
+              data-autopilot-safe
+              onClick={(e) => onStartAutopilot({ x: e.clientX, y: e.clientY })}
+              className="flex items-center justify-between gap-2 rounded-sm border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-semibold text-accent transition-colors duration-150 hover:bg-accent/20"
+            >
+              <span className="font-medium text-ink-dim">Autopilot handed you control</span>
+              <span className="whitespace-nowrap">
+                <span aria-hidden className="mr-1">⏵</span>Resume
+              </span>
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <span aria-hidden className="h-3.5 w-[3px] shrink-0 rounded-full bg-accent" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim">
@@ -190,20 +206,9 @@ export function TourOverlay({
               </button>
             </div>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-xs tabular-nums text-ink-faint">
+              <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-faint">
                 {beatIndex + 1} / {total}
               </span>
-              {beatIndex === 0 && !autopilot && onStartAutopilot && (
-                <button
-                  type="button"
-                  data-autopilot-safe
-                  onClick={onStartAutopilot}
-                  className={BTN_GHOST}
-                >
-                  <span aria-hidden className="mr-1">⏵</span>
-                  {DRIVE_LABEL}
-                </button>
-              )}
               {awaiting ? (
                 <button
                   type="button"

@@ -19,6 +19,7 @@ import { Reveal } from "./Reveal";
 import { SideBySide } from "./SideBySide";
 import { usePrefersReducedMotion } from "./Spotlight";
 import { TourOverlay } from "./TourOverlay";
+import { TourPrompt } from "./TourPrompt";
 import { buildTour } from "./tour";
 import { useTourCamera } from "./useTourCamera";
 import { useWalkthrough, WalkthroughProvider } from "./WalkthroughProvider";
@@ -145,6 +146,10 @@ function WalkthroughShell({
   const [tourBeat, setTourBeat] = useState(0);
   const [sideBySideOpen, setSideBySideOpen] = useState(false);
   const [autopilot, setAutopilot] = useState(false);
+  // pre-tour choice: autopilot vs manual; re-shown on tour replay
+  const [tourPrompt, setTourPrompt] = useState(true);
+  const [apOrigin, setApOrigin] = useState<{ x: number; y: number } | null>(null);
+  const [apStopped, setApStopped] = useState(false);
 
   const beats = useMemo(() => buildTour(runs), [runs]);
 
@@ -215,11 +220,14 @@ function WalkthroughShell({
 
   const exitTour = () => {
     setAutopilot(false);
+    setApStopped(false);
+    setTourPrompt(false);
     setTourMode("free");
     play();
   };
   const finishTour = () => {
     setAutopilot(false);
+    setApStopped(false);
     setTourMode("free");
     selectAgent(null);
     setTab("grid");
@@ -228,15 +236,28 @@ function WalkthroughShell({
   };
   const replayTour = () => {
     setTourBeat(0);
+    setAutopilot(false);
+    setApStopped(false);
+    setTourPrompt(true);
     setTourMode("tour");
+  };
+  const startAutopilot = (origin: { x: number; y: number } | null) => {
+    setApOrigin(origin);
+    setApStopped(false);
+    setTourPrompt(false);
+    setAutopilot(true);
   };
   const toggleAutopilot = () => {
     if (autopilot) {
       setAutopilot(false);
+      setApStopped(true);
       return;
     }
-    if (tourMode !== "tour") replayTour();
-    setAutopilot(true);
+    if (tourMode !== "tour") {
+      setTourBeat(0);
+      setTourMode("tour");
+    }
+    startAutopilot(null);
   };
 
   // interactive reveal is sticky per beat: once the trace is opened the beat
@@ -248,9 +269,11 @@ function WalkthroughShell({
   }, [tourActive, activeBeat, selectedAgent, tourBeat]);
   const apAwaiting = !!activeBeat?.interactive && revealedBeat !== tourBeat;
 
+  const promptOpen = tourActive && !tourSuspended && !covered && tourPrompt;
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   const { camera, spotRect } = useTourCamera({
-    active: tourActive && !tourSuspended && !covered,
+    active: tourActive && !tourSuspended && !covered && !tourPrompt,
     beat: activeBeat,
     awaiting: apAwaiting,
     reducedMotion,
@@ -447,7 +470,7 @@ function WalkthroughShell({
 
       <TourOverlay
         beats={beats}
-        active={tourMode === "tour" && !tourSuspended}
+        active={tourMode === "tour" && !tourSuspended && !tourPrompt}
         beatIndex={tourBeat}
         onSetBeat={setTourBeat}
         onExitTour={exitTour}
@@ -461,16 +484,31 @@ function WalkthroughShell({
         sideBySideOpen={sideBySideOpen}
         onToggleSideBySide={() => setSideBySideOpen((o) => !o)}
         autopilot={autopilot}
-        onStartAutopilot={() => setAutopilot(true)}
+        canResume={apStopped}
+        onStartAutopilot={startAutopilot}
         awaiting={apAwaiting}
         spotRect={spotRect}
       />
 
+      {promptOpen && (
+        <TourPrompt
+          totalBeats={beats.length}
+          onAutopilot={startAutopilot}
+          onManual={() => setTourPrompt(false)}
+          onSkip={exitTour}
+        />
+      )}
+
       <Autopilot
-        enabled={autopilot && tourActive && !tourSuspended}
+        enabled={autopilot && tourActive && !tourSuspended && !tourPrompt}
         beat={activeBeat}
         awaiting={apAwaiting}
-        onStop={() => setAutopilot(false)}
+        isLast={tourBeat >= beats.length - 1}
+        origin={apOrigin}
+        onStop={(reason) => {
+          setAutopilot(false);
+          if (reason === "interrupt") setApStopped(true);
+        }}
       />
 
       {/* face-off beat: side-by-side scorecard comparison */}

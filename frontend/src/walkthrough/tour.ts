@@ -357,7 +357,7 @@ export function buildTour(runs: DemoRun[]): Beat[] {
     placement: "top",
     eyebrow: "Explore freely",
     title: "Now it's yours to drive",
-    body: `That's the tour. Watch the full run play out - scrub the timeline, change speed, ${faceoff === undefined ? "" : "flip runs to compare models, "}click any agent to open its trace. Or head back to the landing. Everything you see re-derives from the recorded event logs - point Saboteur at your own agent and get this scorecard in CI.`,
+    body: `That's the tour - the next move is yours. Watch the full run play out (scrub the timeline, change speed, ${faceoff === undefined ? "" : "flip runs to compare models, "}click any agent for its trace), or head back to the landing. Everything you see re-derives from the recorded event logs - point Saboteur at your own agent and get this scorecard in CI.`,
     finishLabel: "Watch the full run",
     actions: [
       { label: "Back to landing", variant: "ghost", kind: "exit" },

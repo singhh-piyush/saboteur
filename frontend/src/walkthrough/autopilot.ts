@@ -5,17 +5,18 @@ export type AutopilotStep =
   | { kind: "dwell"; ms: number }
   | { kind: "click"; target: "agent" | "next" | "compare"; agent?: number };
 
-export const DRIVE_LABEL = "Let it drive";
+export const DRIVE_LABEL = "Let autopilot drive";
 
-const COMPARE_DWELL_MS = 4200;
+const COMPARE_DWELL_MS = 7000;
 const AFTER_COMPARE_MS = 900;
 
-/** how long a viewer needs on a coachmark before the cursor moves on */
+/** how long a viewer needs on a coachmark before the cursor moves on:
+    ~155 wpm reading pace (~65ms/char) plus a short orientation beat */
 export function readingMs(text: string): number {
-  return Math.min(7500, Math.max(3000, Math.round(2600 + 26 * text.length)));
+  return Math.min(22000, Math.max(4000, Math.round(1200 + 65 * text.length)));
 }
 
-export function planPhase(beat: Beat, awaiting: boolean): AutopilotStep[] {
+export function planPhase(beat: Beat, awaiting: boolean, isLast = false): AutopilotStep[] {
   if (awaiting && beat.interactive) {
     return [
       { kind: "dwell", ms: readingMs(beat.promptBody ?? beat.body) },
@@ -23,6 +24,8 @@ export function planPhase(beat: Beat, awaiting: boolean): AutopilotStep[] {
     ];
   }
   const steps: AutopilotStep[] = [{ kind: "dwell", ms: readingMs(beat.body) }];
+  // the closing beat is a decision point: autopilot never clicks past it
+  if (isLast) return steps;
   if (beat.compare) {
     steps.push(
       { kind: "click", target: "compare" },
